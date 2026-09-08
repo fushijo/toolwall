@@ -325,6 +325,41 @@ check("gui.toggle expands ~ in gui.command before exec", function()
     os.remove(path)
 end)
 
+check("gui.toggle forces a visibility transition so waywall commits the window", function()
+    -- waywall's floating_set_visible() early-returns when the flag already
+    -- matches, and that function is the only one that commits the views. A
+    -- window mapped while the flag was already true is therefore "visible"
+    -- and absent from the screen until something drives a real transition.
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "keybinds": [ { "input": "Ctrl-I", "command": "gui.toggle" } ],
+        "gui": { "command": "toolwall-gui" } }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    -- Something already revealed the floating layer, so a bare
+    -- show_floating(true) would be a no-op inside waywall.
+    waywall.show_floating(true)
+
+    cfg.actions["Ctrl-I"]()
+
+    local transitions = {}
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "show_floating" then
+            table.insert(transitions, entry.args[1])
+        end
+    end
+
+    assert_eq(transitions[#transitions - 1], false, "forced hide before show")
+    assert_eq(transitions[#transitions], true, "shown after the forced transition")
+    assert_eq(waywall.floating, true, "floating layer visible")
+    os.remove(path)
+end)
+
 check("unknown commands do not consume the keypress", function()
     local path = write_config([[
       { "version": 1,

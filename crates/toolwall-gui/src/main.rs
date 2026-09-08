@@ -17,6 +17,9 @@ use toolwall_core::{problems, Document, Scope, Store};
 
 use widgets::FileBrowser;
 
+/// Also the size re-asserted when waywall configures us to nothing.
+const DEFAULT_SIZE: [f32; 2] = [720.0, 520.0];
+
 fn main() -> Result<()> {
     let store = Store::at_default_path()?;
 
@@ -29,7 +32,7 @@ fn main() -> Result<()> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([720.0, 520.0])
+            .with_inner_size(DEFAULT_SIZE)
             .with_min_inner_size([480.0, 360.0])
             .with_title("toolwall"),
         ..Default::default()
@@ -84,6 +87,32 @@ impl App {
         });
     }
 
+    /// Re-assert our size while the compositor has left us degenerately small.
+    ///
+    /// waywall configures floating windows with `xdg_toplevel.configure(0, 0)`,
+    /// which in xdg-shell means "choose your own size". winit takes the zero
+    /// literally and clamps the surface to 1x1, so the GUI renders every frame
+    /// correctly into a single pixel and looks like it never launched at all.
+    /// A normal desktop compositor sends a real size, which is why this only
+    /// happens inside waywall.
+    ///
+    /// Re-requesting stops as soon as we have a usable size, so it does not
+    /// fight the user resizing the window afterwards.
+    fn ensure_usable_size(ctx: &egui::Context) {
+        const MIN_USABLE: f32 = 64.0;
+
+        let size = ctx.screen_rect().size();
+        if size.x >= MIN_USABLE && size.y >= MIN_USABLE {
+            return;
+        }
+
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+            DEFAULT_SIZE[0],
+            DEFAULT_SIZE[1],
+        )));
+        ctx.request_repaint();
+    }
+
     fn revert(&mut self) {
         self.status = Some(match self.store.load() {
             Ok(doc) => {
@@ -98,6 +127,8 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        Self::ensure_usable_size(ctx);
+
         // Cheap for a document this size, and it keeps every inline warning
         // honest as you type rather than only at save time.
         let problems = problems(&self.doc);

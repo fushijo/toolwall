@@ -169,6 +169,44 @@ fn tabs_render_an_empty_document() {
     render(&mut doc, |ui, doc| tabs::input::show(ui, doc));
 }
 
+/// waywall configures floating windows with `xdg_toplevel.configure(0, 0)`,
+/// which winit clamps to a 1x1 surface: the GUI renders every frame correctly
+/// into a single pixel and looks like it never launched. Confirmed from a
+/// WAYLAND_DEBUG trace inside waywall, where every buffer was created 1x1.
+#[test]
+fn a_degenerate_window_size_is_re_requested() {
+    fn viewport_commands(screen: egui::Vec2) -> Vec<egui::ViewportCommand> {
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, screen)),
+            ..Default::default()
+        };
+
+        let output = ctx.run(input, |ctx| {
+            crate::App::ensure_usable_size(ctx);
+        });
+
+        output
+            .viewport_output
+            .into_values()
+            .flat_map(|v| v.commands)
+            .collect()
+    }
+
+    let squashed = viewport_commands(egui::vec2(1.0, 1.0));
+    assert!(
+        squashed.iter().any(|c| matches!(c, egui::ViewportCommand::InnerSize(_))),
+        "a 1x1 window must ask for a real size, got {squashed:?}"
+    );
+
+    // Once usable, stop asking - otherwise this would fight the user resizing.
+    let normal = viewport_commands(egui::vec2(720.0, 520.0));
+    assert!(
+        !normal.iter().any(|c| matches!(c, egui::ViewportCommand::InnerSize(_))),
+        "a usable window must be left alone, got {normal:?}"
+    );
+}
+
 #[test]
 fn captured_keys_format_as_waywall_input_strings() {
     let ctrl = egui::Modifiers { ctrl: true, ..Default::default() };

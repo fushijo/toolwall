@@ -81,12 +81,47 @@ function M.bind(rt)
         Generalising this is the first upstream patch worth writing. Until
         then, opening the toolwall GUI will also reveal Ninjabrain Bot.
     ]]
+    --[[
+        Force every floating window to be shown, and committed.
+
+        waywall's floating_set_visible() returns early when the requested
+        visibility already matches the current flag:
+
+            if (wrap->floating.visible == visible) return;
+
+        and it is that function - not the per-view creation path - which
+        commits the views:
+
+            wl_list_for_each (fview, &wrap->floating.views, link) {
+                server_view_set_visible(fview->view, visible);
+                server_view_commit(fview->view);
+            }
+
+        A window that maps while the flag is already true therefore gets
+        set_visible() at creation with no commit, and a later show(true) is a
+        no-op because the flag already matches. The window is then visible
+        according to waywall and absent from the screen, permanently.
+
+        Driving the flag false and back to true forces the transition, so the
+        commit loop runs over every live floating view.
+    ]]
+    local function force_show_floating()
+        if waywall.floating_shown() then
+            waywall.show_floating(false)
+        end
+        waywall.show_floating(true)
+    end
+
     M.register("floating.toggle", function()
-        waywall.show_floating(not waywall.floating_shown())
+        if waywall.floating_shown() then
+            waywall.show_floating(false)
+        else
+            force_show_floating()
+        end
     end)
 
     M.register("floating.show", function()
-        waywall.show_floating(true)
+        force_show_floating()
     end)
 
     M.register("floating.hide", function()
@@ -123,15 +158,27 @@ function M.bind(rt)
                 launched — losing the delay is recoverable, never showing the
                 GUI is not.
             ]]
-            pcall(waywall.sleep, gui.launch_delay_ms or 400)
+            local slept = pcall(waywall.sleep, gui.launch_delay_ms or 400)
+            if not slept then
+                util.warn("launch delay failed; revealing the GUI anyway")
+            end
 
-            -- Always show on first launch rather than toggling against a
-            -- visibility state read from before the window existed.
-            waywall.show_floating(true)
+            -- The window has only just mapped, so it is exactly the case that
+            -- needs the forced transition described above.
+            force_show_floating()
+
+            -- waywall's log is the only observability this path has, and it
+            -- is the one users report when the GUI does not appear.
+            util.warn(("launched GUI %q; floating shown = %s")
+                :format(util.expand(cmd), tostring(waywall.floating_shown())))
             return
         end
 
-        waywall.show_floating(not waywall.floating_shown())
+        if waywall.floating_shown() then
+            waywall.show_floating(false)
+        else
+            force_show_floating()
+        end
     end)
 
     M.register("exec", function(state, args)
