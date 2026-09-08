@@ -11,6 +11,9 @@ path = "src/main.rs"
 [dependencies]
 toolwall-core.workspace = true
 anyhow.workspace = true
+# Not new weight: Keybind::args is a serde_json::Value, so this is already
+# linked in via toolwall-core. Declared so the args editors can build one.
+serde_json.workspace = true
 # egui: single static binary, immediate mode, good Wayland support.
 # Keep the dependency surface small - this launches inside a nested
 # compositor alongside a running game.

@@ -1,0 +1,103 @@
+//! Images: a PNG overlay drawn over the instance.
+
+use std::path::Path;
+
+use toolwall_core::schema::{Image, Rect};
+use toolwall_core::{Document, Problem, Scope};
+
+use crate::widgets::{
+    depth_editor, expand_tilde, optional_text, problems_for, rect_editor, shader_picker,
+    FileBrowser,
+};
+
+pub fn show(
+    ui: &mut egui::Ui,
+    doc: &mut Document,
+    problems: &[Problem],
+    browser: &mut FileBrowser,
+) {
+    let shaders: Vec<String> = doc.shaders.keys().cloned().collect();
+
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        let mut remove = None;
+
+        for (index, image) in doc.images.iter_mut().enumerate() {
+            let heading = image.label.clone().unwrap_or_else(|| image.id.clone());
+
+            egui::CollapsingHeader::new(heading)
+                .id_salt(("image", index))
+                .show(ui, |ui| {
+                    problems_for(ui, problems, &Scope::Image(image.id.clone()));
+
+                    egui::Grid::new(("image-grid", index))
+                        .num_columns(2)
+                        .spacing([12.0, 6.0])
+                        .show(ui, |ui| {
+                            ui.label("id");
+                            ui.text_edit_singleline(&mut image.id);
+                            ui.end_row();
+
+                            ui.label("label");
+                            optional_text(ui, &mut image.label);
+                            ui.end_row();
+
+                            ui.label("path");
+                            ui.vertical(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.text_edit_singleline(&mut image.path);
+                                    if ui.button("Browse…").clicked() {
+                                        browser.open(index, &image.path, "png");
+                                    }
+                                });
+
+                                // A path that does not resolve fails silently
+                                // at load time - waywall logs a warning and
+                                // skips the overlay - so say so here instead.
+                                if !image.path.is_empty()
+                                    && !Path::new(&expand_tilde(&image.path)).is_file()
+                                {
+                                    ui.colored_label(
+                                        egui::Color32::from_rgb(255, 170, 80),
+                                        "⚠ no file at this path",
+                                    );
+                                }
+                            });
+                            ui.end_row();
+
+                            ui.label("dst");
+                            rect_editor(ui, "dst", &mut image.dst);
+                            ui.end_row();
+
+                            ui.label("depth");
+                            depth_editor(ui, &mut image.depth);
+                            ui.end_row();
+
+                            ui.label("shader");
+                            shader_picker(ui, &format!("image-shader-{index}"), &mut image.shader, &shaders);
+                            ui.end_row();
+                        });
+
+                    if ui.button("Remove image").clicked() {
+                        remove = Some(index);
+                    }
+                });
+        }
+
+        if let Some(index) = remove {
+            doc.images.remove(index);
+        }
+
+        ui.separator();
+
+        if ui.button("Add image").clicked() {
+            doc.images.push(Image {
+                id: format!("image{}", doc.images.len() + 1),
+                label: None,
+                path: String::new(),
+                dst: Rect { x: 0, y: 0, w: 100, h: 100 },
+                depth: None,
+                shader: None,
+            });
+        }
+    });
+}

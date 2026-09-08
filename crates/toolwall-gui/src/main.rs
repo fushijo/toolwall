@@ -7,14 +7,15 @@
 //! through `toolwall_core::Store`, which trips waywall's hot reload. That is
 //! the entire integration surface, and it is why this binary needs no patched
 //! waywall and no IPC.
-//!
-//! # Status
-//!
-//! Skeleton. The Modes tab is wired end to end as the reference pattern;
-//! Mirrors, Images, Keybinds and Input follow the same shape.
+
+mod keys;
+mod tabs;
+mod widgets;
 
 use anyhow::Result;
-use toolwall_core::{schema, Document, Store};
+use toolwall_core::{problems, Document, Scope, Store};
+
+use widgets::FileBrowser;
 
 fn main() -> Result<()> {
     let store = Store::at_default_path()?;
@@ -37,10 +38,23 @@ fn main() -> Result<()> {
     eframe::run_native(
         "toolwall",
         options,
-        Box::new(|_cc| Ok(Box::new(App { store, doc, load_error, status: None, tab: Tab::Modes }))),
+        Box::new(|_cc| {
+            Ok(Box::new(App {
+                store,
+                doc,
+                load_error,
+                status: None,
+                tab: Tab::Modes,
+                browser: FileBrowser::default(),
+                capturing: None,
+            }))
+        }),
     )
     .map_err(|e| anyhow::anyhow!("{e}"))
 }
+
+#[cfg(test)]
+mod tests;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Tab {
@@ -57,6 +71,9 @@ struct App {
     load_error: Option<String>,
     status: Option<(bool, String)>,
     tab: Tab,
+    browser: FileBrowser,
+    /// Index of the keybind currently swallowing the next keypress.
+    capturing: Option<usize>,
 }
 
 impl App {
@@ -71,6 +88,7 @@ impl App {
         self.status = Some(match self.store.load() {
             Ok(doc) => {
                 self.doc = doc;
+                self.load_error = None;
                 (true, "Reverted to the file on disk".to_string())
             }
             Err(err) => (false, format!("{err:#}")),
@@ -80,6 +98,16 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Cheap for a document this size, and it keeps every inline warning
+        // honest as you type rather than only at save time.
+        let problems = problems(&self.doc);
+
+        if let Some((index, path)) = self.browser.show(ctx) {
+            if let Some(image) = self.doc.images.get_mut(index) {
+                image.path = path;
+            }
+        }
+
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.tab, Tab::Modes, "Modes");
@@ -92,9 +120,17 @@ impl eframe::App for App {
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("Save").clicked() {
+                // Save is refused rather than allowed to fail in the store:
+                // a bad write here hot-reloads into a live session.
+                let blocked = !problems.is_empty();
+                let save = ui.add_enabled(!blocked, egui::Button::new("Save"));
+                if save.clicked() {
                     self.save();
                 }
+                if blocked {
+                    save.on_hover_text("Fix the highlighted problems first");
+                }
+
                 if ui.button("Revert").clicked() {
                     self.revert();
                 }
@@ -103,6 +139,11 @@ impl eframe::App for App {
 
                 if let Some(err) = &self.load_error {
                     ui.colored_label(egui::Color32::LIGHT_RED, format!("load failed: {err}"));
+                } else if blocked {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(255, 120, 120),
+                        format!("{} problem(s) — see the highlighted items", problems.len()),
+                    );
                 } else if let Some((ok, message)) = &self.status {
                     let color = if *ok {
                         egui::Color32::LIGHT_GREEN
@@ -116,110 +157,27 @@ impl eframe::App for App {
             });
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| match self.tab {
-            Tab::Modes => modes_tab(ui, &mut self.doc),
-            other => {
-                let name = match other {
-                    Tab::Mirrors => "Mirrors",
-                    Tab::Images => "Images",
-                    Tab::Keybinds => "Keybinds",
-                    Tab::Input => "Input",
-                    Tab::Modes => unreachable!(),
-                };
-                ui.weak(format!("{name}: not implemented yet."));
-                ui.weak("Follow the pattern in modes_tab - edit self.doc in place, then Save.");
+        egui::CentralPanel::default().show(ctx, |ui| {
+            // Document-wide problems have no item to sit next to.
+            for problem in problems.iter().filter(|p| p.scope == Scope::Document) {
+                ui.colored_label(
+                    egui::Color32::from_rgb(255, 120, 120),
+                    format!("⚠ {}", problem.message),
+                );
+            }
+
+            match self.tab {
+                Tab::Modes => tabs::modes::show(ui, &mut self.doc, &problems),
+                Tab::Mirrors => tabs::mirrors::show(ui, &mut self.doc, &problems),
+                Tab::Images => {
+                    tabs::images::show(ui, &mut self.doc, &problems, &mut self.browser)
+                }
+                Tab::Keybinds => {
+                    tabs::keybinds::show(ui, &mut self.doc, &problems, &mut self.capturing)
+                }
+                Tab::Input => tabs::input::show(ui, &mut self.doc),
             }
         });
     }
 }
 
-/// Reference implementation for every other tab.
-///
-/// Note what is absent: no waywall calls, no IPC, no diffing. Mutate the
-/// document, hand it to the store, done.
-fn modes_tab(ui: &mut egui::Ui, doc: &mut Document) {
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        let mut remove: Option<usize> = None;
-
-        for (index, mode) in doc.modes.iter_mut().enumerate() {
-            let heading = mode.label.clone().unwrap_or_else(|| mode.id.clone());
-
-            egui::CollapsingHeader::new(heading)
-                .id_salt(index)
-                .default_open(false)
-                .show(ui, |ui| {
-                    egui::Grid::new(format!("mode-{index}"))
-                        .num_columns(2)
-                        .spacing([12.0, 6.0])
-                        .show(ui, |ui| {
-                            ui.label("id");
-                            ui.text_edit_singleline(&mut mode.id);
-                            ui.end_row();
-
-                            ui.label("label");
-                            let mut label = mode.label.clone().unwrap_or_default();
-                            if ui.text_edit_singleline(&mut label).changed() {
-                                mode.label = (!label.is_empty()).then_some(label);
-                            }
-                            ui.end_row();
-
-                            ui.label("width");
-                            ui.add(
-                                egui::DragValue::new(&mut mode.resolution.width)
-                                    .range(0..=16384),
-                            );
-                            ui.end_row();
-
-                            ui.label("height");
-                            ui.add(
-                                egui::DragValue::new(&mut mode.resolution.height)
-                                    .range(0..=16384),
-                            );
-                            ui.end_row();
-
-                            ui.label("sensitivity");
-                            ui.horizontal(|ui| {
-                                let mut overridden = mode.sensitivity.is_some();
-                                if ui.checkbox(&mut overridden, "override").changed() {
-                                    mode.sensitivity = overridden.then_some(1.0);
-                                }
-                                if let Some(sens) = &mut mode.sensitivity {
-                                    ui.add(
-                                        egui::DragValue::new(sens)
-                                            .speed(0.01)
-                                            .range(0.01..=10.0),
-                                    );
-                                }
-                            });
-                            ui.end_row();
-
-                            ui.label("toggle off on repress");
-                            ui.checkbox(&mut mode.toggle, "");
-                            ui.end_row();
-                        });
-
-                    if ui.button("Remove mode").clicked() {
-                        remove = Some(index);
-                    }
-                });
-        }
-
-        if let Some(index) = remove {
-            doc.modes.remove(index);
-        }
-
-        ui.separator();
-
-        if ui.button("Add mode").clicked() {
-            doc.modes.push(schema::Mode {
-                id: format!("mode{}", doc.modes.len() + 1),
-                label: None,
-                resolution: schema::Resolution { width: 0, height: 0 },
-                sensitivity: None,
-                toggle: true,
-                mirrors: Vec::new(),
-                images: Vec::new(),
-            });
-        }
-    });
-}

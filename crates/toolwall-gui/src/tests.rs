@@ -1,0 +1,202 @@
+//! Headless checks for the tab code.
+//!
+//! egui runs perfectly well without a window, so every tab can be driven
+//! through a real layout pass with no compositor, GPU or display. That catches
+//! the failures that actually happen when editing this code — panics, id
+//! collisions between repeated widgets, and index handling in the
+//! add/remove paths — none of which need pixels to detect.
+
+use serde_json::json;
+use toolwall_core::schema::{
+    ColorKey, Command, Image, Keybind, Mirror, Mode, Rect, Resolution, Shader,
+};
+use toolwall_core::{problems, Document};
+
+use crate::{keys, tabs, widgets::FileBrowser};
+
+/// A document exercising every branch the tabs have: overlays attached and
+/// dangling, a colour key, a shader, and one keybind per argument shape.
+fn sample() -> Document {
+    let mut doc = Document {
+        modes: vec![
+            Mode {
+                id: "thin".into(),
+                label: Some("Thin BT".into()),
+                resolution: Resolution { width: 320, height: 1080 },
+                sensitivity: Some(0.5),
+                toggle: true,
+                mirrors: vec!["eye".into()],
+                images: vec!["grid".into()],
+            },
+            Mode {
+                id: "wide".into(),
+                label: None,
+                resolution: Resolution { width: 1920, height: 300 },
+                sensitivity: None,
+                toggle: true,
+                // Deliberately dangling, to exercise the warning path.
+                mirrors: vec!["missing".into()],
+                images: vec![],
+            },
+        ],
+        mirrors: vec![Mirror {
+            id: "eye".into(),
+            label: Some("Boat eye".into()),
+            src: Rect { x: 0, y: 0, w: 100, h: 100 },
+            dst: Rect { x: 0, y: 300, w: 300, h: 300 },
+            depth: Some(1),
+            shader: Some("invert".into()),
+            color_key: Some(ColorKey { input: "#fff".into(), output: "#f00".into() }),
+        }],
+        images: vec![Image {
+            id: "grid".into(),
+            label: None,
+            path: "~/.config/waywall/overlays/nope.png".into(),
+            dst: Rect { x: 0, y: 0, w: 10, h: 10 },
+            depth: None,
+            shader: None,
+        }],
+        keybinds: vec![
+            Keybind {
+                input: "Shift-T".into(),
+                command: Command::ModeSet,
+                args: Some(json!({ "mode": "thin" })),
+                label: Some("Thin".into()),
+            },
+            Keybind {
+                input: "Shift-C".into(),
+                command: Command::ModeCycle,
+                args: Some(json!({ "modes": ["thin", "wide"] })),
+                label: None,
+            },
+            Keybind {
+                input: "Shift-S".into(),
+                command: Command::SensSet,
+                args: Some(json!({ "sensitivity": 0.6 })),
+                label: None,
+            },
+            Keybind {
+                input: "Shift-K".into(),
+                command: Command::KeymapSet,
+                args: Some(json!({ "layout": "de" })),
+                label: None,
+            },
+            Keybind {
+                input: "Shift-R".into(),
+                command: Command::RemapsSet,
+                args: Some(json!({ "remaps": { "MB4": "Home" } })),
+                label: None,
+            },
+            Keybind {
+                input: "Shift-P".into(),
+                command: Command::KeyPress,
+                args: Some(json!({ "key": "F3" })),
+                label: None,
+            },
+            Keybind {
+                input: "Ctrl-E".into(),
+                command: Command::Exec,
+                args: Some(json!({ "command": "ls" })),
+                label: None,
+            },
+            Keybind {
+                input: "Ctrl-I".into(),
+                command: Command::GuiToggle,
+                args: None,
+                label: None,
+            },
+        ],
+        ..Default::default()
+    };
+
+    doc.shaders.insert(
+        "invert".into(),
+        Shader { vertex: None, fragment: Some("invert.frag".into()) },
+    );
+    doc.input.remaps.insert("MB4".into(), "Home".into());
+    doc
+}
+
+/// Run one layout pass over a tab, as egui would with a real window.
+fn render(doc: &mut Document, mut body: impl FnMut(&mut egui::Ui, &mut Document)) {
+    let ctx = egui::Context::default();
+    let _ = ctx.run(egui::RawInput::default(), |ctx| {
+        egui::CentralPanel::default().show(ctx, |ui| body(ui, doc));
+    });
+}
+
+#[test]
+fn every_tab_renders() {
+    let mut doc = sample();
+    let found = problems(&doc);
+    assert!(!found.is_empty(), "sample should have the dangling overlay problem");
+
+    render(&mut doc, |ui, doc| {
+        let found = problems(doc);
+        tabs::modes::show(ui, doc, &found);
+    });
+    render(&mut doc, |ui, doc| {
+        let found = problems(doc);
+        tabs::mirrors::show(ui, doc, &found);
+    });
+    render(&mut doc, |ui, doc| {
+        let found = problems(doc);
+        let mut browser = FileBrowser::default();
+        tabs::images::show(ui, doc, &found, &mut browser);
+    });
+    render(&mut doc, |ui, doc| {
+        let found = problems(doc);
+        let mut capturing = None;
+        tabs::keybinds::show(ui, doc, &found, &mut capturing);
+    });
+    render(&mut doc, |ui, doc| tabs::input::show(ui, doc));
+}
+
+#[test]
+fn tabs_render_an_empty_document() {
+    let mut doc = Document::default();
+
+    render(&mut doc, |ui, doc| tabs::modes::show(ui, doc, &[]));
+    render(&mut doc, |ui, doc| tabs::mirrors::show(ui, doc, &[]));
+    render(&mut doc, |ui, doc| {
+        let mut browser = FileBrowser::default();
+        tabs::images::show(ui, doc, &[], &mut browser);
+    });
+    render(&mut doc, |ui, doc| {
+        let mut capturing = None;
+        tabs::keybinds::show(ui, doc, &[], &mut capturing);
+    });
+    render(&mut doc, |ui, doc| tabs::input::show(ui, doc));
+}
+
+#[test]
+fn captured_keys_format_as_waywall_input_strings() {
+    let ctrl = egui::Modifiers { ctrl: true, ..Default::default() };
+    let ctrl_shift = egui::Modifiers { ctrl: true, shift: true, ..Default::default() };
+    let none = egui::Modifiers::default();
+
+    assert_eq!(keys::format(egui::Key::I, ctrl).as_deref(), Some("Ctrl-I"));
+    assert_eq!(keys::format(egui::Key::N, ctrl_shift).as_deref(), Some("Ctrl-Shift-N"));
+    assert_eq!(keys::format(egui::Key::T, none).as_deref(), Some("T"));
+    assert_eq!(keys::format(egui::Key::F3, none).as_deref(), Some("F3"));
+
+    // waywall's keysym names, which are not always the obvious ones.
+    assert_eq!(keys::format(egui::Key::Enter, none).as_deref(), Some("Return"));
+    assert_eq!(keys::format(egui::Key::Backspace, none).as_deref(), Some("BackSpace"));
+    assert_eq!(keys::format(egui::Key::PageUp, none).as_deref(), Some("Page_Up"));
+    assert_eq!(keys::format(egui::Key::Space, none).as_deref(), Some("space"));
+}
+
+#[test]
+fn a_document_edited_through_the_tabs_still_round_trips() {
+    // The GUI hands the store a typed Document; if that cannot serialise and
+    // deserialise cleanly, a save would write something the runtime rejects.
+    let doc = sample();
+    let body = serde_json::to_string_pretty(&doc).expect("serialise");
+    let back: Document = serde_json::from_str(&body).expect("deserialise");
+
+    assert_eq!(back.modes.len(), doc.modes.len());
+    assert_eq!(back.keybinds.len(), doc.keybinds.len());
+    assert_eq!(back.mirrors[0].color_key.as_ref().unwrap().input, "#fff");
+    assert_eq!(problems(&back).len(), problems(&doc).len());
+}
