@@ -8,4 +8,4 @@ pub mod schema;
 pub mod store;
 
 pub use schema::{Document, SCHEMA_VERSION};
-pub use store::{Store, validate};
+pub use store::{Problem, Scope, Store, problems, validate};

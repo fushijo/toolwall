@@ -137,69 +137,143 @@ impl Store {
     }
 }
 
-/// Structural checks beyond what serde enforces.
-pub fn validate(doc: &Document) -> Result<()> {
+/// Where a validation problem lives, so the GUI can show it next to the item
+/// that caused it rather than as one opaque status line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Scope {
+    Document,
+    Mode(String),
+    Mirror(String),
+    Image(String),
+    Keybind(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Problem {
+    pub scope: Scope,
+    pub message: String,
+}
+
+/// Every structural problem in the document, not just the first.
+///
+/// `validate` is this reduced to a pass/fail; the GUI uses the full list to
+/// annotate individual modes, mirrors, images and keybinds inline.
+pub fn problems(doc: &Document) -> Vec<Problem> {
+    let mut out = Vec::new();
+
+    let mut push = |scope: Scope, message: String| out.push(Problem { scope, message });
+
     if doc.version != SCHEMA_VERSION {
-        bail!("schema version {}, expected {}", doc.version, SCHEMA_VERSION);
+        push(
+            Scope::Document,
+            format!("schema version {}, expected {}", doc.version, SCHEMA_VERSION),
+        );
     }
 
     let mut ids = std::collections::HashSet::new();
     let mut overlay_ids = std::collections::HashSet::new();
 
     for mirror in &doc.mirrors {
+        if mirror.id.trim().is_empty() {
+            push(Scope::Mirror(mirror.id.clone()), "id must not be empty".into());
+        }
         if !ids.insert(("mirror", mirror.id.as_str())) {
-            bail!("duplicate mirror id {:?}", mirror.id);
+            push(
+                Scope::Mirror(mirror.id.clone()),
+                format!("duplicate mirror id {:?}", mirror.id),
+            );
         }
         overlay_ids.insert(mirror.id.as_str());
     }
 
     for image in &doc.images {
+        if image.id.trim().is_empty() {
+            push(Scope::Image(image.id.clone()), "id must not be empty".into());
+        }
         if !ids.insert(("image", image.id.as_str())) {
-            bail!("duplicate image id {:?}", image.id);
+            push(
+                Scope::Image(image.id.clone()),
+                format!("duplicate image id {:?}", image.id),
+            );
         }
         overlay_ids.insert(image.id.as_str());
     }
 
     let mut mode_ids = std::collections::HashSet::new();
     for mode in &doc.modes {
+        if mode.id.trim().is_empty() {
+            push(Scope::Mode(mode.id.clone()), "id must not be empty".into());
+        }
         if !mode_ids.insert(mode.id.as_str()) {
-            bail!("duplicate mode id {:?}", mode.id);
+            push(
+                Scope::Mode(mode.id.clone()),
+                format!("duplicate mode id {:?}", mode.id),
+            );
         }
 
         // Leaderboard rules: no dimension above 16384.
         if mode.resolution.width > 16384 || mode.resolution.height > 16384 {
-            bail!(
-                "mode {:?} exceeds the 16384px leaderboard limit ({}x{})",
-                mode.id, mode.resolution.width, mode.resolution.height
+            push(
+                Scope::Mode(mode.id.clone()),
+                format!(
+                    "exceeds the 16384px leaderboard limit ({}x{})",
+                    mode.resolution.width, mode.resolution.height
+                ),
             );
         }
 
         for id in mode.mirrors.iter().chain(mode.images.iter()) {
             if !overlay_ids.contains(id.as_str()) {
-                bail!("mode {:?} references unknown overlay {:?}", mode.id, id);
+                push(
+                    Scope::Mode(mode.id.clone()),
+                    format!("references unknown overlay {id:?}"),
+                );
             }
         }
     }
 
     if let Some(default) = &doc.default_mode {
         if !mode_ids.contains(default.as_str()) {
-            bail!("default_mode {:?} is not a defined mode", default);
+            push(
+                Scope::Document,
+                format!("default_mode {default:?} is not a defined mode"),
+            );
         }
     }
 
     for id in &doc.base_overlays {
         if !overlay_ids.contains(id.as_str()) {
-            bail!("base_overlays references unknown overlay {:?}", id);
+            push(
+                Scope::Document,
+                format!("base_overlays references unknown overlay {id:?}"),
+            );
         }
     }
 
     let mut inputs = std::collections::HashSet::new();
     for bind in &doc.keybinds {
+        if bind.input.trim().is_empty() {
+            push(
+                Scope::Keybind(bind.input.clone()),
+                "keybind has no input string".into(),
+            );
+        }
         if !inputs.insert(bind.input.as_str()) {
-            bail!("duplicate keybind for {:?}", bind.input);
+            push(
+                Scope::Keybind(bind.input.clone()),
+                format!("duplicate keybind for {:?}", bind.input),
+            );
         }
     }
 
+    out
+}
+
+/// Structural checks beyond what serde enforces.
+pub fn validate(doc: &Document) -> Result<()> {
+    if let Some(first) = problems(doc).first() {
+        bail!("{}", first.message);
+    }
     Ok(())
 }
 
@@ -254,5 +328,35 @@ mod tests {
     #[test]
     fn accepts_a_valid_document() {
         assert!(validate(&doc_with_mode()).is_ok());
+        assert!(problems(&doc_with_mode()).is_empty());
+    }
+
+    #[test]
+    fn reports_every_problem_scoped_to_its_item() {
+        let mut doc = doc_with_mode();
+        doc.modes[0].resolution.width = 20000;
+        doc.modes[0].mirrors.push("nope".into());
+        doc.keybinds.push(Keybind {
+            input: "Shift-T".into(),
+            command: Command::ModeReset,
+            args: None,
+            label: None,
+        });
+        doc.keybinds.push(Keybind {
+            input: "Shift-T".into(),
+            command: Command::ModeReset,
+            args: None,
+            label: None,
+        });
+
+        let found = problems(&doc);
+
+        // validate() only ever surfaces the first of these.
+        assert_eq!(found.len(), 3, "{found:#?}");
+        assert!(found.iter().all(|p| match &p.scope {
+            Scope::Mode(id) => id == "thin",
+            Scope::Keybind(input) => input == "Shift-T",
+            _ => false,
+        }));
     }
 }
