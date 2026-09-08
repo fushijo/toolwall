@@ -115,8 +115,20 @@ function M.bind(rt)
             waywall.exec(util.expand(cmd))
             state.gui_launched = true
 
-            -- Give the client a moment to map before revealing it.
-            waywall.sleep(gui.launch_delay_ms or 400)
+            --[[
+                Give the client a moment to map before revealing it.
+
+                This is the only call in the path that suspends execution, and
+                a failure here must not stop us revealing the window we just
+                launched — losing the delay is recoverable, never showing the
+                GUI is not.
+            ]]
+            pcall(waywall.sleep, gui.launch_delay_ms or 400)
+
+            -- Always show on first launch rather than toggling against a
+            -- visibility state read from before the window existed.
+            waywall.show_floating(true)
+            return
         end
 
         waywall.show_floating(not waywall.floating_shown())
