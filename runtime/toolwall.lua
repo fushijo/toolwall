@@ -55,6 +55,21 @@ M.rt = rt
     Only the parts waywall reads at load time: input, theme, window, shaders,
     experimental, actions. Scene content is not represented here.
 ]]
+--[[
+    waywall's own config parser only recognises "no anchor" as the Lua field
+    being entirely absent (nil) - not an empty string. Our schema allows ""
+    as the "none" choice for a GUI dropdown, so translate "", nil and JSON
+    null all into an omitted key here, or every toolwall config that leaves
+    ninb_anchor unset would fail to load at all:
+    "invalid value '' for 'theme.ninb_anchor'".
+]]
+local function ninb_anchor_value(raw)
+    if raw == nil or raw == util.NULL or raw == "" then
+        return nil
+    end
+    return raw
+end
+
 local function build_waywall_config(doc)
     local input = doc.input or {}
     local theme = doc.theme or {}
@@ -86,7 +101,7 @@ local function build_waywall_config(doc)
             cursor_icon = theme.cursor_icon or "",
             cursor_size = theme.cursor_size or 0,
 
-            ninb_anchor = theme.ninb_anchor or "",
+            ninb_anchor = ninb_anchor_value(theme.ninb_anchor),
             ninb_opacity = theme.ninb_opacity or 1.0,
         },
 

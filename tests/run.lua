@@ -272,6 +272,32 @@ check("applying the default mode during load, before the window exists, does not
     os.remove(path)
 end)
 
+check("theme.ninb_anchor of \"\" or unset is omitted, not sent to waywall as an empty string", function()
+    -- waywall's real config parser treats "no anchor" as the Lua field being
+    -- entirely absent; it rejects an empty string with
+    -- "invalid value '' for 'theme.ninb_anchor'" and refuses to load the
+    -- whole config. Our schema allows "" as the GUI's "none" dropdown
+    -- choice, so the runtime must translate that (and an unset field) into
+    -- an omitted key, not a literal "".
+    local unset_path = write_config(MINIMAL)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = unset_path })
+    assert_eq(cfg.theme.ninb_anchor, nil, "unset ninb_anchor should be omitted")
+    os.remove(unset_path)
+
+    package.loaded["toolwall"] = nil
+    package.loaded["toolwall.config"] = nil
+    waywall.reset()
+
+    local empty_path = write_config([[
+      { "version": 1, "theme": { "ninb_anchor": "" } }
+    ]])
+    toolwall = require("toolwall")
+    cfg = toolwall.setup({ path = empty_path })
+    assert_eq(cfg.theme.ninb_anchor, nil, "empty-string ninb_anchor should be omitted")
+    os.remove(empty_path)
+end)
+
 check("gui.toggle expands ~ in gui.command before exec", function()
     -- waywall.exec() is a bare execvp() using the compositor's own PATH,
     -- which commonly lacks ~/.cargo/bin unless waywall was launched from an
