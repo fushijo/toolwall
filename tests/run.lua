@@ -1,0 +1,290 @@
+--[[
+    toolwall runtime tests.
+
+    Run with:  lua tests/run.lua   (from the repository root)
+]]
+
+package.path = table.concat({
+    "tests/mock/?.lua",
+    "runtime/?.lua",
+    package.path,
+}, ";")
+
+local waywall = require("waywall")
+
+local passed, failed = 0, 0
+
+local function check(name, fn)
+    waywall.reset()
+
+    -- Modules cache runtime state, so reload them for every test.
+    for _, mod in ipairs({
+        "toolwall", "toolwall.config", "toolwall.scene", "toolwall.modes",
+        "toolwall.hud", "toolwall.keybinds", "toolwall.commands",
+    }) do
+        package.loaded[mod] = nil
+    end
+
+    local ok, err = pcall(fn)
+    if ok then
+        passed = passed + 1
+        print("  pass  " .. name)
+    else
+        failed = failed + 1
+        print("  FAIL  " .. name .. "\n        " .. tostring(err))
+    end
+end
+
+local function assert_eq(actual, expected, label)
+    if actual ~= expected then
+        error(("%s: expected %s, got %s")
+            :format(label or "value", tostring(expected), tostring(actual)), 2)
+    end
+end
+
+local function write_config(body)
+    local path = os.tmpname()
+    local fh = assert(io.open(path, "w"))
+    fh:write(body)
+    fh:close()
+    return path
+end
+
+local MINIMAL = [[
+{
+  "version": 1,
+  "input": { "sensitivity": 1.0 },
+  "mirrors": [
+    { "id": "m1", "src": {"x":0,"y":0,"w":10,"h":10}, "dst": {"x":0,"y":0,"w":10,"h":10} }
+  ],
+  "modes": [
+    { "id": "thin", "resolution": {"width":320,"height":1080}, "mirrors": ["m1"] },
+    { "id": "wide", "resolution": {"width":1920,"height":300} }
+  ],
+  "text": [
+    { "id": "hud", "template": "{mode} {res}", "x": 8, "y": 8 }
+  ],
+  "keybinds": [
+    { "input": "Shift-T", "command": "mode.set", "args": { "mode": "thin" } },
+    { "input": "Shift-R", "command": "mode.reset" }
+  ]
+}
+]]
+
+print("toolwall runtime tests\n")
+
+check("setup returns a waywall config table without touching the scene", function()
+    local path = write_config(MINIMAL)
+    local toolwall = require("toolwall")
+
+    local cfg = toolwall.setup({ path = path })
+
+    assert_eq(type(cfg), "table", "config type")
+    assert_eq(type(cfg.actions), "table", "actions type")
+    assert_eq(cfg.input.sensitivity, 1.0, "sensitivity")
+    assert_eq(waywall.live_count(), 0, "scene objects created during startup")
+    os.remove(path)
+end)
+
+check("scene objects appear only after the load event", function()
+    local path = write_config(MINIMAL)
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    assert_eq(waywall.live_count(), 0, "objects before load")
+    waywall.finish_startup()
+
+    -- Base state: no mode mirrors, but the HUD text is drawn.
+    assert_eq(waywall.live_count(), 1, "objects after load")
+    os.remove(path)
+end)
+
+check("mode.set applies resolution and activates its mirrors", function()
+    local path = write_config(MINIMAL)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Shift-T"]()
+
+    assert_eq(waywall.resolution.width, 320, "width")
+    assert_eq(waywall.resolution.height, 1080, "height")
+    assert_eq(toolwall.rt.modes.current, "thin", "current mode")
+
+    local mirrors = 0
+    for _, obj in pairs(waywall.live_objects()) do
+        if obj.kind == "mirror" then mirrors = mirrors + 1 end
+    end
+    assert_eq(mirrors, 1, "live mirrors")
+    os.remove(path)
+end)
+
+check("pressing the same mode again toggles back to base", function()
+    local path = write_config(MINIMAL)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Shift-T"]()
+    cfg.actions["Shift-T"]()
+
+    assert_eq(waywall.resolution.width, 0, "width after toggle off")
+    assert_eq(toolwall.rt.modes.current, nil, "current mode after toggle off")
+
+    local mirrors = 0
+    for _, obj in pairs(waywall.live_objects()) do
+        if obj.kind == "mirror" then mirrors = mirrors + 1 end
+    end
+    assert_eq(mirrors, 0, "mirrors closed on toggle off")
+    os.remove(path)
+end)
+
+check("switching modes closes the previous mode's scene objects", function()
+    local path = write_config(MINIMAL)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Shift-T"]()
+    toolwall.rt.modes:set("wide")
+
+    local mirrors = 0
+    for _, obj in pairs(waywall.live_objects()) do
+        if obj.kind == "mirror" then mirrors = mirrors + 1 end
+    end
+    assert_eq(mirrors, 0, "stale mirrors left live")
+    os.remove(path)
+end)
+
+check("HUD re-renders on mode change without leaking text objects", function()
+    local path = write_config(MINIMAL)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Shift-T"]()
+    cfg.actions["Shift-R"]()
+    toolwall.rt.modes:set("wide")
+
+    local texts = 0
+    for _, obj in pairs(waywall.live_objects()) do
+        if obj.kind == "text" then texts = texts + 1 end
+    end
+    assert_eq(texts, 1, "live text objects")
+    os.remove(path)
+end)
+
+check("a mode referencing an unknown mirror is rejected at load", function()
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "x", "resolution": {"width":0,"height":0}, "mirrors": ["nope"] } ] }
+    ]])
+    local toolwall = require("toolwall")
+
+    local ok, err = pcall(toolwall.setup, { path = path })
+    assert_eq(ok, false, "setup should fail")
+    assert_eq(tostring(err):match("unknown mirror") ~= nil, true, "error mentions the cause")
+    os.remove(path)
+end)
+
+check("a wrong schema version is rejected", function()
+    local path = write_config('{ "version": 99 }')
+    local toolwall = require("toolwall")
+
+    local ok = pcall(toolwall.setup, { path = path })
+    assert_eq(ok, false, "setup should fail")
+    os.remove(path)
+end)
+
+check("a corrupt config falls back to last known good", function()
+    local path = write_config(MINIMAL)
+
+    -- First load succeeds and snapshots the config.
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    -- Simulate a bad write from the GUI.
+    local fh = assert(io.open(path, "w"))
+    fh:write("{ this is not json")
+    fh:close()
+
+    package.loaded["toolwall"] = nil
+    package.loaded["toolwall.config"] = nil
+    waywall.reset()
+
+    local reloaded = require("toolwall")
+    local cfg = reloaded.setup({ path = path })
+
+    assert_eq(type(cfg), "table", "fallback config")
+    assert_eq(reloaded.rt.degraded ~= nil, true, "degraded flag set")
+
+    os.remove(path)
+    os.remove(path .. ".last-good")
+end)
+
+check("a missing PNG degrades to a warning, not a crash", function()
+    local path = write_config([[
+      { "version": 1,
+        "images": [ { "id": "gone", "path": "/nonexistent/x.png",
+                      "dst": {"x":0,"y":0,"w":1,"h":1} } ],
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0}, "images": ["gone"] } ] }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    -- Must not throw.
+    toolwall.rt.modes:set("m")
+    assert_eq(toolwall.rt.modes.current, "m", "mode still applied")
+    os.remove(path)
+end)
+
+check("applying the default mode during load, before the window exists, does not crash", function()
+    -- Real waywall fires "load" as soon as its own config parses, which is
+    -- several seconds before Minecraft's window connects and maps a view.
+    -- toolwall.setup() applies default_mode/reset() synchronously inside the
+    -- "load" listener, so this window must not be able to crash it.
+    local path = write_config([[
+      { "version": 1,
+        "default_mode": "m",
+        "modes": [ { "id": "m", "resolution": {"width":320,"height":1080} } ] }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    -- Must not throw, even though the view is not ready yet.
+    waywall.finish_startup()
+
+    assert_eq(toolwall.rt.modes.current, nil, "mode not applied before the view exists")
+    assert_eq(waywall.resolution.width, 0, "resolution untouched before the view exists")
+
+    -- Once the window connects, a real keypress applies the mode normally.
+    waywall.mount_view()
+    toolwall.rt.modes:set("m")
+
+    assert_eq(toolwall.rt.modes.current, "m", "mode applied once the view exists")
+    assert_eq(waywall.resolution.width, 320, "resolution applied once the view exists")
+    os.remove(path)
+end)
+
+check("unknown commands do not consume the keypress", function()
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "keybinds": [ { "input": "Shift-Q", "command": "does.not.exist" } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+
+    assert_eq(cfg.actions["Shift-Q"](), false, "should return false")
+    os.remove(path)
+end)
+
+print(("\n%d passed, %d failed"):format(passed, failed))
+os.exit(failed == 0 and 0 or 1)
