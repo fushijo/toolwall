@@ -25,6 +25,10 @@ function M.new(doc)
         live = {},    -- id -> scene object
         active = {},  -- id -> true
         pinned = {},  -- id -> true, shown by hand rather than by a mode
+
+        -- The resolution a mode is switching to, for relative captures made
+        -- before waywall has applied the new size.
+        resolution_hint = nil,
     }, Scene)
 end
 
@@ -39,9 +43,54 @@ local function shader_of(spec)
     return s
 end
 
+--[[
+    Resolve a capture region given as fractions of the resolution.
+
+    Minecraft positions its HUD relative to the window, so a region pinned to
+    pixels is right at one resolution and wrong at every other - a pie-chart
+    capture tuned for a thin window lands on the debug text at fullscreen.
+
+    waywall reports 0x0 for an unset resolution and Lua cannot ask how large
+    the window is, so the mode's own configured resolution is the fallback.
+]]
+function Scene:_percent_rect(pct)
+    local res_w, res_h = 0, 0
+
+    local ok, aw, ah = pcall(waywall.active_res)
+    if ok then
+        res_w, res_h = aw or 0, ah or 0
+    end
+
+    if (res_w <= 0 or res_h <= 0) and self.resolution_hint then
+        res_w = self.resolution_hint.width or 0
+        res_h = self.resolution_hint.height or 0
+    end
+
+    if res_w <= 0 or res_h <= 0 then
+        return nil, "no known resolution"
+    end
+
+    return {
+        x = math.floor((pct.x or 0) * res_w),
+        y = math.floor((pct.y or 0) * res_h),
+        w = math.max(1, math.floor((pct.w or 0) * res_w)),
+        h = math.max(1, math.floor((pct.h or 0) * res_h)),
+    }
+end
+
 function Scene:_create_mirror(spec)
+    local src = rect(spec.src)
+
+    if spec.src_percent and spec.src_percent ~= util.NULL then
+        local resolved, err = self:_percent_rect(spec.src_percent)
+        if not resolved then
+            error("relative capture: " .. err, 0)
+        end
+        src = resolved
+    end
+
     local opts = {
-        src = rect(spec.src),
+        src = src,
         dst = rect(spec.dst),
         depth = spec.depth,
         shader = shader_of(spec),
@@ -155,7 +204,16 @@ function Scene:set_active(ids)
     end
 
     for id in pairs(self.live) do
-        if not want[id] then
+        --[[
+            A relative capture is derived from the resolution, so a live one is
+            stale the moment the resolution changes. Closing it here means
+            show() rebuilds it against the new size instead of short-circuiting
+            on the object that already exists.
+        ]]
+        local spec = self.doc._mirrors[id]
+        local relative = spec and spec.src_percent and spec.src_percent ~= util.NULL
+
+        if not want[id] or relative then
             self:hide(id)
         end
     end

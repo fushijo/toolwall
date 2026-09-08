@@ -25,7 +25,7 @@ use tabs::input::RemapCapture;
 /// into one reload instead of one per keystroke.
 const APPLY_AFTER: Duration = Duration::from_millis(350);
 
-use widgets::FileBrowser;
+use widgets::{FileBrowser, PickTarget};
 
 /// Also the size re-asserted when waywall configures us to nothing.
 const DEFAULT_SIZE: [f32; 2] = [720.0, 520.0];
@@ -235,9 +235,15 @@ impl eframe::App for App {
         // honest as you type rather than only at save time.
         let problems = problems(&self.doc);
 
-        if let Some((index, path)) = self.browser.show(ctx) {
-            if let Some(image) = self.doc.images.get_mut(index) {
-                image.path = path;
+        if let Some((target, path)) = self.browser.show(ctx) {
+            match target {
+                PickTarget::Image(index) => {
+                    if let Some(image) = self.doc.images.get_mut(index) {
+                        image.path = path;
+                    }
+                }
+                PickTarget::Background => self.doc.theme.background_png = path,
+                PickTarget::NinbJar => self.doc.ninb.jar = path,
             }
         }
 
@@ -322,13 +328,16 @@ impl eframe::App for App {
                 Tab::Keybinds => {
                     tabs::keybinds::show(ui, &mut self.doc, &problems, &mut self.capturing, self.advanced)
                 }
-                Tab::Theme => tabs::theme::show(ui, &mut self.doc, self.advanced),
+                Tab::Theme => {
+                    tabs::theme::show(ui, &mut self.doc, self.advanced, &mut self.browser)
+                }
                 Tab::Input => tabs::input::show(
                     ui,
                     &mut self.doc,
                     &problems,
                     self.advanced,
                     &mut self.remap_capture,
+                    &mut self.browser,
                 ),
             }
         });

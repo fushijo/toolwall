@@ -3,13 +3,20 @@
 use toolwall_core::schema::NinbAnchor;
 use toolwall_core::Document;
 
+use crate::widgets::{color_field, path_field, FileBrowser, PickTarget};
+
 const ANCHORS: &[&str] = &[
     "topleft", "top", "topright",
     "left", "right",
     "bottomleft", "bottomright",
 ];
 
-pub fn show(ui: &mut egui::Ui, doc: &mut Document, advanced: bool) {
+pub fn show(
+    ui: &mut egui::Ui,
+    doc: &mut Document,
+    advanced: bool,
+    browser: &mut FileBrowser,
+) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Around the game");
 
@@ -17,12 +24,18 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, advanced: bool) {
             .num_columns(2)
             .spacing([12.0, 6.0])
             .show(ui, |ui| {
-                ui.label("Background colour").on_hover_text("#rrggbb or #rrggbbaa");
-                ui.text_edit_singleline(&mut doc.theme.background);
+                ui.label("Background colour");
+                color_field(ui, &mut doc.theme.background);
                 ui.end_row();
 
                 ui.label("Background image");
-                ui.text_edit_singleline(&mut doc.theme.background_png);
+                path_field(
+                    ui,
+                    &mut doc.theme.background_png,
+                    browser,
+                    PickTarget::Background,
+                    "png",
+                );
                 ui.end_row();
 
                 if advanced {

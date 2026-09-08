@@ -41,6 +41,7 @@ fn sample() -> Document {
         ],
         mirrors: vec![Mirror {
             id: "eye".into(),
+            src_percent: None,
             label: Some("Boat eye".into()),
             src: Rect { x: 0, y: 0, w: 100, h: 100 },
             dst: Rect { x: 0, y: 300, w: 300, h: 300 },
@@ -159,9 +160,9 @@ fn every_tab_renders() {
     });
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
-        tabs::input::show(ui, doc, &found, true, &mut None);
+        tabs::input::show(ui, doc, &found, true, &mut None, &mut FileBrowser::default());
     });
-    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true));
+    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true, &mut FileBrowser::default()));
 }
 
 #[test]
@@ -180,9 +181,9 @@ fn tabs_render_an_empty_document() {
     });
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
-        tabs::input::show(ui, doc, &found, true, &mut None);
+        tabs::input::show(ui, doc, &found, true, &mut None, &mut FileBrowser::default());
     });
-    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true));
+    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true, &mut FileBrowser::default()));
 }
 
 /// waywall configures floating windows with `xdg_toplevel.configure(0, 0)`,

@@ -6,8 +6,8 @@ use toolwall_core::schema::{Image, Rect};
 use toolwall_core::{Document, Problem, Scope};
 
 use crate::widgets::{
-    depth_editor, expand_tilde, optional_text, problems_for, rect_editor, shader_picker,
-    FileBrowser,
+    depth_editor, optional_text, path_field, problems_for, rect_editor, shader_picker,
+    FileBrowser, PickTarget,
 };
 
 pub fn show(
@@ -45,26 +45,13 @@ pub fn show(
                             ui.end_row();
 
                             ui.label("Image file");
-                            ui.vertical(|ui| {
-                                ui.horizontal(|ui| {
-                                    ui.text_edit_singleline(&mut image.path);
-                                    if ui.button("Browse…").clicked() {
-                                        browser.open(index, &image.path, "png");
-                                    }
-                                });
-
-                                // A path that does not resolve fails silently
-                                // at load time - waywall logs a warning and
-                                // skips the overlay - so say so here instead.
-                                if !image.path.is_empty()
-                                    && !Path::new(&expand_tilde(&image.path)).is_file()
-                                {
-                                    ui.colored_label(
-                                        egui::Color32::from_rgb(255, 170, 80),
-                                        "⚠ no file at this path",
-                                    );
-                                }
-                            });
+                            path_field(
+                                ui,
+                                &mut image.path,
+                                browser,
+                                PickTarget::Image(index),
+                                "png",
+                            );
                             ui.end_row();
 
                             ui.label("Draw at");

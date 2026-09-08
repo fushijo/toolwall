@@ -228,6 +228,20 @@ pub struct Rect {
     pub h: u32,
 }
 
+/// A rectangle expressed as fractions of the resolution (0.0 - 1.0).
+///
+/// Minecraft draws its HUD relative to the window, so a capture pinned to
+/// pixels is correct at exactly one resolution and wrong at every other. The
+/// pie chart sits in the same *proportional* place whether you are at 340x1080
+/// or fullscreen.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct RectPercent {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Size {
     pub w: u32,
@@ -268,6 +282,11 @@ pub struct Mirror {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// Capture region as fractions of the resolution. Takes precedence over
+    /// `src`, and follows the game as you switch modes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src_percent: Option<RectPercent>,
+    #[serde(default = "zero_rect")]
     pub src: Rect,
     pub dst: Rect,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -445,6 +464,7 @@ fn black() -> String { "#000000ff".into() }
 fn base_label() -> String { "base".into() }
 fn gui_command() -> String { "toolwall-gui".into() }
 fn launch_delay() -> u32 { 400 }
+fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }
 fn ninb_command() -> String { "java -jar {jar}".into() }
 fn default_opacity() -> f32 { 0.92 }
 fn default_font_size() -> f32 { 14.0 }

@@ -107,6 +107,7 @@ function Modes:set(id)
         waywall.set_sensitivity(0)  -- 0 restores the configured default
     end
 
+    self.scene.resolution_hint = mode.resolution
     self.scene:set_active(self:_overlays_for(mode))
 
     self.current = id
@@ -128,6 +129,7 @@ function Modes:reset()
     end
 
     waywall.set_sensitivity(0)
+    self.scene.resolution_hint = nil
     self.scene:set_active(self:_base_overlays())
 
     self.current = nil

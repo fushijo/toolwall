@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use toolwall_core::{Document, Problem, Scope};
 
 use crate::keys;
-use crate::widgets::{expand_tilde, problems_for};
+use crate::widgets::{path_field, problems_for, FileBrowser, PickTarget};
 
 /// Which half of which rebind row is waiting for a keypress.
 #[derive(PartialEq, Eq, Clone)]
@@ -27,6 +27,7 @@ pub fn show(
     problems: &[Problem],
     advanced: bool,
     capture: &mut Option<RemapCapture>,
+    browser: &mut FileBrowser,
 ) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Mouse");
@@ -69,17 +70,7 @@ pub fn show(
             .spacing([12.0, 6.0])
             .show(ui, |ui| {
                 ui.label("Jar file");
-                ui.vertical(|ui| {
-                    ui.text_edit_singleline(&mut doc.ninb.jar);
-                    if !doc.ninb.jar.is_empty()
-                        && !std::path::Path::new(&expand_tilde(&doc.ninb.jar)).is_file()
-                    {
-                        ui.colored_label(
-                            egui::Color32::from_rgb(255, 170, 80),
-                            "⚠ no file at this path",
-                        );
-                    }
-                });
+                path_field(ui, &mut doc.ninb.jar, browser, PickTarget::NinbJar, "jar");
                 ui.end_row();
 
                 if advanced {

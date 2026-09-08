@@ -69,10 +69,6 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                             });
                             ui.end_row();
 
-                            ui.label("Press again to turn off");
-                            ui.checkbox(&mut mode.toggle, "");
-                            ui.end_row();
-
                             ui.label("Overlays").on_hover_text(
                                 "Shown automatically while this mode is active",
                             );

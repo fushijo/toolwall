@@ -103,6 +103,31 @@ pub fn shader_picker(
         });
 }
 
+/// A colour swatch you can click, backed by a #rrggbb / #rrggbbaa string.
+///
+/// waywall wants hex, but nobody should have to type hex to pick a colour.
+pub fn color_field(ui: &mut egui::Ui, hex: &mut String) {
+    let mut rgba = parse_hex(hex).unwrap_or([0, 0, 0, 255]);
+
+    ui.horizontal(|ui| {
+        if ui.color_edit_button_srgba_unmultiplied(&mut rgba).changed() {
+            *hex = format!("#{:02x}{:02x}{:02x}{:02x}", rgba[0], rgba[1], rgba[2], rgba[3]);
+        }
+        ui.add(egui::TextEdit::singleline(hex).desired_width(110.0));
+    });
+}
+
+fn parse_hex(hex: &str) -> Option<[u8; 4]> {
+    let body = hex.trim().strip_prefix('#')?;
+    let byte = |i: usize| u8::from_str_radix(body.get(i..i + 2)?, 16).ok();
+
+    match body.len() {
+        6 => Some([byte(0)?, byte(2)?, byte(4)?, 255]),
+        8 => Some([byte(0)?, byte(2)?, byte(4)?, byte(6)?]),
+        _ => None,
+    }
+}
+
 /// An optional free-text field, where empty means absent.
 pub fn optional_text(ui: &mut egui::Ui, value: &mut Option<String>) {
     let mut text = value.clone().unwrap_or_default();
@@ -123,16 +148,23 @@ pub fn problems_for(ui: &mut egui::Ui, problems: &[Problem], scope: &Scope) {
 /// Deliberately not a native file dialog: `rfd` would pull in GTK or the
 /// desktop portal, and this binary launches inside a nested compositor next to
 /// a running game. Browsing with `std::fs` costs nothing.
+/// What a pick should be written back to.
+#[derive(Clone, PartialEq, Eq)]
+pub enum PickTarget {
+    Image(usize),
+    Background,
+    NinbJar,
+}
+
 #[derive(Default)]
 pub struct FileBrowser {
-    /// Index of the image being edited, if the browser is open.
-    pub target: Option<usize>,
+    pub target: Option<PickTarget>,
     dir: PathBuf,
     extension: &'static str,
 }
 
 impl FileBrowser {
-    pub fn open(&mut self, target: usize, start_from: &str, extension: &'static str) {
+    pub fn open(&mut self, target: PickTarget, start_from: &str, extension: &'static str) {
         self.target = Some(target);
         self.extension = extension;
 
@@ -146,9 +178,9 @@ impl FileBrowser {
             .unwrap_or_else(|| PathBuf::from("."));
     }
 
-    /// Returns `(target index, path)` if the user picked a file this frame.
-    pub fn show(&mut self, ctx: &egui::Context) -> Option<(usize, String)> {
-        let target = self.target?;
+    /// Returns what was picked, and where it should go, if anything.
+    pub fn show(&mut self, ctx: &egui::Context) -> Option<(PickTarget, String)> {
+        let target = self.target.clone()?;
 
         let mut picked = None;
         let mut keep_open = true;
@@ -195,7 +227,7 @@ impl FileBrowser {
                             if ui.button(format!("🗀 {name}")).clicked() {
                                 self.dir = path;
                             }
-                        } else if ui.button(format!("🖼 {name}")).clicked() {
+                        } else if ui.button(format!("• {name}")).clicked() {
                             picked = Some(path.display().to_string());
                         }
                     }
@@ -221,4 +253,29 @@ pub fn expand_tilde(path: &str) -> String {
         },
         None => path.to_string(),
     }
+}
+
+/// A path field with a Browse button, so nobody has to type one.
+pub fn path_field(
+    ui: &mut egui::Ui,
+    value: &mut String,
+    browser: &mut FileBrowser,
+    target: PickTarget,
+    extension: &'static str,
+) {
+    ui.vertical(|ui| {
+        ui.horizontal(|ui| {
+            ui.text_edit_singleline(value);
+            if ui.button("Browse…").clicked() {
+                browser.open(target, value, extension);
+            }
+        });
+
+        if !value.is_empty() && !Path::new(&expand_tilde(value)).is_file() {
+            ui.colored_label(
+                egui::Color32::from_rgb(255, 170, 80),
+                "⚠ no file at this path",
+            );
+        }
+    });
 }
