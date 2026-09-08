@@ -49,6 +49,10 @@ pub struct Document {
     #[serde(default)]
     pub text: Vec<Text>,
 
+    /// Extra programs hosted as floating windows, e.g. Ninjabrain Bot.
+    #[serde(default)]
+    pub apps: Vec<App>,
+
     #[serde(default)]
     pub keybinds: Vec<Keybind>,
 
@@ -75,6 +79,7 @@ impl Default for Document {
             mirrors: Vec::new(),
             images: Vec::new(),
             text: Vec::new(),
+            apps: Vec::new(),
             keybinds: Vec::new(),
             hud: Hud::default(),
             gui: Gui::default(),
@@ -289,6 +294,20 @@ pub struct Text {
     pub depth: Option<i32>,
 }
 
+/// A program launched into waywall as a floating window.
+///
+/// The command is split on spaces into argv by waywall, and is trusted the
+/// same way `gui.command` is - it is named by the config owner, not by a
+/// keybind, so a shared config still cannot smuggle in a command that runs
+/// without you binding it to a key yourself.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct App {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub command: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Keybind {
     /// waywall keysym with modifiers, e.g. `Ctrl-I`, `Shift-T`, `*-F3`.
@@ -330,6 +349,8 @@ pub enum Command {
     FloatingHide,
     #[serde(rename = "gui.toggle")]
     GuiToggle,
+    #[serde(rename = "app.toggle")]
+    AppToggle,
     #[serde(rename = "exec")]
     Exec,
 }

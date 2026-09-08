@@ -206,7 +206,7 @@ impl eframe::App for App {
                 Tab::Keybinds => {
                     tabs::keybinds::show(ui, &mut self.doc, &problems, &mut self.capturing)
                 }
-                Tab::Input => tabs::input::show(ui, &mut self.doc),
+                Tab::Input => tabs::input::show(ui, &mut self.doc, &problems),
             }
         });
     }

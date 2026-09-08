@@ -51,6 +51,26 @@ function M.expand(path)
     return path
 end
 
+--[[
+    Expand a command line rather than a single path.
+
+    waywall.exec() splits on spaces into argv, so a command usually carries
+    its arguments — "java -jar ~/.config/waywall/resources/ninb.jar". The ~
+    is therefore not at the start of the string, where M.expand looks for it.
+]]
+function M.expand_command(command)
+    if command == nil or command == M.NULL or command == "" then
+        return command
+    end
+
+    local home = os.getenv("HOME")
+    if home and home ~= "" then
+        command = command:gsub("~/", home .. "/")
+    end
+
+    return M.expand(command)
+end
+
 function M.shallow_copy(t)
     local out = {}
     for k, v in pairs(t or {}) do

@@ -146,6 +146,7 @@ pub enum Scope {
     Mirror(String),
     Image(String),
     Keybind(String),
+    App(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -250,8 +251,44 @@ pub fn problems(doc: &Document) -> Vec<Problem> {
         }
     }
 
+    let mut app_ids = std::collections::HashSet::new();
+    for app in &doc.apps {
+        if app.id.trim().is_empty() {
+            push(Scope::App(app.id.clone()), "id must not be empty".into());
+        }
+        if !app_ids.insert(app.id.as_str()) {
+            push(Scope::App(app.id.clone()), format!("duplicate app id {:?}", app.id));
+        }
+        if app.command.trim().is_empty() {
+            push(Scope::App(app.id.clone()), "command must not be empty".into());
+        }
+    }
+
     let mut inputs = std::collections::HashSet::new();
     for bind in &doc.keybinds {
+        // An app.toggle naming an app that does not exist is a keybind that
+        // silently does nothing, which is worth catching before save.
+        if bind.command == crate::schema::Command::AppToggle {
+            let named = bind
+                .args
+                .as_ref()
+                .and_then(|a| a.get("app"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            if named.is_empty() {
+                push(
+                    Scope::Keybind(bind.input.clone()),
+                    "app.toggle needs an app".into(),
+                );
+            } else if !app_ids.contains(named) {
+                push(
+                    Scope::Keybind(bind.input.clone()),
+                    format!("app.toggle references unknown app {named:?}"),
+                );
+            }
+        }
+
         if bind.input.trim().is_empty() {
             push(
                 Scope::Keybind(bind.input.clone()),
@@ -329,6 +366,27 @@ mod tests {
     fn accepts_a_valid_document() {
         assert!(validate(&doc_with_mode()).is_ok());
         assert!(problems(&doc_with_mode()).is_empty());
+    }
+
+    #[test]
+    fn rejects_an_app_toggle_naming_a_missing_app() {
+        let mut doc = doc_with_mode();
+        doc.keybinds.push(Keybind {
+            input: "grave".into(),
+            command: Command::AppToggle,
+            args: Some(serde_json::json!({ "app": "ninb" })),
+            label: None,
+        });
+
+        // No apps defined yet: the keybind would silently do nothing.
+        assert!(validate(&doc).is_err());
+
+        doc.apps.push(App {
+            id: "ninb".into(),
+            label: Some("Ninjabrain Bot".into()),
+            command: "java -jar ~/ninb.jar".into(),
+        });
+        assert!(validate(&doc).is_ok());
     }
 
     #[test]

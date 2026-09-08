@@ -149,7 +149,10 @@ fn every_tab_renders() {
         let mut capturing = None;
         tabs::keybinds::show(ui, doc, &found, &mut capturing);
     });
-    render(&mut doc, |ui, doc| tabs::input::show(ui, doc));
+    render(&mut doc, |ui, doc| {
+        let found = problems(doc);
+        tabs::input::show(ui, doc, &found);
+    });
 }
 
 #[test]
@@ -166,7 +169,10 @@ fn tabs_render_an_empty_document() {
         let mut capturing = None;
         tabs::keybinds::show(ui, doc, &[], &mut capturing);
     });
-    render(&mut doc, |ui, doc| tabs::input::show(ui, doc));
+    render(&mut doc, |ui, doc| {
+        let found = problems(doc);
+        tabs::input::show(ui, doc, &found);
+    });
 }
 
 /// waywall configures floating windows with `xdg_toplevel.configure(0, 0)`,

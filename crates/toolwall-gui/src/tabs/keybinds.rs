@@ -25,6 +25,7 @@ const COMMANDS: &[(Command, &str)] = &[
     (Command::FloatingShow, "floating.show"),
     (Command::FloatingHide, "floating.hide"),
     (Command::GuiToggle, "gui.toggle"),
+    (Command::AppToggle, "app.toggle"),
     (Command::Exec, "exec"),
 ];
 
@@ -39,6 +40,7 @@ pub fn show(
     capturing: &mut Option<usize>,
 ) {
     let mode_ids: Vec<String> = doc.modes.iter().map(|m| m.id.clone()).collect();
+    let app_ids: Vec<String> = doc.apps.iter().map(|a| a.id.clone()).collect();
     let allow_exec = doc.gui.allow_exec;
 
     // A capture in progress swallows the next keypress into the binding.
@@ -106,7 +108,7 @@ pub fn show(
                                 });
                             ui.end_row();
 
-                            args_editor(ui, index, bind, &mode_ids, allow_exec);
+                            args_editor(ui, index, bind, &mode_ids, &app_ids, allow_exec);
                         });
 
                     if ui.button("Remove keybind").clicked() {
@@ -142,6 +144,7 @@ fn args_editor(
     index: usize,
     bind: &mut Keybind,
     mode_ids: &[String],
+    app_ids: &[String],
     allow_exec: bool,
 ) {
     match bind.command {
@@ -157,6 +160,31 @@ fn args_editor(
                         }
                     }
                 });
+            ui.end_row();
+        }
+
+        Command::AppToggle => {
+            ui.label("app").on_hover_text(
+                "Launches the app if it is not running yet, then reveals it",
+            );
+            ui.vertical(|ui| {
+                let current = arg_str(&bind.args, "app");
+                egui::ComboBox::from_id_salt(("arg-app", index))
+                    .selected_text(if current.is_empty() { "—".into() } else { current.clone() })
+                    .show_ui(ui, |ui| {
+                        for id in app_ids {
+                            if ui.selectable_label(&current == id, id).clicked() {
+                                set_arg(&mut bind.args, "app", json!(id));
+                            }
+                        }
+                    });
+                if app_ids.is_empty() {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(255, 170, 80),
+                        "⚠ no apps defined - add one in the Input tab",
+                    );
+                }
+            });
             ui.end_row();
         }
 

@@ -42,7 +42,7 @@ function M.validate(doc)
             :format(tostring(doc.version), M.SCHEMA_VERSION)
     end
 
-    for _, key in ipairs({ "modes", "mirrors", "images", "text", "keybinds" }) do
+    for _, key in ipairs({ "modes", "mirrors", "images", "text", "apps", "keybinds" }) do
         if doc[key] ~= nil and type(doc[key]) ~= "table" then
             return nil, key .. " must be an array"
         end
@@ -50,7 +50,7 @@ function M.validate(doc)
     end
 
     -- Index collections by id for O(1) lookup and duplicate detection.
-    for _, key in ipairs({ "modes", "mirrors", "images", "text" }) do
+    for _, key in ipairs({ "modes", "mirrors", "images", "text", "apps" }) do
         local seen = {}
         for _, entry in ipairs(doc[key]) do
             if type(entry.id) ~= "string" or entry.id == "" then

@@ -2,9 +2,12 @@
 
 use std::collections::BTreeMap;
 
-use toolwall_core::Document;
+use toolwall_core::schema::App;
+use toolwall_core::{Document, Problem, Scope};
 
-pub fn show(ui: &mut egui::Ui, doc: &mut Document) {
+use crate::widgets::{optional_text, problems_for};
+
+pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         egui::Grid::new("input-grid")
             .num_columns(2)
@@ -58,6 +61,14 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document) {
         ui.heading("Remaps");
         ui.weak("Source key or mouse button → output key, e.g. MB4 → Home.");
         remap_editor(ui, &mut doc.input.remaps);
+
+        ui.separator();
+        ui.heading("Floating apps");
+        ui.weak(
+            "Programs hosted as floating windows, e.g. Ninjabrain Bot. Bind one to a key \
+             with the app.toggle command.",
+        );
+        apps_editor(ui, doc, problems);
 
         ui.separator();
         ui.heading("GUI");
@@ -123,5 +134,57 @@ fn remap_editor(ui: &mut egui::Ui, remaps: &mut BTreeMap<String, String>) {
 
     if ui.button("Add remap").clicked() {
         remaps.insert(String::new(), String::new());
+    }
+}
+
+/// Apps are launched by `app.toggle`, which is what makes a "toggle
+/// Ninjabrain Bot" keybind actually start Ninjabrain Bot - `floating.toggle`
+/// only changes the visibility of things already running.
+fn apps_editor(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
+    let mut remove = None;
+
+    for (index, app) in doc.apps.iter_mut().enumerate() {
+        let heading = app.label.clone().unwrap_or_else(|| app.id.clone());
+
+        egui::CollapsingHeader::new(heading)
+            .id_salt(("app", index))
+            .show(ui, |ui| {
+                problems_for(ui, problems, &Scope::App(app.id.clone()));
+
+                egui::Grid::new(("app-grid", index))
+                    .num_columns(2)
+                    .spacing([12.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.label("id");
+                        ui.text_edit_singleline(&mut app.id);
+                        ui.end_row();
+
+                        ui.label("label");
+                        optional_text(ui, &mut app.label);
+                        ui.end_row();
+
+                        ui.label("command").on_hover_text(
+                            "Split on spaces into arguments by waywall. ~ is expanded.",
+                        );
+                        ui.text_edit_singleline(&mut app.command);
+                        ui.end_row();
+                    });
+
+                if ui.button("Remove app").clicked() {
+                    remove = Some(index);
+                }
+            });
+    }
+
+    if let Some(index) = remove {
+        doc.apps.remove(index);
+    }
+
+    if ui.button("Add app").clicked() {
+        doc.apps.push(App {
+            id: format!("app{}", doc.apps.len() + 1),
+            label: None,
+            command: String::new(),
+        });
     }
 }

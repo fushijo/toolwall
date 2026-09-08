@@ -360,6 +360,60 @@ check("gui.toggle forces a visibility transition so waywall commits the window",
     os.remove(path)
 end)
 
+check("app.toggle launches a configured app and reveals it", function()
+    -- floating.toggle only changes visibility, so a "toggle Ninjabrain Bot"
+    -- keybind bound to it can never actually start Ninjabrain Bot.
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "apps": [ { "id": "ninb", "command": "java -jar ~/ninb.jar" } ],
+        "keybinds": [ { "input": "grave", "command": "app.toggle",
+                        "args": { "app": "ninb" } } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["grave"]()
+
+    local execed
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "exec" then execed = entry.args[1] end
+    end
+
+    assert_eq(execed, "java -jar " .. (os.getenv("HOME") or "") .. "/ninb.jar",
+        "app command execed with ~ expanded")
+    assert_eq(waywall.floating, true, "floating revealed after launch")
+
+    -- A second press toggles visibility without launching a second copy.
+    cfg.actions["grave"]()
+    assert_eq(waywall.floating, false, "second press hides")
+
+    local launches = 0
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "exec" then launches = launches + 1 end
+    end
+    assert_eq(launches, 1, "app launched only once")
+    os.remove(path)
+end)
+
+check("app.toggle naming an unknown app does not consume the keypress", function()
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "keybinds": [ { "input": "grave", "command": "app.toggle",
+                        "args": { "app": "nope" } } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    assert_eq(cfg.actions["grave"](), false, "should pass the key through")
+    os.remove(path)
+end)
+
 check("unknown commands do not consume the keypress", function()
     local path = write_config([[
       { "version": 1,

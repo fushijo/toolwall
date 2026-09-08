@@ -3,100 +3,176 @@
   "$id": "https://github.com/OWNER/toolwall/schema/toolwall.schema.json",
   "title": "toolwall configuration",
   "type": "object",
-  "required": ["version"],
+  "required": [
+    "version"
+  ],
   "additionalProperties": false,
-
   "properties": {
     "version": {
       "const": 1,
       "description": "Schema version. Bumped only on breaking changes."
     },
-
     "meta": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string" },
-        "author": { "type": "string" },
-        "description": { "type": "string" }
+        "name": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
       }
     },
-
     "input": {
       "type": "object",
       "additionalProperties": false,
       "description": "Maps directly onto waywall's input table.",
       "properties": {
-        "layout": { "type": "string" },
-        "model": { "type": "string" },
-        "rules": { "type": "string" },
-        "variant": { "type": "string" },
-        "options": { "type": "string" },
+        "layout": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "rules": {
+          "type": "string"
+        },
+        "variant": {
+          "type": "string"
+        },
+        "options": {
+          "type": "string"
+        },
         "remaps": {
           "type": "object",
           "description": "Source keycode or mouse button -> output keycode.",
-          "additionalProperties": { "type": "string" }
+          "additionalProperties": {
+            "type": "string"
+          }
         },
-        "repeat_rate": { "type": "integer", "minimum": -1 },
-        "repeat_delay": { "type": "integer", "minimum": -1 },
-        "sensitivity": { "type": "number", "exclusiveMinimum": 0 },
-        "confine_pointer": { "type": "boolean" }
+        "repeat_rate": {
+          "type": "integer",
+          "minimum": -1
+        },
+        "repeat_delay": {
+          "type": "integer",
+          "minimum": -1
+        },
+        "sensitivity": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "confine_pointer": {
+          "type": "boolean"
+        }
       }
     },
-
     "theme": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "background": { "$ref": "#/$defs/color" },
-        "background_png": { "type": "string" },
-        "cursor_theme": { "type": "string" },
-        "cursor_icon": { "type": "string" },
-        "cursor_size": { "type": "integer", "minimum": 0 },
+        "background": {
+          "$ref": "#/$defs/color"
+        },
+        "background_png": {
+          "type": "string"
+        },
+        "cursor_theme": {
+          "type": "string"
+        },
+        "cursor_icon": {
+          "type": "string"
+        },
+        "cursor_size": {
+          "type": "integer",
+          "minimum": 0
+        },
         "ninb_anchor": {
           "oneOf": [
             {
               "type": "string",
-              "enum": ["", "topleft", "top", "topright", "left", "right", "bottomleft", "bottomright"]
+              "enum": [
+                "",
+                "topleft",
+                "top",
+                "topright",
+                "left",
+                "right",
+                "bottomleft",
+                "bottomright"
+              ]
             },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["position"],
+              "required": [
+                "position"
+              ],
               "properties": {
                 "position": {
                   "type": "string",
-                  "enum": ["topleft", "top", "topright", "left", "right", "bottomleft", "bottomright"]
+                  "enum": [
+                    "topleft",
+                    "top",
+                    "topright",
+                    "left",
+                    "right",
+                    "bottomleft",
+                    "bottomright"
+                  ]
                 },
-                "x": { "type": "integer" },
-                "y": { "type": "integer" }
+                "x": {
+                  "type": "integer"
+                },
+                "y": {
+                  "type": "integer"
+                }
               }
             }
           ]
         },
-        "ninb_opacity": { "type": "number", "minimum": 0, "maximum": 1 }
+        "ninb_opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     },
-
     "window": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "fullscreen_width": { "type": "integer", "minimum": 0, "maximum": 16384 },
-        "fullscreen_height": { "type": "integer", "minimum": 0, "maximum": 16384 }
+        "fullscreen_width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "fullscreen_height": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        }
       }
     },
-
     "experimental": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "debug": { "type": "boolean" },
-        "jit": { "type": "boolean" },
-        "tearing": { "type": "boolean" }
+        "debug": {
+          "type": "boolean"
+        },
+        "jit": {
+          "type": "boolean"
+        },
+        "tearing": {
+          "type": "boolean"
+        }
       }
     },
-
     "shaders": {
       "type": "object",
       "description": "Shader name -> source files, resolved relative to the waywall config dir.",
@@ -104,54 +180,68 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "vertex": { "type": "string" },
-          "fragment": { "type": "string" }
+          "vertex": {
+            "type": "string"
+          },
+          "fragment": {
+            "type": "string"
+          }
         }
       }
     },
-
     "default_mode": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Mode id applied on startup. null means start unmodified."
     },
-
     "base_overlays": {
       "type": "array",
       "description": "Mirror/image ids that stay live in every mode.",
-      "items": { "$ref": "#/$defs/id" }
+      "items": {
+        "$ref": "#/$defs/id"
+      }
     },
-
     "modes": {
       "type": "array",
-      "items": { "$ref": "#/$defs/mode" }
+      "items": {
+        "$ref": "#/$defs/mode"
+      }
     },
-
     "mirrors": {
       "type": "array",
-      "items": { "$ref": "#/$defs/mirror" }
+      "items": {
+        "$ref": "#/$defs/mirror"
+      }
     },
-
     "images": {
       "type": "array",
-      "items": { "$ref": "#/$defs/image" }
+      "items": {
+        "$ref": "#/$defs/image"
+      }
     },
-
     "text": {
       "type": "array",
       "description": "HUD elements, re-rendered on mode and resolution changes.",
-      "items": { "$ref": "#/$defs/text" }
+      "items": {
+        "$ref": "#/$defs/text"
+      }
     },
-
     "keybinds": {
       "type": "array",
-      "items": { "$ref": "#/$defs/keybind" }
+      "items": {
+        "$ref": "#/$defs/keybind"
+      }
     },
-
     "hud": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "idle_label": { "type": "string", "default": "base" },
+        "idle_label": {
+          "type": "string",
+          "default": "base"
+        },
         "follow_state": {
           "type": "boolean",
           "default": false,
@@ -161,16 +251,26 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "x": { "type": "integer" },
-            "y": { "type": "integer" },
-            "color": { "$ref": "#/$defs/color" },
-            "size": { "type": "integer", "minimum": 1 },
-            "depth": { "type": "integer" }
+            "x": {
+              "type": "integer"
+            },
+            "y": {
+              "type": "integer"
+            },
+            "color": {
+              "$ref": "#/$defs/color"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "depth": {
+              "type": "integer"
+            }
           }
         }
       }
     },
-
     "gui": {
       "type": "object",
       "additionalProperties": false,
@@ -179,59 +279,119 @@
           "type": "string",
           "description": "Executable launched inside waywall by the gui.toggle command."
         },
-        "launch_delay_ms": { "type": "integer", "minimum": 0, "default": 400 },
+        "launch_delay_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 400
+        },
         "allow_exec": {
           "type": "boolean",
           "default": false,
           "description": "Enables the arbitrary 'exec' keybind command. Off by default so shared configs cannot run commands on load."
         }
       }
+    },
+    "apps": {
+      "type": "array",
+      "description": "Programs hosted as floating windows, launched by app.toggle.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "command"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string",
+            "description": "Split on spaces into argv by waywall. ~ is expanded."
+          }
+        }
+      }
     }
   },
-
   "$defs": {
     "id": {
       "type": "string",
       "minLength": 1,
       "pattern": "^[a-zA-Z0-9_.-]+$"
     },
-
     "color": {
       "type": "string",
       "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
     },
-
     "rect": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["x", "y", "w", "h"],
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
       "properties": {
-        "x": { "type": "integer" },
-        "y": { "type": "integer" },
-        "w": { "type": "integer", "minimum": 0 },
-        "h": { "type": "integer", "minimum": 0 }
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        },
+        "w": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "h": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
-
     "mode": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "resolution"],
+      "required": [
+        "id",
+        "resolution"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "label": { "type": "string" },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string"
+        },
         "resolution": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["width", "height"],
+          "required": [
+            "width",
+            "height"
+          ],
           "description": "0x0 stretches Minecraft to the waywall window. Leaderboard rules cap any dimension at 16384 and permit only one resolution that exceeds your monitor bounds.",
           "properties": {
-            "width": { "type": "integer", "minimum": 0, "maximum": 16384 },
-            "height": { "type": "integer", "minimum": 0, "maximum": 16384 }
+            "width": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 16384
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 16384
+            }
           }
         },
         "sensitivity": {
-          "type": ["number", "null"],
+          "type": [
+            "number",
+            "null"
+          ],
           "exclusiveMinimum": 0,
           "description": "null inherits input.sensitivity."
         },
@@ -240,73 +400,146 @@
           "default": true,
           "description": "Pressing the mode's keybind again returns to the base state."
         },
-        "mirrors": { "type": "array", "items": { "$ref": "#/$defs/id" } },
-        "images": { "type": "array", "items": { "$ref": "#/$defs/id" } }
-      }
-    },
-
-    "mirror": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "src", "dst"],
-      "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "label": { "type": "string" },
-        "src": { "$ref": "#/$defs/rect" },
-        "dst": { "$ref": "#/$defs/rect" },
-        "depth": { "type": "integer" },
-        "shader": { "type": ["string", "null"] },
-        "color_key": {
-          "type": ["object", "null"],
-          "additionalProperties": false,
-          "required": ["input", "output"],
-          "properties": {
-            "input": { "$ref": "#/$defs/color" },
-            "output": { "$ref": "#/$defs/color" }
+        "mirrors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
           }
         }
       }
     },
-
+    "mirror": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "src",
+        "dst"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "src": {
+          "$ref": "#/$defs/rect"
+        },
+        "dst": {
+          "$ref": "#/$defs/rect"
+        },
+        "depth": {
+          "type": "integer"
+        },
+        "shader": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "color_key": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "input",
+            "output"
+          ],
+          "properties": {
+            "input": {
+              "$ref": "#/$defs/color"
+            },
+            "output": {
+              "$ref": "#/$defs/color"
+            }
+          }
+        }
+      }
+    },
     "image": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "path", "dst"],
+      "required": [
+        "id",
+        "path",
+        "dst"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "label": { "type": "string" },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string"
+        },
         "path": {
           "type": "string",
           "description": "PNG path. A leading ~ and $VARS are expanded by the runtime."
         },
-        "dst": { "$ref": "#/$defs/rect" },
-        "depth": { "type": "integer" },
-        "shader": { "type": ["string", "null"] }
+        "dst": {
+          "$ref": "#/$defs/rect"
+        },
+        "depth": {
+          "type": "integer"
+        },
+        "shader": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
-
     "text": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "template", "x", "y"],
+      "required": [
+        "id",
+        "template",
+        "x",
+        "y"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
         "template": {
           "type": "string",
           "description": "Placeholders: {mode} {res} {width} {height} {sens} {state}. An element rendering to an empty string is skipped."
         },
-        "x": { "type": "integer" },
-        "y": { "type": "integer" },
-        "color": { "$ref": "#/$defs/color" },
-        "size": { "type": "integer", "minimum": 1 },
-        "depth": { "type": "integer" }
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "depth": {
+          "type": "integer"
+        }
       }
     },
-
     "keybind": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["input", "command"],
+      "required": [
+        "input",
+        "command"
+      ],
       "properties": {
         "input": {
           "type": "string",
@@ -328,6 +561,7 @@
             "floating.show",
             "floating.hide",
             "gui.toggle",
+            "app.toggle",
             "exec"
           ]
         },
@@ -335,7 +569,9 @@
           "type": "object",
           "description": "Command-specific arguments. See docs/schema.md."
         },
-        "label": { "type": "string" }
+        "label": {
+          "type": "string"
+        }
       }
     }
   }

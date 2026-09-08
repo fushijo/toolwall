@@ -181,6 +181,51 @@ function M.bind(rt)
         end
     end)
 
+    --[[
+        Launch a configured app as a floating window, then reveal it.
+
+        This is what makes a "toggle Ninjabrain Bot" keybind actually open
+        Ninjabrain Bot. floating.toggle only changes the visibility of windows
+        that are already running, so on its own it can never start anything.
+
+        KNOWN LIMITATION: waywall.show_floating() is global, so revealing one
+        floating window reveals every running one. Showing only the app you
+        asked for needs per-window control, which is an upstream change.
+    ]]
+    M.register("app.toggle", function(state, args)
+        local id = args.app
+        local app = state.doc._apps and state.doc._apps[id]
+        if not app then
+            util.warn(("unknown app %q"):format(tostring(id)))
+            return false
+        end
+
+        state.apps_launched = state.apps_launched or {}
+
+        if not state.apps_launched[id] then
+            local cmd = app.command
+            if not cmd or cmd == util.NULL or cmd == "" then
+                util.warn(("app %q has no command"):format(id))
+                return false
+            end
+
+            waywall.exec(util.expand_command(cmd))
+            state.apps_launched[id] = true
+
+            local gui = state.doc.gui or {}
+            pcall(waywall.sleep, gui.launch_delay_ms or 400)
+
+            force_show_floating()
+            return
+        end
+
+        if waywall.floating_shown() then
+            waywall.show_floating(false)
+        else
+            force_show_floating()
+        end
+    end)
+
     M.register("exec", function(state, args)
         local gui = state.doc.gui or {}
         if not util.bool(gui.allow_exec, false) then
