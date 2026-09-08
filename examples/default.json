@@ -1,0 +1,124 @@
+{
+  "version": 1,
+
+  "meta": {
+    "name": "default",
+    "description": "Starting point. Replace the rects with your own measurements."
+  },
+
+  "input": {
+    "layout": "us",
+    "repeat_rate": 20,
+    "repeat_delay": 300,
+    "sensitivity": 1.0,
+    "confine_pointer": false,
+    "remaps": {
+      "MB4": "Home"
+    }
+  },
+
+  "theme": {
+    "background": "#303030ff",
+    "ninb_anchor": { "position": "right", "x": -10, "y": 10 },
+    "ninb_opacity": 1.0
+  },
+
+  "window": {
+    "fullscreen_width": 0,
+    "fullscreen_height": 0
+  },
+
+  "default_mode": null,
+
+  "base_overlays": [],
+
+  "mirrors": [
+    {
+      "id": "eye_measure",
+      "label": "Boat eye measurement",
+      "src": { "x": 160, "y": 900, "w": 100, "h": 100 },
+      "dst": { "x": 0, "y": 300, "w": 300, "h": 300 },
+      "depth": 1
+    },
+    {
+      "id": "pie_chart",
+      "label": "F3 pie chart",
+      "src": { "x": 0, "y": 0, "w": 200, "h": 200 },
+      "dst": { "x": 0, "y": 0, "w": 200, "h": 200 },
+      "color_key": { "input": "#dddddd", "output": "#ee1111" },
+      "depth": 1
+    }
+  ],
+
+  "images": [
+    {
+      "id": "boateye_grid",
+      "label": "Boat eye grid",
+      "path": "~/.config/waywall/overlays/boateye.png",
+      "dst": { "x": 0, "y": 300, "w": 300, "h": 300 },
+      "depth": 2
+    }
+  ],
+
+  "modes": [
+    {
+      "id": "thin",
+      "label": "Thin BT",
+      "resolution": { "width": 320, "height": 1080 },
+      "sensitivity": null,
+      "toggle": true,
+      "mirrors": [],
+      "images": []
+    },
+    {
+      "id": "wide",
+      "label": "Wide",
+      "resolution": { "width": 1920, "height": 300 },
+      "sensitivity": null,
+      "toggle": true,
+      "mirrors": [],
+      "images": []
+    },
+    {
+      "id": "eye",
+      "label": "Eye measure",
+      "resolution": { "width": 384, "height": 16384 },
+      "sensitivity": 0.4,
+      "toggle": true,
+      "mirrors": ["eye_measure"],
+      "images": ["boateye_grid"]
+    }
+  ],
+
+  "text": [
+    {
+      "id": "hud_mode",
+      "template": "{mode}  {res}",
+      "x": 8,
+      "y": 8,
+      "color": "#ffffffcc",
+      "size": 2,
+      "depth": 10
+    }
+  ],
+
+  "keybinds": [
+    { "input": "Ctrl-I", "command": "gui.toggle", "label": "Open settings" },
+    { "input": "Shift-T", "command": "mode.set", "args": { "mode": "thin" }, "label": "Thin BT" },
+    { "input": "Shift-W", "command": "mode.set", "args": { "mode": "wide" }, "label": "Wide" },
+    { "input": "Shift-E", "command": "mode.set", "args": { "mode": "eye" }, "label": "Eye measure" },
+    { "input": "Shift-R", "command": "mode.reset", "label": "Reset" },
+    { "input": "Ctrl-Shift-N", "command": "floating.toggle", "label": "Toggle Ninjabrain Bot" }
+  ],
+
+  "hud": {
+    "idle_label": "base",
+    "follow_state": false
+  },
+
+  "gui": {
+    "command": "toolwall-gui",
+    "launch_delay_ms": 400,
+    "allow_exec": false
+  }
+}
