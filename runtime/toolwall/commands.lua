@@ -12,6 +12,7 @@
 ]]
 
 local waywall = require("waywall")
+local launch = require("toolwall.launch")
 local util = require("toolwall.util")
 
 local M = {}
@@ -71,18 +72,11 @@ function M.bind(rt)
     end)
 
     --[[
-        Floating-window control.
-
-        KNOWN LIMITATION: waywall.show_floating() is global. It shows or hides
-        every floating window at once, including Ninjabrain Bot. There is
-        currently no per-window control and no anchoring for anything other
-        than Ninjabrain Bot (theme.ninb_anchor is hardcoded to it).
-
-        Generalising this is the first upstream patch worth writing. Until
-        then, opening the toolwall GUI will also reveal Ninjabrain Bot.
-    ]]
-    --[[
         Force every floating window to be shown, and committed.
+
+        KNOWN LIMITATION: waywall.show_floating() is global — it shows or hides
+        every floating window at once, so revealing the GUI also reveals
+        Ninjabrain Bot. Per-window control is an upstream change.
 
         waywall's floating_set_visible() returns early when the requested
         visibility already matches the current flag:
@@ -130,47 +124,28 @@ function M.bind(rt)
 
     M.register("gui.toggle", function(state)
         local gui = state.doc.gui or {}
+        local cmd = gui.command
 
-        if not state.gui_launched then
-            local cmd = gui.command
-            if not cmd or cmd == util.NULL or cmd == "" then
-                util.warn("no gui.command configured")
-                return false
-            end
+        if not cmd or cmd == util.NULL or cmd == "" then
+            util.warn("no gui.command configured")
+            return false
+        end
 
-            --[[
-                waywall.exec() is a bare execvp() using the compositor's own
-                PATH, not a shell. That PATH comes from however waywall was
-                launched (Prism Launcher, a desktop entry, ...), which
-                commonly does not include ~/.cargo/bin the way an
-                interactive shell's PATH would. Expanding ~ here lets
-                gui.command name an absolute-ish path that survives that,
-                the same way image/shader paths already do.
-            ]]
-            waywall.exec(util.expand(cmd))
-            state.gui_launched = true
+        cmd = util.expand_command(cmd)
 
-            --[[
-                Give the client a moment to map before revealing it.
-
-                This is the only call in the path that suspends execution, and
-                a failure here must not stop us revealing the window we just
-                launched — losing the delay is recoverable, never showing the
-                GUI is not.
-            ]]
+        --[[
+            Launch state lives in a pidfile, not in this table. Saving from
+            the GUI reloads the config, which rebuilds the Lua VM and would
+            otherwise lose the fact that the GUI is already open — so the
+            next press would open a second one, and the next a third.
+        ]]
+        if launch.once(waywall, "gui", cmd) then
             local slept = pcall(waywall.sleep, gui.launch_delay_ms or 400)
             if not slept then
                 util.warn("launch delay failed; revealing the GUI anyway")
             end
 
-            -- The window has only just mapped, so it is exactly the case that
-            -- needs the forced transition described above.
             force_show_floating()
-
-            -- waywall's log is the only observability this path has, and it
-            -- is the one users report when the GUI does not appear.
-            util.warn(("launched GUI %q; floating shown = %s")
-                :format(util.expand(cmd), tostring(waywall.floating_shown())))
             return
         end
 
@@ -200,18 +175,17 @@ function M.bind(rt)
             return false
         end
 
-        state.apps_launched = state.apps_launched or {}
+        local cmd = app.command
+        if not cmd or cmd == util.NULL or cmd == "" then
+            util.warn(("app %q has no command"):format(id))
+            return false
+        end
 
-        if not state.apps_launched[id] then
-            local cmd = app.command
-            if not cmd or cmd == util.NULL or cmd == "" then
-                util.warn(("app %q has no command"):format(id))
-                return false
-            end
+        cmd = util.expand_command(cmd)
 
-            waywall.exec(util.expand_command(cmd))
-            state.apps_launched[id] = true
-
+        -- Tracked by pidfile for the same reason gui.toggle is: a reload
+        -- must not start a second Ninjabrain Bot.
+        if launch.once(waywall, "app-" .. id, cmd) then
             local gui = state.doc.gui or {}
             pcall(waywall.sleep, gui.launch_delay_ms or 400)
 

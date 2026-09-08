@@ -153,6 +153,7 @@ fn every_tab_renders() {
         let found = problems(doc);
         tabs::input::show(ui, doc, &found);
     });
+    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc));
 }
 
 #[test]
@@ -173,6 +174,7 @@ fn tabs_render_an_empty_document() {
         let found = problems(doc);
         tabs::input::show(ui, doc, &found);
     });
+    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc));
 }
 
 /// waywall configures floating windows with `xdg_toplevel.configure(0, 0)`,

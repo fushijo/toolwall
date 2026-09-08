@@ -34,7 +34,8 @@ fn main() -> Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(DEFAULT_SIZE)
             .with_min_inner_size([480.0, 360.0])
-            .with_title("toolwall"),
+            .with_title("toolwall")
+            .with_transparent(true),
         ..Default::default()
     };
 
@@ -65,6 +66,7 @@ enum Tab {
     Mirrors,
     Images,
     Keybinds,
+    Theme,
     Input,
 }
 
@@ -113,6 +115,43 @@ impl App {
         ctx.request_repaint();
     }
 
+    /// Push the document's appearance settings into egui, every frame, so
+    /// edits in the Theme tab are visible as you make them.
+    fn apply_appearance(&mut self, ctx: &egui::Context) {
+        let look = &self.doc.gui.appearance;
+
+        let mut visuals = if look.dark {
+            egui::Visuals::dark()
+        } else {
+            egui::Visuals::light()
+        };
+
+        // Translucency has to be painted, not just requested: the window is
+        // transparent, so every opaque surface we draw is one we chose to.
+        let alpha = (look.opacity.clamp(0.15, 1.0) * 255.0) as u8;
+        let tint = |c: egui::Color32| {
+            egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), alpha)
+        };
+
+        visuals.panel_fill = tint(if look.dark {
+            egui::Color32::from_rgb(12, 12, 14)
+        } else {
+            egui::Color32::from_rgb(246, 246, 248)
+        });
+        visuals.window_fill = visuals.panel_fill;
+        visuals.extreme_bg_color = tint(visuals.extreme_bg_color);
+        visuals.faint_bg_color = tint(visuals.faint_bg_color);
+
+        ctx.set_visuals(visuals);
+
+        // Zoom scales the whole UI with the text, which keeps hit targets and
+        // spacing proportional - setting a font size alone does not.
+        let zoom = (look.font_size / 14.0).clamp(0.7, 1.8);
+        if (ctx.zoom_factor() - zoom).abs() > 0.01 {
+            ctx.set_zoom_factor(zoom);
+        }
+    }
+
     fn revert(&mut self) {
         self.status = Some(match self.store.load() {
             Ok(doc) => {
@@ -128,6 +167,7 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         Self::ensure_usable_size(ctx);
+        self.apply_appearance(ctx);
 
         // Cheap for a document this size, and it keeps every inline warning
         // honest as you type rather than only at save time.
@@ -145,7 +185,16 @@ impl eframe::App for App {
                 ui.selectable_value(&mut self.tab, Tab::Mirrors, "Mirrors");
                 ui.selectable_value(&mut self.tab, Tab::Images, "Images");
                 ui.selectable_value(&mut self.tab, Tab::Keybinds, "Keybinds");
+                ui.selectable_value(&mut self.tab, Tab::Theme, "Theme");
                 ui.selectable_value(&mut self.tab, Tab::Input, "Input");
+
+                // Right-aligned close. The editor floats over the game, so
+                // dismissing it needs to be reachable without the keybind.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("✕").on_hover_text("Close").clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
             });
         });
 
@@ -206,6 +255,7 @@ impl eframe::App for App {
                 Tab::Keybinds => {
                     tabs::keybinds::show(ui, &mut self.doc, &problems, &mut self.capturing)
                 }
+                Tab::Theme => tabs::theme::show(ui, &mut self.doc),
                 Tab::Input => tabs::input::show(ui, &mut self.doc, &problems),
             }
         });

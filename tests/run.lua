@@ -12,6 +12,13 @@ package.path = table.concat({
 
 local waywall = require("waywall")
 
+-- Stand in for /proc, so a launched process can be "alive" with a chosen
+-- command line. Applied once: launch.lua keeps no state of its own.
+local launch = require("toolwall.launch")
+launch.proc_cmdline = function(pid)
+    return waywall.processes[pid]
+end
+
 local passed, failed = 0, 0
 
 local function check(name, fn)
@@ -316,12 +323,8 @@ check("gui.toggle expands ~ in gui.command before exec", function()
 
     cfg.actions["Ctrl-I"]()
 
-    local exec_cmd = nil
-    for _, entry in ipairs(waywall.log) do
-        if entry.name == "exec" then exec_cmd = entry.args[1] end
-    end
-
-    assert_eq(exec_cmd, (os.getenv("HOME") or "") .. "/bin/toolwall-gui", "expanded exec command")
+    assert_eq(waywall.launched[1], (os.getenv("HOME") or "") .. "/bin/toolwall-gui",
+        "expanded command inside the launcher")
     os.remove(path)
 end)
 
@@ -382,8 +385,17 @@ check("app.toggle launches a configured app and reveals it", function()
         if entry.name == "exec" then execed = entry.args[1] end
     end
 
-    assert_eq(execed, "java -jar " .. (os.getenv("HOME") or "") .. "/ninb.jar",
-        "app command execed with ~ expanded")
+    -- Launches go through a generated script so the child's pid can be
+    -- recorded; the real command lives inside it.
+    assert_eq(execed ~= nil and execed:match("^sh ") ~= nil, true,
+        "launched via the tracking script")
+
+    local script = execed:match("^sh (.+)$")
+    local fh = assert(io.open(script, "r"))
+    local body = fh:read("*a")
+    fh:close()
+    assert_eq(body:find("java -jar " .. (os.getenv("HOME") or "") .. "/ninb.jar", 1, true) ~= nil,
+        true, "app command expanded inside the launcher")
     assert_eq(waywall.floating, true, "floating revealed after launch")
 
     -- A second press toggles visibility without launching a second copy.
@@ -411,6 +423,46 @@ check("app.toggle naming an unknown app does not consume the keypress", function
     waywall.mount_view()
 
     assert_eq(cfg.actions["grave"](), false, "should pass the key through")
+    os.remove(path)
+end)
+
+check("a config reload does not launch a second GUI", function()
+    -- Saving from the GUI trips the hot reload, which rebuilds the Lua VM and
+    -- destroys all runtime state. Before launch tracking moved to a pidfile,
+    -- that lost "the GUI is already open" and every save added another copy.
+    local body = [[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "keybinds": [ { "input": "Ctrl-I", "command": "gui.toggle" } ],
+        "gui": { "command": "toolwall-gui" } }
+    ]]
+    local path = write_config(body)
+
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Ctrl-I"]()
+    assert_eq(#waywall.launched, 1, "launched once")
+
+    -- Now simulate what a save does: rebuild the VM from scratch. Everything
+    -- the runtime knew is gone; only the pidfile survives.
+    for _, mod in ipairs({ "toolwall", "toolwall.config", "toolwall.scene",
+                           "toolwall.modes", "toolwall.hud", "toolwall.keybinds",
+                           "toolwall.commands" }) do
+        package.loaded[mod] = nil
+    end
+
+    local reloaded = require("toolwall")
+    local cfg2 = reloaded.setup({ path = path })
+    waywall.startup = false
+    waywall.fire("load")
+
+    cfg2.actions["Ctrl-I"]()
+
+    assert_eq(#waywall.launched, 1, "still only one GUI after a reload")
+    assert_eq(waywall.floating, false, "the second press toggles instead of launching")
     os.remove(path)
 end)
 

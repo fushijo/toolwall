@@ -381,6 +381,9 @@ pub struct Gui {
     /// Enables the arbitrary `exec` keybind command. Off by default.
     #[serde(default)]
     pub allow_exec: bool,
+    /// How the editor window itself looks. Edited from inside the editor.
+    #[serde(default)]
+    pub appearance: Appearance,
 }
 
 impl Default for Gui {
@@ -389,7 +392,28 @@ impl Default for Gui {
             command: "toolwall-gui".into(),
             launch_delay_ms: 400,
             allow_exec: false,
+            appearance: Appearance::default(),
         }
+    }
+}
+
+/// The editor's own look. Kept in the same document as everything else so it
+/// survives a restart and travels with a shared config.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Appearance {
+    /// Window opacity. The editor floats over the game, so seeing through it
+    /// matters more here than in a normal desktop app.
+    #[serde(default = "default_opacity")]
+    pub opacity: f32,
+    #[serde(default = "yes")]
+    pub dark: bool,
+    #[serde(default = "default_font_size")]
+    pub font_size: f32,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self { opacity: 0.92, dark: true, font_size: 14.0 }
     }
 }
 
@@ -400,3 +424,5 @@ fn black() -> String { "#000000ff".into() }
 fn base_label() -> String { "base".into() }
 fn gui_command() -> String { "toolwall-gui".into() }
 fn launch_delay() -> u32 { 400 }
+fn default_opacity() -> f32 { 0.92 }
+fn default_font_size() -> f32 { 14.0 }

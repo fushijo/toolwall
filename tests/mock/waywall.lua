@@ -32,6 +32,10 @@ M.state_value = { screen = "title" }
 ]]
 M.view_ready = false
 
+-- Fake pid -> command line, standing in for /proc.
+M.processes = {}
+M.next_pid = 1000
+
 local function record(name, ...)
     table.insert(M.log, { name = name, args = { ... } })
 end
@@ -53,6 +57,14 @@ function M.reset()
     M.next_id = 0
     M.state_value = { screen = "title" }
     M.view_ready = false
+    M.launched = {}
+    M.processes = {}
+    M.next_pid = 1000
+
+    -- Launch records outlive a Lua VM by design, so a test must clear them.
+    for _, id in ipairs({ "gui", "app-ninb" }) do
+        os.remove((os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/toolwall-" .. id .. ".pid")
+    end
 end
 
 --[[
@@ -195,9 +207,47 @@ function M.text(body, options)
     return new_object("text", payload)
 end
 
+--[[
+    Emulate running a launcher script.
+
+    toolwall launches things through a generated shell script that records the
+    child's pid, so that a config reload (which rebuilds the Lua VM) can tell
+    an already-running program from a new one. Actually honouring that here is
+    what lets a test exercise the "already running, so toggle instead of
+    launching a second copy" path.
+]]
+local function run_launcher(script_path)
+    local script = io.open(script_path, "r")
+    if not script then return end
+
+    local body = script:read("*a") or ""
+    script:close()
+
+    local pid_path = body:match("echo %$%$ > '([^']+)'")
+    local command = body:match("exec (.-)%s*$")
+    if not pid_path or not command then return end
+
+    -- A fake pid, whose command line the test suite serves in place of /proc.
+    M.next_pid = (M.next_pid or 1000) + 1
+    M.processes[M.next_pid] = command
+
+    local out = io.open(pid_path, "w")
+    if not out then return end
+    out:write(tostring(M.next_pid))
+    out:close()
+
+    M.launched = M.launched or {}
+    table.insert(M.launched, command)
+end
+
 function M.exec(command)
     guard("exec")
     record("exec", command)
+
+    local script_path = command:match("^sh (.+)$")
+    if script_path then
+        run_launcher(script_path)
+    end
 end
 
 function M.sleep(ms)
