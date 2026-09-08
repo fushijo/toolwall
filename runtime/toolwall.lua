@@ -123,6 +123,27 @@ local function build_waywall_config(doc)
 end
 
 --[[
+    Choose the remap set for the instance's current screen.
+
+    waywall.state() throws when the State Output mod is absent, so a config
+    that opts in on an instance without the mod degrades to the base remaps
+    rather than erroring on every state change.
+]]
+local function apply_state_remaps(doc)
+    local input = doc.input or {}
+    local base = input.remaps or {}
+    local menu = input.remaps_menu or {}
+
+    local ok, state = pcall(waywall.state)
+    if not ok or type(state) ~= "table" then
+        return
+    end
+
+    local playing = state.screen == "inworld" and state.inworld == "unpaused"
+    waywall.set_remaps(playing and base or menu)
+end
+
+--[[
     Deferred initialisation. Runs on the "load" event, when the full waywall
     API is legal to call.
 ]]
@@ -142,6 +163,10 @@ local function on_load()
     end
 
     rt.hud:refresh()
+
+    if next(rt.doc.input and rt.doc.input.remaps_menu or {}) then
+        apply_state_remaps(rt.doc)
+    end
 
     if rt.degraded then
         rt.hud:banner("toolwall: " .. rt.degraded .. " (using last known good)")
@@ -181,6 +206,24 @@ function M.setup(opts)
     waywall.listen("resolution", function()
         if rt.hud then rt.hud:refresh() end
     end)
+
+    --[[
+        Swap remaps when the cursor appears.
+
+        A bind that is useful with the cursor captured (a mouse button standing
+        in for a key) is usually wrong once you are clicking around an
+        inventory. waywall reports the instance's screen through the State
+        Output mod, so "cursor visible" is everything that is not
+        inworld/unpaused.
+
+        Only wired up when a second set is actually configured, so the common
+        case costs nothing and the State Output mod stays optional.
+    ]]
+    if next(doc.input and doc.input.remaps_menu or {}) then
+        waywall.listen("state", function()
+            apply_state_remaps(doc)
+        end)
+    end
 
     if doc.hud and doc.hud.follow_state then
         waywall.listen("state", function()

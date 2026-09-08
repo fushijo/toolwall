@@ -62,6 +62,14 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
         ui.weak("Source key or mouse button → output key, e.g. MB4 → Home.");
         remap_editor(ui, &mut doc.input.remaps);
 
+        ui.add_space(6.0);
+        ui.label("While the cursor is visible");
+        ui.weak(
+            "Used instead of the set above in inventories, menus and while paused. \
+             Leave empty to use one set everywhere. Needs the State Output mod.",
+        );
+        remap_editor(ui, &mut doc.input.remaps_menu);
+
         ui.separator();
         ui.heading("Floating apps");
         ui.weak(

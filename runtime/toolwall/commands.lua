@@ -200,6 +200,16 @@ function M.bind(rt)
         end
     end)
 
+    --[[
+        Show or hide one overlay by hand, independent of the current mode.
+
+        Modes own the overlays they declare; this pins one on top of whatever
+        mode is active, and it survives mode switches until toggled off.
+    ]]
+    M.register("overlay.toggle", function(state, args)
+        return state.scene:toggle(args.overlay)
+    end)
+
     M.register("exec", function(state, args)
         local gui = state.doc.gui or {}
         if not util.bool(gui.allow_exec, false) then

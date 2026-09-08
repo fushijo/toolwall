@@ -1,6 +1,6 @@
 //! Mirrors: a region of the Minecraft window drawn somewhere else.
 
-use toolwall_core::schema::{ColorKey, Mirror, Rect};
+use toolwall_core::schema::{ColorKey, Mirror, Rect, Size};
 use toolwall_core::{Document, Problem, Scope};
 
 use crate::widgets::{depth_editor, optional_text, problems_for, rect_editor, shader_picker};
@@ -31,10 +31,20 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
                             optional_text(ui, &mut mirror.label);
                             ui.end_row();
 
-                            ui.label("src")
-                                .on_hover_text("Region of the Minecraft window to copy from");
-                            rect_editor(ui, "src", &mut mirror.src);
+                            ui.label("EyeZoom").on_hover_text(
+                                "Follow the crosshair: capture a small region at the \
+                                 centre of the game and draw it into dst, magnified",
+                            );
+                            crosshair_editor(ui, &mut mirror.crosshair);
                             ui.end_row();
+
+                            if mirror.crosshair.is_none() {
+                                ui.label("src").on_hover_text(
+                                    "Region of the Minecraft window to copy from",
+                                );
+                                rect_editor(ui, "src", &mut mirror.src);
+                                ui.end_row();
+                            }
 
                             ui.label("dst").on_hover_text("Where to draw it");
                             rect_editor(ui, "dst", &mut mirror.dst);
@@ -69,6 +79,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
             doc.mirrors.push(Mirror {
                 id: format!("mirror{}", doc.mirrors.len() + 1),
                 label: None,
+                crosshair: None,
                 src: Rect { x: 0, y: 0, w: 100, h: 100 },
                 dst: Rect { x: 0, y: 0, w: 100, h: 100 },
                 depth: None,
@@ -96,6 +107,28 @@ fn color_key_editor(ui: &mut egui::Ui, key: &mut Option<ColorKey>) {
                 ui.label("out");
                 ui.text_edit_singleline(&mut key.output);
             });
+        }
+    });
+}
+
+/// EyeZoom. When on, `src` is recomputed from the live resolution each time
+/// the mirror is shown, so the captured region stays on the crosshair as you
+/// switch between thin, wide and tall.
+fn crosshair_editor(ui: &mut egui::Ui, crosshair: &mut Option<Size>) {
+    ui.vertical(|ui| {
+        let mut on = crosshair.is_some();
+        if ui.checkbox(&mut on, "follow crosshair").changed() {
+            *crosshair = on.then(|| Size { w: 80, h: 60 });
+        }
+
+        if let Some(size) = crosshair {
+            ui.horizontal(|ui| {
+                ui.label("capture");
+                ui.add(egui::DragValue::new(&mut size.w).range(1..=4096));
+                ui.label("x");
+                ui.add(egui::DragValue::new(&mut size.h).range(1..=4096));
+            });
+            ui.weak("Smaller capture = more magnification.");
         }
     });
 }

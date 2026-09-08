@@ -114,6 +114,12 @@ pub struct Input {
     #[serde(default)]
     pub remaps: std::collections::BTreeMap<String, String>,
 
+    /// Remaps applied instead while the cursor is visible - inventory, a
+    /// menu, or paused. Empty means "use `remaps` everywhere", so this costs
+    /// nothing unless you opt in. Needs the State Output mod.
+    #[serde(default)]
+    pub remaps_menu: std::collections::BTreeMap<String, String>,
+
     /// -1 inherits the host Wayland session.
     #[serde(default = "minus_one")]
     pub repeat_rate: i32,
@@ -135,6 +141,7 @@ impl Default for Input {
             variant: String::new(),
             options: String::new(),
             remaps: Default::default(),
+            remaps_menu: Default::default(),
             repeat_rate: -1,
             repeat_delay: -1,
             sensitivity: 1.0,
@@ -223,6 +230,12 @@ pub struct Rect {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Size {
+    pub w: u32,
+    pub h: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Resolution {
     pub width: u32,
     pub height: u32,
@@ -256,6 +269,13 @@ pub struct Mirror {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// A region of this size centred on the crosshair, recomputed from the
+    /// live resolution each time the mirror is shown. This is EyeZoom: a
+    /// small source drawn into a large `dst` is a magnifier.
+    ///
+    /// When set, `src` is ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crosshair: Option<Size>,
     pub src: Rect,
     pub dst: Rect,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -351,6 +371,8 @@ pub enum Command {
     GuiToggle,
     #[serde(rename = "app.toggle")]
     AppToggle,
+    #[serde(rename = "overlay.toggle")]
+    OverlayToggle,
     #[serde(rename = "exec")]
     Exec,
 }

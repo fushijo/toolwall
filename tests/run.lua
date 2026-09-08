@@ -466,6 +466,118 @@ check("a config reload does not launch a second GUI", function()
     os.remove(path)
 end)
 
+check("a crosshair mirror centres on the resolution it is shown at", function()
+    -- EyeZoom: a small source drawn into a large dst is a magnifier, and the
+    -- crosshair is the centre of the Minecraft window - so the source has to
+    -- move whenever the resolution does.
+    local path = write_config([[
+      { "version": 1,
+        "mirrors": [ { "id": "zoom", "crosshair": { "w": 80, "h": 60 },
+                       "src": {"x":0,"y":0,"w":0,"h":0},
+                       "dst": {"x":0,"y":0,"w":800,"h":600} } ],
+        "modes": [ { "id": "thin", "resolution": {"width":320,"height":1080},
+                     "mirrors": ["zoom"] },
+                   { "id": "wide", "resolution": {"width":1920,"height":300},
+                     "mirrors": ["zoom"] } ] }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    local function last_mirror_src()
+        local src
+        for _, entry in ipairs(waywall.log) do
+            if entry.name == "mirror" then src = entry.args[1].src end
+        end
+        return src
+    end
+
+    toolwall.rt.modes:set("thin")
+    local thin = last_mirror_src()
+    assert_eq(thin.x, 320 / 2 - 40, "centred horizontally at 320 wide")
+    assert_eq(thin.y, 1080 / 2 - 30, "centred vertically at 1080 tall")
+    assert_eq(thin.w, 80, "source width")
+
+    toolwall.rt.modes:set("wide")
+    local wide = last_mirror_src()
+    assert_eq(wide.x, 1920 / 2 - 40, "re-centred for the new resolution")
+    assert_eq(wide.y, 300 / 2 - 30, "re-centred vertically too")
+    os.remove(path)
+end)
+
+check("overlay.toggle pins an overlay across mode switches", function()
+    local path = write_config([[
+      { "version": 1,
+        "mirrors": [ { "id": "pinme", "src": {"x":0,"y":0,"w":10,"h":10},
+                       "dst": {"x":0,"y":0,"w":10,"h":10} } ],
+        "modes": [ { "id": "a", "resolution": {"width":320,"height":1080} },
+                   { "id": "b", "resolution": {"width":1920,"height":300} } ],
+        "keybinds": [ { "input": "Shift-O", "command": "overlay.toggle",
+                        "args": { "overlay": "pinme" } } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    local function mirrors_live()
+        local n = 0
+        for _, obj in pairs(waywall.live_objects()) do
+            if obj.kind == "mirror" then n = n + 1 end
+        end
+        return n
+    end
+
+    toolwall.rt.modes:set("a")
+    assert_eq(mirrors_live(), 0, "no overlay before toggling")
+
+    cfg.actions["Shift-O"]()
+    assert_eq(mirrors_live(), 1, "toggled on")
+
+    -- Neither mode declares it, so only pinning keeps it alive.
+    toolwall.rt.modes:set("b")
+    assert_eq(mirrors_live(), 1, "survives a mode switch")
+
+    cfg.actions["Shift-O"]()
+    assert_eq(mirrors_live(), 0, "toggled back off")
+    os.remove(path)
+end)
+
+check("remaps follow the cursor between playing and menus", function()
+    local path = write_config([[
+      { "version": 1,
+        "input": { "remaps": { "MB4": "Home" },
+                   "remaps_menu": { "MB4": "Escape" } },
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ] }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    local function last_remaps()
+        local set
+        for _, entry in ipairs(waywall.log) do
+            if entry.name == "set_remaps" then set = entry.args[1] end
+        end
+        return set
+    end
+
+    assert_eq(last_remaps().MB4, "Home", "playing uses the base remaps")
+
+    waywall.state_value = { screen = "inworld", inworld = "paused" }
+    waywall.fire("state")
+    assert_eq(last_remaps().MB4, "Escape", "a visible cursor uses the menu remaps")
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.fire("state")
+    assert_eq(last_remaps().MB4, "Home", "back to the base remaps")
+    os.remove(path)
+end)
+
 check("unknown commands do not consume the keypress", function()
     local path = write_config([[
       { "version": 1,

@@ -41,6 +41,7 @@ fn sample() -> Document {
         ],
         mirrors: vec![Mirror {
             id: "eye".into(),
+            crosshair: Some(toolwall_core::schema::Size { w: 80, h: 60 }),
             label: Some("Boat eye".into()),
             src: Rect { x: 0, y: 0, w: 100, h: 100 },
             dst: Rect { x: 0, y: 300, w: 300, h: 300 },

@@ -68,6 +68,13 @@
         },
         "confine_pointer": {
           "type": "boolean"
+        },
+        "remaps_menu": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Remaps used instead while the cursor is visible. Needs the State Output mod."
         }
       }
     },
@@ -419,7 +426,6 @@
       "additionalProperties": false,
       "required": [
         "id",
-        "src",
         "dst"
       ],
       "properties": {
@@ -460,6 +466,25 @@
             },
             "output": {
               "$ref": "#/$defs/color"
+            }
+          }
+        },
+        "crosshair": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "w",
+            "h"
+          ],
+          "description": "EyeZoom: capture a region of this size centred on the crosshair. When set, src is ignored.",
+          "properties": {
+            "w": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "h": {
+              "type": "integer",
+              "minimum": 1
             }
           }
         }
@@ -562,6 +587,7 @@
             "floating.hide",
             "gui.toggle",
             "app.toggle",
+            "overlay.toggle",
             "exec"
           ]
         },
