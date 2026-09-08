@@ -102,7 +102,17 @@ function M.bind(rt)
                 util.warn("no gui.command configured")
                 return false
             end
-            waywall.exec(cmd)
+
+            --[[
+                waywall.exec() is a bare execvp() using the compositor's own
+                PATH, not a shell. That PATH comes from however waywall was
+                launched (Prism Launcher, a desktop entry, ...), which
+                commonly does not include ~/.cargo/bin the way an
+                interactive shell's PATH would. Expanding ~ here lets
+                gui.command name an absolute-ish path that survives that,
+                the same way image/shader paths already do.
+            ]]
+            waywall.exec(util.expand(cmd))
             state.gui_launched = true
 
             -- Give the client a moment to map before revealing it.

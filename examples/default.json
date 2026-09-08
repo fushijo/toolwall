@@ -117,7 +117,7 @@
   },
 
   "gui": {
-    "command": "toolwall-gui",
+    "command": "~/.cargo/bin/toolwall-gui",
     "launch_delay_ms": 400,
     "allow_exec": false
   }

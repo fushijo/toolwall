@@ -272,6 +272,33 @@ check("applying the default mode during load, before the window exists, does not
     os.remove(path)
 end)
 
+check("gui.toggle expands ~ in gui.command before exec", function()
+    -- waywall.exec() is a bare execvp() using the compositor's own PATH,
+    -- which commonly lacks ~/.cargo/bin unless waywall was launched from an
+    -- interactive shell. gui.command must be expanded the same way image
+    -- and shader paths are.
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "keybinds": [ { "input": "Ctrl-I", "command": "gui.toggle" } ],
+        "gui": { "command": "~/bin/toolwall-gui" } }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Ctrl-I"]()
+
+    local exec_cmd = nil
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "exec" then exec_cmd = entry.args[1] end
+    end
+
+    assert_eq(exec_cmd, (os.getenv("HOME") or "") .. "/bin/toolwall-gui", "expanded exec command")
+    os.remove(path)
+end)
+
 check("unknown commands do not consume the keypress", function()
     local path = write_config([[
       { "version": 1,
