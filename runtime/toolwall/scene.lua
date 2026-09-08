@@ -44,18 +44,22 @@ local function shader_of(spec)
 end
 
 --[[
-    Resolve a capture region given as fractions of the resolution.
+    Resolve a capture region measured from a corner.
 
-    Minecraft positions its HUD relative to the window, so a region pinned to
-    pixels is right at one resolution and wrong at every other - a pie-chart
-    capture tuned for a thin window lands on the debug text at fullscreen.
+    Minecraft pins its debug HUD to the corners at fixed pixel offsets — the
+    pie chart is the same size and the same distance from the bottom-right
+    corner at 340x1080 as it is at fullscreen. A region pinned to absolute
+    coordinates is therefore correct at exactly one resolution, which is how a
+    pie-chart capture ends up showing the debug text instead.
 
     waywall reports 0x0 for an unset resolution and Lua cannot ask how large
     the window is, so the mode's own configured resolution is the fallback.
 ]]
-function Scene:_percent_rect(pct)
-    local res_w, res_h = 0, 0
+function Scene:_anchored_rect(spec)
+    local src = spec.src or {}
+    local w, h = src.w or 0, src.h or 0
 
+    local res_w, res_h = 0, 0
     local ok, aw, ah = pcall(waywall.active_res)
     if ok then
         res_w, res_h = aw or 0, ah or 0
@@ -70,48 +74,78 @@ function Scene:_percent_rect(pct)
         return nil, "no known resolution"
     end
 
-    return {
-        x = math.floor((pct.x or 0) * res_w),
-        y = math.floor((pct.y or 0) * res_h),
-        w = math.max(1, math.floor((pct.w or 0) * res_w)),
-        h = math.max(1, math.floor((pct.h or 0) * res_h)),
-    }
+    -- x and y are distances from the anchored edges to the near edge of the
+    -- region, which is how gore's config expresses the same rectangles.
+    local anchor = spec.src_anchor
+    local x, y = src.x or 0, src.y or 0
+
+    if anchor == "topright" or anchor == "bottomright" then
+        x = res_w - x
+    end
+    if anchor == "bottomleft" or anchor == "bottomright" then
+        y = res_h - y
+    end
+
+    return { x = x, y = y, w = w, h = h }
 end
 
+--[[
+    Build the waywall objects for one mirror.
+
+    Returns a list, because a mirror carrying several colour keys is drawn as
+    one layer per key: colour keying passes only the matching colour, so
+    isolating the pie chart from the world behind it means stacking a layer for
+    each of its colours. A crop shader would do it in one pass, but waywall
+    compiles shaders at startup only, and every edit here arrives by hot
+    reload.
+]]
 function Scene:_create_mirror(spec)
     local src = rect(spec.src)
 
-    if spec.src_percent and spec.src_percent ~= util.NULL then
-        local resolved, err = self:_percent_rect(spec.src_percent)
+    if spec.src_anchor and spec.src_anchor ~= util.NULL and spec.src_anchor ~= "" then
+        local resolved, err = self:_anchored_rect(spec)
         if not resolved then
-            error("relative capture: " .. err, 0)
+            error("anchored capture: " .. err, 0)
         end
         src = resolved
     end
 
-    local opts = {
+    local base = {
         src = src,
         dst = rect(spec.dst),
         depth = spec.depth,
         shader = shader_of(spec),
     }
 
-    if spec.color_key and spec.color_key ~= util.NULL then
-        opts.color_key = {
-            input = spec.color_key.input,
-            output = spec.color_key.output,
-        }
+    local keys = {}
+    if spec.color_keys and spec.color_keys ~= util.NULL then
+        for _, key in ipairs(spec.color_keys) do
+            table.insert(keys, key)
+        end
+    end
+    if #keys == 0 and spec.color_key and spec.color_key ~= util.NULL then
+        table.insert(keys, spec.color_key)
     end
 
-    return waywall.mirror(opts)
+    if #keys == 0 then
+        return { waywall.mirror(base) }
+    end
+
+    local objects = {}
+    for _, key in ipairs(keys) do
+        local opts = util.shallow_copy(base)
+        opts.color_key = { input = key.input, output = key.output }
+        table.insert(objects, waywall.mirror(opts))
+    end
+    return objects
 end
 
 function Scene:_create_image(spec)
-    return waywall.image(util.expand(spec.path), {
+    return { waywall.image(util.expand(spec.path), {
         dst = rect(spec.dst),
         depth = spec.depth,
         shader = shader_of(spec),
-    })
+    }) }
 end
 
 --[[
@@ -157,11 +191,10 @@ function Scene:show(id)
 end
 
 function Scene:hide(id)
-    local obj = self.live[id]
-    if obj then
+    for _, obj in ipairs(self.live[id] or {}) do
         obj:close()
-        self.live[id] = nil
     end
+    self.live[id] = nil
     self.active[id] = nil
 end
 
@@ -211,7 +244,7 @@ function Scene:set_active(ids)
             on the object that already exists.
         ]]
         local spec = self.doc._mirrors[id]
-        local relative = spec and spec.src_percent and spec.src_percent ~= util.NULL
+        local relative = spec and spec.src_anchor and spec.src_anchor ~= util.NULL
 
         if not want[id] or relative then
             self:hide(id)

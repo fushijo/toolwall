@@ -228,18 +228,20 @@ pub struct Rect {
     pub h: u32,
 }
 
-/// A rectangle expressed as fractions of the resolution (0.0 - 1.0).
+/// Which corner a capture region is measured from.
 ///
-/// Minecraft draws its HUD relative to the window, so a capture pinned to
-/// pixels is correct at exactly one resolution and wrong at every other. The
-/// pie chart sits in the same *proportional* place whether you are at 340x1080
-/// or fullscreen.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct RectPercent {
-    pub x: f32,
-    pub y: f32,
-    pub w: f32,
-    pub h: f32,
+/// Minecraft pins its debug HUD to the corners at fixed pixel offsets, not to
+/// fractions of the window: the pie chart is always the same size and the same
+/// distance from the bottom-right corner, whether you are at 340x1080 or
+/// fullscreen. Anchoring reproduces that, so one capture is correct at every
+/// resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Anchor {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -282,10 +284,10 @@ pub struct Mirror {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
-    /// Capture region as fractions of the resolution. Takes precedence over
-    /// `src`, and follows the game as you switch modes.
+    /// Corner that `src.x` / `src.y` are measured from. Without it they are
+    /// absolute, which is only correct at one resolution.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub src_percent: Option<RectPercent>,
+    pub src_anchor: Option<Anchor>,
     #[serde(default = "zero_rect")]
     pub src: Rect,
     pub dst: Rect,
@@ -295,6 +297,15 @@ pub struct Mirror {
     pub shader: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color_key: Option<ColorKey>,
+
+    /// Several colour keys, drawn as one layer each.
+    ///
+    /// Colour keying passes only the matching colour, so isolating something
+    /// many-coloured - the pie chart - means one layer per colour stacked up.
+    /// This is the hot-reloadable alternative to a crop shader, which waywall
+    /// only compiles at startup.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub color_keys: Vec<ColorKey>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

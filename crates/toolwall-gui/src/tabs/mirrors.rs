@@ -83,7 +83,8 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
             doc.mirrors.push(Mirror {
                 id: format!("mirror{}", doc.mirrors.len() + 1),
                 label: None,
-                src_percent: None,
+                src_anchor: None,
+                color_keys: Vec::new(),
                 src: Rect { x: 0, y: 0, w: 100, h: 100 },
                 dst: Rect { x: 0, y: 0, w: 100, h: 100 },
                 depth: None,

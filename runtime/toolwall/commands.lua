@@ -134,6 +134,10 @@ function M.bind(rt)
         the same one a player uses - press Escape into the game, which opens
         the pause menu and hands the cursor back.
 
+        The keycode is "ESC", from input-event-codes.h. waywall takes keycodes
+        here and keysyms in keybinds, and passing a keysym name ("Escape")
+        fails silently - which is exactly why this did nothing at first.
+
         Guarded on the instance actually being in-world and unpaused, so this
         never closes a menu that is already open. Without the State Output mod
         we cannot tell, and do nothing rather than guess.
@@ -145,7 +149,7 @@ function M.bind(rt)
         end
 
         if st.screen == "inworld" and st.inworld == "unpaused" then
-            pcall(waywall.press_key, "Escape")
+            pcall(waywall.press_key, "ESC")
         end
     end
 
