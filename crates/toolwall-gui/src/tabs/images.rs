@@ -15,6 +15,7 @@ pub fn show(
     doc: &mut Document,
     problems: &[Problem],
     browser: &mut FileBrowser,
+    advanced: bool,
 ) {
     let shaders: Vec<String> = doc.shaders.keys().cloned().collect();
 
@@ -33,15 +34,17 @@ pub fn show(
                         .num_columns(2)
                         .spacing([12.0, 6.0])
                         .show(ui, |ui| {
-                            ui.label("id");
-                            ui.text_edit_singleline(&mut image.id);
-                            ui.end_row();
+                            if advanced {
+                                ui.label("ID");
+                                ui.text_edit_singleline(&mut image.id);
+                                ui.end_row();
+                            }
 
-                            ui.label("label");
+                            ui.label("Name");
                             optional_text(ui, &mut image.label);
                             ui.end_row();
 
-                            ui.label("path");
+                            ui.label("Image file");
                             ui.vertical(|ui| {
                                 ui.horizontal(|ui| {
                                     ui.text_edit_singleline(&mut image.path);
@@ -64,20 +67,27 @@ pub fn show(
                             });
                             ui.end_row();
 
-                            ui.label("dst");
+                            ui.label("Draw at");
                             rect_editor(ui, "dst", &mut image.dst);
                             ui.end_row();
 
-                            ui.label("depth");
-                            depth_editor(ui, &mut image.depth);
-                            ui.end_row();
+                            if advanced {
+                                ui.label("Layer");
+                                depth_editor(ui, &mut image.depth);
+                                ui.end_row();
 
-                            ui.label("shader");
-                            shader_picker(ui, &format!("image-shader-{index}"), &mut image.shader, &shaders);
-                            ui.end_row();
+                                ui.label("Shader");
+                                shader_picker(
+                                    ui,
+                                    &format!("image-shader-{index}"),
+                                    &mut image.shader,
+                                    &shaders,
+                                );
+                                ui.end_row();
+                            }
                         });
 
-                    if ui.button("Remove image").clicked() {
+                    if advanced && ui.button("Remove image").clicked() {
                         remove = Some(index);
                     }
                 });
@@ -89,7 +99,7 @@ pub fn show(
 
         ui.separator();
 
-        if ui.button("Add image").clicked() {
+        if advanced && ui.button("Add image").clicked() {
             doc.images.push(Image {
                 id: format!("image{}", doc.images.len() + 1),
                 label: None,

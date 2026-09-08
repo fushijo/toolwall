@@ -1,11 +1,11 @@
 //! Mirrors: a region of the Minecraft window drawn somewhere else.
 
-use toolwall_core::schema::{ColorKey, Mirror, Rect, Size};
+use toolwall_core::schema::{ColorKey, Mirror, Rect};
 use toolwall_core::{Document, Problem, Scope};
 
 use crate::widgets::{depth_editor, optional_text, problems_for, rect_editor, shader_picker};
 
-pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
+pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advanced: bool) {
     let shaders: Vec<String> = doc.shaders.keys().cloned().collect();
 
     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -23,47 +23,51 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
                         .num_columns(2)
                         .spacing([12.0, 6.0])
                         .show(ui, |ui| {
-                            ui.label("id");
-                            ui.text_edit_singleline(&mut mirror.id);
-                            ui.end_row();
-
-                            ui.label("label");
-                            optional_text(ui, &mut mirror.label);
-                            ui.end_row();
-
-                            ui.label("EyeZoom").on_hover_text(
-                                "Follow the crosshair: capture a small region at the \
-                                 centre of the game and draw it into dst, magnified",
-                            );
-                            crosshair_editor(ui, &mut mirror.crosshair);
-                            ui.end_row();
-
-                            if mirror.crosshair.is_none() {
-                                ui.label("src").on_hover_text(
-                                    "Region of the Minecraft window to copy from",
-                                );
-                                rect_editor(ui, "src", &mut mirror.src);
+                            if advanced {
+                                ui.label("ID");
+                                ui.text_edit_singleline(&mut mirror.id);
                                 ui.end_row();
                             }
 
-                            ui.label("dst").on_hover_text("Where to draw it");
+                            ui.label("Name");
+                            optional_text(ui, &mut mirror.label);
+                            ui.end_row();
+
+                            ui.label("Capture from")
+                                .on_hover_text("Region of the game to copy");
+                            rect_editor(ui, "src", &mut mirror.src);
+                            ui.end_row();
+
+                            ui.label("Draw at").on_hover_text("Where on screen to draw it");
                             rect_editor(ui, "dst", &mut mirror.dst);
                             ui.end_row();
 
-                            ui.label("depth");
-                            depth_editor(ui, &mut mirror.depth);
-                            ui.end_row();
+                            if advanced {
+                                ui.label("Layer").on_hover_text(
+                                    "Higher draws in front. Leave unset unless \
+                                     two overlays are fighting over the same spot.",
+                                );
+                                depth_editor(ui, &mut mirror.depth);
+                                ui.end_row();
 
-                            ui.label("shader");
-                            shader_picker(ui, &format!("mirror-shader-{index}"), &mut mirror.shader, &shaders);
-                            ui.end_row();
+                                ui.label("Shader");
+                                shader_picker(
+                                    ui,
+                                    &format!("mirror-shader-{index}"),
+                                    &mut mirror.shader,
+                                    &shaders,
+                                );
+                                ui.end_row();
 
-                            ui.label("colour key");
-                            color_key_editor(ui, &mut mirror.color_key);
-                            ui.end_row();
+                                ui.label("Colour key").on_hover_text(
+                                    "Replace one colour with another as it is drawn",
+                                );
+                                color_key_editor(ui, &mut mirror.color_key);
+                                ui.end_row();
+                            }
                         });
 
-                    if ui.button("Remove mirror").clicked() {
+                    if advanced && ui.button("Remove mirror").clicked() {
                         remove = Some(index);
                     }
                 });
@@ -75,11 +79,10 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
 
         ui.separator();
 
-        if ui.button("Add mirror").clicked() {
+        if advanced && ui.button("Add mirror").clicked() {
             doc.mirrors.push(Mirror {
                 id: format!("mirror{}", doc.mirrors.len() + 1),
                 label: None,
-                crosshair: None,
                 src: Rect { x: 0, y: 0, w: 100, h: 100 },
                 dst: Rect { x: 0, y: 0, w: 100, h: 100 },
                 depth: None,
@@ -107,28 +110,6 @@ fn color_key_editor(ui: &mut egui::Ui, key: &mut Option<ColorKey>) {
                 ui.label("out");
                 ui.text_edit_singleline(&mut key.output);
             });
-        }
-    });
-}
-
-/// EyeZoom. When on, `src` is recomputed from the live resolution each time
-/// the mirror is shown, so the captured region stays on the crosshair as you
-/// switch between thin, wide and tall.
-fn crosshair_editor(ui: &mut egui::Ui, crosshair: &mut Option<Size>) {
-    ui.vertical(|ui| {
-        let mut on = crosshair.is_some();
-        if ui.checkbox(&mut on, "follow crosshair").changed() {
-            *crosshair = on.then(|| Size { w: 80, h: 60 });
-        }
-
-        if let Some(size) = crosshair {
-            ui.horizontal(|ui| {
-                ui.label("capture");
-                ui.add(egui::DragValue::new(&mut size.w).range(1..=4096));
-                ui.label("x");
-                ui.add(egui::DragValue::new(&mut size.h).range(1..=4096));
-            });
-            ui.weak("Smaller capture = more magnification.");
         }
     });
 }

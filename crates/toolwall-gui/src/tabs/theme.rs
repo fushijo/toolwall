@@ -9,7 +9,7 @@ const ANCHORS: &[&str] = &[
     "bottomleft", "bottomright",
 ];
 
-pub fn show(ui: &mut egui::Ui, doc: &mut Document) {
+pub fn show(ui: &mut egui::Ui, doc: &mut Document, advanced: bool) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Around the game");
 
@@ -17,33 +17,35 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document) {
             .num_columns(2)
             .spacing([12.0, 6.0])
             .show(ui, |ui| {
-                ui.label("background").on_hover_text("#rrggbb or #rrggbbaa");
+                ui.label("Background colour").on_hover_text("#rrggbb or #rrggbbaa");
                 ui.text_edit_singleline(&mut doc.theme.background);
                 ui.end_row();
 
-                ui.label("background image");
+                ui.label("Background image");
                 ui.text_edit_singleline(&mut doc.theme.background_png);
                 ui.end_row();
 
-                ui.label("cursor theme");
-                ui.text_edit_singleline(&mut doc.theme.cursor_theme);
-                ui.end_row();
+                if advanced {
+                    ui.label("Cursor theme");
+                    ui.text_edit_singleline(&mut doc.theme.cursor_theme);
+                    ui.end_row();
 
-                ui.label("cursor icon");
-                ui.text_edit_singleline(&mut doc.theme.cursor_icon);
-                ui.end_row();
+                    ui.label("Cursor icon");
+                    ui.text_edit_singleline(&mut doc.theme.cursor_icon);
+                    ui.end_row();
 
-                ui.label("cursor size").on_hover_text("0 inherits");
-                ui.add(egui::DragValue::new(&mut doc.theme.cursor_size).range(0..=128));
-                ui.end_row();
+                    ui.label("Cursor size").on_hover_text("0 inherits");
+                    ui.add(egui::DragValue::new(&mut doc.theme.cursor_size).range(0..=128));
+                    ui.end_row();
+                }
             });
 
         ui.separator();
-        ui.heading("Floating window position");
+        ui.heading("Ninjabrain Bot position");
         ui.weak(
-            "waywall anchors whichever floating window is the only one open, so this \
-             positions Ninjabrain Bot when it is running alone. Unanchored windows sit at \
-             the top-left and can be moved with Shift + drag.",
+            "waywall has one anchor slot and gives it to whichever floating window \
+             opened first, so this positions Ninjabrain Bot when it opens before the \
+             editor. Any window can also be moved with Shift + drag.",
         );
 
         anchor_editor(ui, doc);
@@ -53,13 +55,14 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document) {
             .num_columns(2)
             .spacing([12.0, 6.0])
             .show(ui, |ui| {
-                ui.label("opacity");
+                ui.label("Opacity");
                 ui.add(
                     egui::Slider::new(&mut doc.theme.ninb_opacity, 0.1..=1.0).fixed_decimals(2),
                 );
                 ui.end_row();
             });
 
+        if advanced {
         ui.separator();
         ui.heading("Window size");
         ui.weak("0 x 0 follows the monitor.");
@@ -68,18 +71,19 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document) {
             .num_columns(2)
             .spacing([12.0, 6.0])
             .show(ui, |ui| {
-                ui.label("fullscreen width");
+                ui.label("Fullscreen width");
                 ui.add(egui::DragValue::new(&mut doc.window.fullscreen_width).range(0..=16384));
                 ui.end_row();
 
-                ui.label("fullscreen height");
+                ui.label("Fullscreen height");
                 ui.add(egui::DragValue::new(&mut doc.window.fullscreen_height).range(0..=16384));
                 ui.end_row();
             });
+        }
 
         ui.separator();
         ui.heading("This editor");
-        ui.weak("Applies immediately. Saved with the rest of your config.");
+        ui.weak("Applies as you change it.");
 
         let look = &mut doc.gui.appearance;
 
@@ -87,18 +91,18 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document) {
             .num_columns(2)
             .spacing([12.0, 6.0])
             .show(ui, |ui| {
-                ui.label("opacity").on_hover_text("See the game through the editor");
+                ui.label("Opacity").on_hover_text("See the game through the editor");
                 ui.add(egui::Slider::new(&mut look.opacity, 0.25..=1.0).fixed_decimals(2));
                 ui.end_row();
 
-                ui.label("theme");
+                ui.label("Theme");
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut look.dark, true, "Dark");
                     ui.selectable_value(&mut look.dark, false, "Light");
                 });
                 ui.end_row();
 
-                ui.label("font size");
+                ui.label("Font size");
                 ui.add(egui::Slider::new(&mut look.font_size, 10.0..=24.0).fixed_decimals(0));
                 ui.end_row();
             });
@@ -135,9 +139,9 @@ fn anchor_editor(ui: &mut egui::Ui, doc: &mut Document) {
             });
 
         ui.add_enabled_ui(!position.is_empty(), |ui| {
-            ui.label("offset x");
+            ui.label("Offset X");
             changed |= ui.add(egui::DragValue::new(&mut x).speed(1.0)).changed();
-            ui.label("y");
+            ui.label("Y");
             changed |= ui.add(egui::DragValue::new(&mut y).speed(1.0)).changed();
         });
     });

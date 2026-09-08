@@ -146,7 +146,7 @@ pub enum Scope {
     Mirror(String),
     Image(String),
     Keybind(String),
-    App(String),
+    Ninb,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -251,40 +251,30 @@ pub fn problems(doc: &Document) -> Vec<Problem> {
         }
     }
 
-    let mut app_ids = std::collections::HashSet::new();
-    for app in &doc.apps {
-        if app.id.trim().is_empty() {
-            push(Scope::App(app.id.clone()), "id must not be empty".into());
-        }
-        if !app_ids.insert(app.id.as_str()) {
-            push(Scope::App(app.id.clone()), format!("duplicate app id {:?}", app.id));
-        }
-        if app.command.trim().is_empty() {
-            push(Scope::App(app.id.clone()), "command must not be empty".into());
-        }
+    let ninb_ready = !doc.ninb.jar.trim().is_empty();
+    if !ninb_ready && doc.keybinds.iter().any(|b| b.command == crate::schema::Command::NinbToggle) {
+        push(
+            Scope::Ninb,
+            "a key opens Ninjabrain Bot, but no jar is set".into(),
+        );
     }
 
     let mut inputs = std::collections::HashSet::new();
     for bind in &doc.keybinds {
-        // An app.toggle naming an app that does not exist is a keybind that
-        // silently does nothing, which is worth catching before save.
-        if bind.command == crate::schema::Command::AppToggle {
+        // An overlay.toggle naming something that does not exist is a
+        // keybind that silently does nothing, which is worth catching.
+        if bind.command == crate::schema::Command::OverlayToggle {
             let named = bind
                 .args
                 .as_ref()
-                .and_then(|a| a.get("app"))
+                .and_then(|a| a.get("overlay"))
                 .and_then(|v| v.as_str())
                 .unwrap_or_default();
 
-            if named.is_empty() {
+            if named.is_empty() || !overlay_ids.contains(named) {
                 push(
                     Scope::Keybind(bind.input.clone()),
-                    "app.toggle needs an app".into(),
-                );
-            } else if !app_ids.contains(named) {
-                push(
-                    Scope::Keybind(bind.input.clone()),
-                    format!("app.toggle references unknown app {named:?}"),
+                    "this key opens an overlay that no longer exists".into(),
                 );
             }
         }
@@ -369,23 +359,19 @@ mod tests {
     }
 
     #[test]
-    fn rejects_an_app_toggle_naming_a_missing_app() {
+    fn rejects_a_ninb_key_with_no_jar_configured() {
         let mut doc = doc_with_mode();
         doc.keybinds.push(Keybind {
             input: "grave".into(),
-            command: Command::AppToggle,
-            args: Some(serde_json::json!({ "app": "ninb" })),
+            command: Command::NinbToggle,
+            args: None,
             label: None,
         });
 
-        // No apps defined yet: the keybind would silently do nothing.
+        // The key would silently do nothing without a jar to launch.
         assert!(validate(&doc).is_err());
 
-        doc.apps.push(App {
-            id: "ninb".into(),
-            label: Some("Ninjabrain Bot".into()),
-            command: "java -jar ~/ninb.jar".into(),
-        });
+        doc.ninb.jar = "~/Ninjabrain-Bot.jar".into();
         assert!(validate(&doc).is_ok());
     }
 

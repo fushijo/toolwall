@@ -62,9 +62,11 @@ function M.reset()
     M.next_pid = 1000
 
     -- Launch records outlive a Lua VM by design, so a test must clear them.
-    for _, id in ipairs({ "gui", "app-ninb" }) do
-        os.remove((os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/toolwall-" .. id .. ".pid")
+    local runtime = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
+    for _, id in ipairs({ "gui", "ninb" }) do
+        os.remove(runtime .. "/toolwall-" .. id .. ".pid")
     end
+    os.remove(runtime .. "/toolwall-state-mode")
 end
 
 --[[

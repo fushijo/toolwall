@@ -25,7 +25,7 @@ const COMMANDS: &[(Command, &str)] = &[
     (Command::FloatingShow, "floating.show"),
     (Command::FloatingHide, "floating.hide"),
     (Command::GuiToggle, "gui.toggle"),
-    (Command::AppToggle, "app.toggle"),
+    (Command::NinbToggle, "ninb.toggle"),
     (Command::OverlayToggle, "overlay.toggle"),
     (Command::Exec, "exec"),
 ];
@@ -39,9 +39,9 @@ pub fn show(
     doc: &mut Document,
     problems: &[Problem],
     capturing: &mut Option<usize>,
+    advanced: bool,
 ) {
     let mode_ids: Vec<String> = doc.modes.iter().map(|m| m.id.clone()).collect();
-    let app_ids: Vec<String> = doc.apps.iter().map(|a| a.id.clone()).collect();
     let overlay_ids: Vec<String> = doc
         .mirrors
         .iter()
@@ -78,7 +78,7 @@ pub fn show(
                         .num_columns(2)
                         .spacing([12.0, 6.0])
                         .show(ui, |ui| {
-                            ui.label("input");
+                            ui.label("Key");
                             ui.horizontal(|ui| {
                                 ui.text_edit_singleline(&mut bind.input);
 
@@ -94,11 +94,11 @@ pub fn show(
                             });
                             ui.end_row();
 
-                            ui.label("label");
+                            ui.label("Name");
                             optional_text(ui, &mut bind.label);
                             ui.end_row();
 
-                            ui.label("command");
+                            ui.label("Does");
                             egui::ComboBox::from_id_salt(("command", index))
                                 .selected_text(command_name(bind.command))
                                 .show_ui(ui, |ui| {
@@ -115,10 +115,10 @@ pub fn show(
                                 });
                             ui.end_row();
 
-                            args_editor(ui, index, bind, &mode_ids, &app_ids, &overlay_ids, allow_exec);
+                            args_editor(ui, index, bind, &mode_ids, &overlay_ids, allow_exec);
                         });
 
-                    if ui.button("Remove keybind").clicked() {
+                    if advanced && ui.button("Remove keybind").clicked() {
                         remove = Some(index);
                     }
                 });
@@ -151,7 +151,6 @@ fn args_editor(
     index: usize,
     bind: &mut Keybind,
     mode_ids: &[String],
-    app_ids: &[String],
     overlay_ids: &[String],
     allow_exec: bool,
 ) {
@@ -171,33 +170,8 @@ fn args_editor(
             ui.end_row();
         }
 
-        Command::AppToggle => {
-            ui.label("app").on_hover_text(
-                "Launches the app if it is not running yet, then reveals it",
-            );
-            ui.vertical(|ui| {
-                let current = arg_str(&bind.args, "app");
-                egui::ComboBox::from_id_salt(("arg-app", index))
-                    .selected_text(if current.is_empty() { "—".into() } else { current.clone() })
-                    .show_ui(ui, |ui| {
-                        for id in app_ids {
-                            if ui.selectable_label(&current == id, id).clicked() {
-                                set_arg(&mut bind.args, "app", json!(id));
-                            }
-                        }
-                    });
-                if app_ids.is_empty() {
-                    ui.colored_label(
-                        egui::Color32::from_rgb(255, 170, 80),
-                        "⚠ no apps defined - add one in the Input tab",
-                    );
-                }
-            });
-            ui.end_row();
-        }
-
         Command::OverlayToggle => {
-            ui.label("overlay")
+            ui.label("Overlay")
                 .on_hover_text("Shown on top of whatever mode is active, until toggled off");
             let current = arg_str(&bind.args, "overlay");
             egui::ComboBox::from_id_salt(("arg-overlay", index))
@@ -320,7 +294,8 @@ fn args_editor(
         | Command::FloatingToggle
         | Command::FloatingShow
         | Command::FloatingHide
-        | Command::GuiToggle => {}
+        | Command::GuiToggle
+        | Command::NinbToggle => {}
     }
 }
 

@@ -5,21 +5,58 @@ use std::path::{Path, PathBuf};
 use toolwall_core::schema::Rect;
 use toolwall_core::{Problem, Scope};
 
-/// x/y/w/h on one row. Rects are the most common thing in this config and
-/// deserve to be compact rather than four labelled rows each.
-pub fn rect_editor(ui: &mut egui::Ui, salt: &str, rect: &mut Rect) {
+/// A number with -/+ buttons either side.
+///
+/// Dragging a DragValue is fine with a mouse you can see; nudging a rectangle
+/// a few pixels while the change applies live is what this is actually for.
+pub fn stepper_i32(ui: &mut egui::Ui, value: &mut i32, step: i32) -> bool {
+    let mut changed = false;
     ui.horizontal(|ui| {
-        ui.label("x");
-        ui.add(egui::DragValue::new(&mut rect.x).speed(1.0));
-        ui.label("y");
-        ui.add(egui::DragValue::new(&mut rect.y).speed(1.0));
-        ui.label("w");
-        ui.add(egui::DragValue::new(&mut rect.w).speed(1.0));
-        ui.label("h");
-        ui.add(egui::DragValue::new(&mut rect.h).speed(1.0));
-    })
-    .response
-    .on_hover_text(salt.to_string());
+        if ui.small_button("−").clicked() {
+            *value -= step;
+            changed = true;
+        }
+        changed |= ui.add(egui::DragValue::new(value).speed(1.0)).changed();
+        if ui.small_button("+").clicked() {
+            *value += step;
+            changed = true;
+        }
+    });
+    changed
+}
+
+pub fn stepper_u32(ui: &mut egui::Ui, value: &mut u32, step: u32) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        if ui.small_button("−").clicked() {
+            *value = value.saturating_sub(step);
+            changed = true;
+        }
+        changed |= ui.add(egui::DragValue::new(value).speed(1.0)).changed();
+        if ui.small_button("+").clicked() {
+            *value += step;
+            changed = true;
+        }
+    });
+    changed
+}
+
+/// Position and size, as two labelled rows of steppers.
+pub fn rect_editor(ui: &mut egui::Ui, _salt: &str, rect: &mut Rect) {
+    ui.vertical(|ui| {
+        ui.horizontal(|ui| {
+            ui.label("X");
+            stepper_i32(ui, &mut rect.x, 10);
+            ui.label("Y");
+            stepper_i32(ui, &mut rect.y, 10);
+        });
+        ui.horizontal(|ui| {
+            ui.label("W");
+            stepper_u32(ui, &mut rect.w, 10);
+            ui.label("H");
+            stepper_u32(ui, &mut rect.h, 10);
+        });
+    });
 }
 
 /// Depth is optional, and "unset" is meaningfully different from 0 - it

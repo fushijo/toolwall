@@ -25,6 +25,7 @@ local hud = require("toolwall.hud")
 local keybinds = require("toolwall.keybinds")
 local modes = require("toolwall.modes")
 local scene = require("toolwall.scene")
+local state = require("toolwall.state")
 local util = require("toolwall.util")
 
 local M = {}
@@ -154,9 +155,20 @@ local function on_load()
 
     commands.bind(rt)
 
-    -- Apply the default mode, if one is configured.
+    --[[
+        Restore the mode that was active before this VM was built.
+
+        Every save reloads the config, which rebuilds the VM. Without this,
+        editing a rectangle and watching it apply would drop you back to the
+        base resolution on every keystroke — which makes live editing useless
+        exactly when you want it most.
+    ]]
+    local resume = state.read("mode")
     local default = rt.doc.default_mode
-    if default and default ~= util.NULL then
+
+    if resume and rt.doc._modes[resume] then
+        rt.modes:set(resume)
+    elseif default and default ~= util.NULL then
         rt.modes:set(default)
     else
         rt.modes:reset()

@@ -49,9 +49,8 @@ pub struct Document {
     #[serde(default)]
     pub text: Vec<Text>,
 
-    /// Extra programs hosted as floating windows, e.g. Ninjabrain Bot.
     #[serde(default)]
-    pub apps: Vec<App>,
+    pub ninb: Ninb,
 
     #[serde(default)]
     pub keybinds: Vec<Keybind>,
@@ -79,7 +78,7 @@ impl Default for Document {
             mirrors: Vec::new(),
             images: Vec::new(),
             text: Vec::new(),
-            apps: Vec::new(),
+            ninb: Ninb::default(),
             keybinds: Vec::new(),
             hud: Hud::default(),
             gui: Gui::default(),
@@ -269,13 +268,6 @@ pub struct Mirror {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
-    /// A region of this size centred on the crosshair, recomputed from the
-    /// live resolution each time the mirror is shown. This is EyeZoom: a
-    /// small source drawn into a large `dst` is a magnifier.
-    ///
-    /// When set, `src` is ignored.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub crosshair: Option<Size>,
     pub src: Rect,
     pub dst: Rect,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -314,18 +306,25 @@ pub struct Text {
     pub depth: Option<i32>,
 }
 
-/// A program launched into waywall as a floating window.
+/// Ninjabrain Bot, hosted as a floating window over the game.
 ///
-/// The command is split on spaces into argv by waywall, and is trusted the
-/// same way `gui.command` is - it is named by the config owner, not by a
-/// keybind, so a shared config still cannot smuggle in a command that runs
-/// without you binding it to a key yourself.
+/// Deliberately a single named thing rather than a generic app list: it is
+/// the only third-party window a run actually uses, and a list invites
+/// configuring things that will not behave like ninb does.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct App {
-    pub id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
+pub struct Ninb {
+    /// Path to the Ninjabrain Bot jar. Empty means "not set up".
+    #[serde(default)]
+    pub jar: String,
+    /// Command used to launch it. `{jar}` is replaced with the path above.
+    #[serde(default = "ninb_command")]
     pub command: String,
+}
+
+impl Default for Ninb {
+    fn default() -> Self {
+        Self { jar: String::new(), command: ninb_command() }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -369,8 +368,8 @@ pub enum Command {
     FloatingHide,
     #[serde(rename = "gui.toggle")]
     GuiToggle,
-    #[serde(rename = "app.toggle")]
-    AppToggle,
+    #[serde(rename = "ninb.toggle")]
+    NinbToggle,
     #[serde(rename = "overlay.toggle")]
     OverlayToggle,
     #[serde(rename = "exec")]
@@ -446,5 +445,6 @@ fn black() -> String { "#000000ff".into() }
 fn base_label() -> String { "base".into() }
 fn gui_command() -> String { "toolwall-gui".into() }
 fn launch_delay() -> u32 { 400 }
+fn ninb_command() -> String { "java -jar {jar}".into() }
 fn default_opacity() -> f32 { 0.92 }
 fn default_font_size() -> f32 { 14.0 }

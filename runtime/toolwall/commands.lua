@@ -122,6 +122,33 @@ function M.bind(rt)
         waywall.show_floating(false)
     end)
 
+    --[[
+        Free the cursor so the editor can actually be clicked.
+
+        waywall routes a click to a floating window only when Minecraft does
+        not hold the pointer:
+
+            if (wrap->input.pointer_locked) return false;   // wrap.c
+
+        and it exposes no way to release that lock. The one lever available is
+        the same one a player uses - press Escape into the game, which opens
+        the pause menu and hands the cursor back.
+
+        Guarded on the instance actually being in-world and unpaused, so this
+        never closes a menu that is already open. Without the State Output mod
+        we cannot tell, and do nothing rather than guess.
+    ]]
+    local function release_cursor()
+        local ok, st = pcall(waywall.state)
+        if not ok or type(st) ~= "table" then
+            return
+        end
+
+        if st.screen == "inworld" and st.inworld == "unpaused" then
+            pcall(waywall.press_key, "Escape")
+        end
+    end
+
     M.register("gui.toggle", function(state)
         local gui = state.doc.gui or {}
         local cmd = gui.command
@@ -145,6 +172,7 @@ function M.bind(rt)
                 util.warn("launch delay failed; revealing the GUI anyway")
             end
 
+            release_cursor()
             force_show_floating()
             return
         end
@@ -152,43 +180,39 @@ function M.bind(rt)
         if waywall.floating_shown() then
             waywall.show_floating(false)
         else
+            release_cursor()
             force_show_floating()
         end
     end)
 
     --[[
-        Launch a configured app as a floating window, then reveal it.
+        Open Ninjabrain Bot, launching it first if it is not already running.
 
-        This is what makes a "toggle Ninjabrain Bot" keybind actually open
-        Ninjabrain Bot. floating.toggle only changes the visibility of windows
-        that are already running, so on its own it can never start anything.
+        floating.toggle only changes the visibility of windows that are
+        already open, so on its own it can never start ninb - which is why a
+        key bound to it appeared to do nothing.
 
-        KNOWN LIMITATION: waywall.show_floating() is global, so revealing one
-        floating window reveals every running one. Showing only the app you
-        asked for needs per-window control, which is an upstream change.
+        KNOWN LIMITATION: show_floating() is global, so this reveals every
+        floating window, the editor included. Per-window control is upstream.
     ]]
-    M.register("app.toggle", function(state, args)
-        local id = args.app
-        local app = state.doc._apps and state.doc._apps[id]
-        if not app then
-            util.warn(("unknown app %q"):format(tostring(id)))
+    M.register("ninb.toggle", function(st)
+        local ninb = st.doc.ninb or {}
+        local jar = ninb.jar
+
+        if not jar or jar == util.NULL or jar == "" then
+            util.warn("no Ninjabrain Bot jar configured")
             return false
         end
 
-        local cmd = app.command
-        if not cmd or cmd == util.NULL or cmd == "" then
-            util.warn(("app %q has no command"):format(id))
-            return false
+        local template = ninb.command
+        if not template or template == util.NULL or template == "" then
+            template = "java -jar {jar}"
         end
 
-        cmd = util.expand_command(cmd)
+        local cmd = util.expand_command((template:gsub("{jar}", util.expand(jar))))
 
-        -- Tracked by pidfile for the same reason gui.toggle is: a reload
-        -- must not start a second Ninjabrain Bot.
-        if launch.once(waywall, "app-" .. id, cmd) then
-            local gui = state.doc.gui or {}
-            pcall(waywall.sleep, gui.launch_delay_ms or 400)
-
+        if launch.once(waywall, "ninb", cmd) then
+            pcall(waywall.sleep, (st.doc.gui or {}).launch_delay_ms or 400)
             force_show_floating()
             return
         end

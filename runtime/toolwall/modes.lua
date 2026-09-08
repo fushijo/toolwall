@@ -7,6 +7,7 @@
 ]]
 
 local waywall = require("waywall")
+local state = require("toolwall.state")
 local util = require("toolwall.util")
 
 local Modes = {}
@@ -106,12 +107,10 @@ function Modes:set(id)
         waywall.set_sensitivity(0)  -- 0 restores the configured default
     end
 
-    -- A crosshair mirror centres on this, and waywall may not have applied
-    -- the new size yet when the overlay is created.
-    self.scene.resolution_hint = mode.resolution
     self.scene:set_active(self:_overlays_for(mode))
 
     self.current = id
+    state.write("mode", id)
     self:_emit()
     return true
 end
@@ -129,10 +128,10 @@ function Modes:reset()
     end
 
     waywall.set_sensitivity(0)
-    self.scene.resolution_hint = nil
     self.scene:set_active(self:_base_overlays())
 
     self.current = nil
+    state.write("mode", "")
     self:_emit()
     return true
 end

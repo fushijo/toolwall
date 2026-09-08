@@ -12,8 +12,18 @@ mod keys;
 mod tabs;
 mod widgets;
 
+use std::time::{Duration, Instant};
+
 use anyhow::Result;
 use toolwall_core::{problems, Document, Scope, Store};
+
+use tabs::input::RemapCapture;
+
+/// How long to wait after the last edit before applying it.
+///
+/// Every apply reloads waywall's config, so this batches a burst of nudges
+/// into one reload instead of one per keystroke.
+const APPLY_AFTER: Duration = Duration::from_millis(350);
 
 use widgets::FileBrowser;
 
@@ -29,6 +39,8 @@ fn main() -> Result<()> {
         Ok(doc) => (doc, None),
         Err(err) => (Document::default(), Some(err.to_string())),
     };
+
+    let saved = serde_json::to_string(&doc).unwrap_or_default();
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -51,6 +63,10 @@ fn main() -> Result<()> {
                 tab: Tab::Modes,
                 browser: FileBrowser::default(),
                 capturing: None,
+                remap_capture: None,
+                advanced: false,
+                saved,
+                pending_since: None,
             }))
         }),
     )
@@ -79,16 +95,16 @@ struct App {
     browser: FileBrowser,
     /// Index of the keybind currently swallowing the next keypress.
     capturing: Option<usize>,
+    remap_capture: Option<RemapCapture>,
+    advanced: bool,
+
+    /// The document as last written, so an edit can be noticed without every
+    /// widget having to report one.
+    saved: String,
+    pending_since: Option<Instant>,
 }
 
 impl App {
-    fn save(&mut self) {
-        self.status = Some(match self.store.save(&self.doc) {
-            Ok(()) => (true, "Saved and reloaded".to_string()),
-            Err(err) => (false, format!("{err:#}")),
-        });
-    }
-
     /// Re-assert our size while the compositor has left us degenerately small.
     ///
     /// waywall configures floating windows with `xdg_toplevel.configure(0, 0)`,
@@ -152,6 +168,40 @@ impl App {
         }
     }
 
+    /// Apply edits shortly after they stop, so a change is visible in the
+    /// game without hunting for a Save button.
+    fn apply_when_settled(&mut self, ctx: &egui::Context) {
+        let current = serde_json::to_string(&self.doc).unwrap_or_default();
+
+        if current != self.saved {
+            self.pending_since.get_or_insert_with(Instant::now);
+        }
+
+        let Some(since) = self.pending_since else { return };
+
+        if since.elapsed() < APPLY_AFTER {
+            // Come back when the debounce is up, even without further input.
+            ctx.request_repaint_after(APPLY_AFTER - since.elapsed());
+            return;
+        }
+
+        self.pending_since = None;
+
+        // Never write a document the runtime would reject; the error stays on
+        // screen and the edit stays in the editor until it is fixed.
+        if !problems(&self.doc).is_empty() {
+            return;
+        }
+
+        self.status = Some(match self.store.save(&self.doc) {
+            Ok(()) => {
+                self.saved = current;
+                (true, "Applied".to_string())
+            }
+            Err(err) => (false, format!("{err:#}")),
+        });
+    }
+
     fn revert(&mut self) {
         self.status = Some(match self.store.load() {
             Ok(doc) => {
@@ -168,6 +218,18 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         Self::ensure_usable_size(ctx);
         self.apply_appearance(ctx);
+
+        // Escape dismisses the editor rather than falling through to the game.
+        // While a key is being captured it cancels that instead, which is the
+        // more local meaning.
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if self.capturing.is_some() || self.remap_capture.is_some() {
+                self.capturing = None;
+                self.remap_capture = None;
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        }
 
         // Cheap for a document this size, and it keeps every inline warning
         // honest as you type rather than only at save time.
@@ -191,25 +253,30 @@ impl eframe::App for App {
                 // Right-aligned close. The editor floats over the game, so
                 // dismissing it needs to be reachable without the keybind.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("✕").on_hover_text("Close").clicked() {
+                    if ui.button("✕").on_hover_text("Close (Esc)").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
+
+                    // Everything most people need is in Basic; Advanced adds
+                    // ids, layering and the things that break a setup.
+                    ui.separator();
+                    ui.selectable_value(&mut self.advanced, true, "Advanced");
+                    ui.selectable_value(&mut self.advanced, false, "Basic");
                 });
             });
         });
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                // Save is refused rather than allowed to fail in the store:
-                // a bad write here hot-reloads into a live session.
                 let blocked = !problems.is_empty();
-                let save = ui.add_enabled(!blocked, egui::Button::new("Save"));
-                if save.clicked() {
-                    self.save();
-                }
-                if blocked {
-                    save.on_hover_text("Fix the highlighted problems first");
-                }
+
+                ui.label(if blocked {
+                    "Not applied"
+                } else if self.pending_since.is_some() {
+                    "Applying…"
+                } else {
+                    "Changes apply as you make them"
+                });
 
                 if ui.button("Revert").clicked() {
                     self.revert();
@@ -247,18 +314,26 @@ impl eframe::App for App {
             }
 
             match self.tab {
-                Tab::Modes => tabs::modes::show(ui, &mut self.doc, &problems),
-                Tab::Mirrors => tabs::mirrors::show(ui, &mut self.doc, &problems),
+                Tab::Modes => tabs::modes::show(ui, &mut self.doc, &problems, self.advanced),
+                Tab::Mirrors => tabs::mirrors::show(ui, &mut self.doc, &problems, self.advanced),
                 Tab::Images => {
-                    tabs::images::show(ui, &mut self.doc, &problems, &mut self.browser)
+                    tabs::images::show(ui, &mut self.doc, &problems, &mut self.browser, self.advanced)
                 }
                 Tab::Keybinds => {
-                    tabs::keybinds::show(ui, &mut self.doc, &problems, &mut self.capturing)
+                    tabs::keybinds::show(ui, &mut self.doc, &problems, &mut self.capturing, self.advanced)
                 }
-                Tab::Theme => tabs::theme::show(ui, &mut self.doc),
-                Tab::Input => tabs::input::show(ui, &mut self.doc, &problems),
+                Tab::Theme => tabs::theme::show(ui, &mut self.doc, self.advanced),
+                Tab::Input => tabs::input::show(
+                    ui,
+                    &mut self.doc,
+                    &problems,
+                    self.advanced,
+                    &mut self.remap_capture,
+                ),
             }
         });
+
+        self.apply_when_settled(ctx);
     }
 }
 

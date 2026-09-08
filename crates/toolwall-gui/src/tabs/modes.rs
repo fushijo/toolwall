@@ -9,7 +9,7 @@ use toolwall_core::{Document, Problem, Scope};
 
 use crate::widgets::{optional_text, problems_for};
 
-pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
+pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advanced: bool) {
     // Collected up front: the attach lists need these while `doc.modes` is
     // borrowed mutably below.
     let mirror_ids: Vec<String> = doc.mirrors.iter().map(|m| m.id.clone()).collect();
@@ -31,30 +31,34 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
                         .num_columns(2)
                         .spacing([12.0, 6.0])
                         .show(ui, |ui| {
-                            ui.label("id");
-                            ui.text_edit_singleline(&mut mode.id);
-                            ui.end_row();
+                            if advanced {
+                                ui.label("ID").on_hover_text(
+                                    "Used by keybinds to refer to this mode",
+                                );
+                                ui.text_edit_singleline(&mut mode.id);
+                                ui.end_row();
+                            }
 
-                            ui.label("label");
+                            ui.label("Name");
                             optional_text(ui, &mut mode.label);
                             ui.end_row();
 
-                            ui.label("width");
+                            ui.label("Width");
                             ui.add(
                                 egui::DragValue::new(&mut mode.resolution.width).range(0..=16384),
                             );
                             ui.end_row();
 
-                            ui.label("height");
+                            ui.label("Height");
                             ui.add(
                                 egui::DragValue::new(&mut mode.resolution.height).range(0..=16384),
                             );
                             ui.end_row();
 
-                            ui.label("sensitivity");
+                            ui.label("Sensitivity");
                             ui.horizontal(|ui| {
                                 let mut overridden = mode.sensitivity.is_some();
-                                if ui.checkbox(&mut overridden, "override").changed() {
+                                if ui.checkbox(&mut overridden, "Override").changed() {
                                     mode.sensitivity = overridden.then_some(1.0);
                                 }
                                 if let Some(sens) = &mut mode.sensitivity {
@@ -65,20 +69,21 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem]) {
                             });
                             ui.end_row();
 
-                            ui.label("toggle off on repress");
+                            ui.label("Press again to turn off");
                             ui.checkbox(&mut mode.toggle, "");
                             ui.end_row();
 
-                            ui.label("mirrors");
-                            attach_list(ui, &mirror_ids, &mut mode.mirrors);
-                            ui.end_row();
-
-                            ui.label("images");
-                            attach_list(ui, &image_ids, &mut mode.images);
+                            ui.label("Overlays").on_hover_text(
+                                "Shown automatically while this mode is active",
+                            );
+                            ui.vertical(|ui| {
+                                attach_list(ui, &mirror_ids, &mut mode.mirrors);
+                                attach_list(ui, &image_ids, &mut mode.images);
+                            });
                             ui.end_row();
                         });
 
-                    if ui.button("Remove mode").clicked() {
+                    if advanced && ui.button("Remove mode").clicked() {
                         remove = Some(index);
                     }
                 });

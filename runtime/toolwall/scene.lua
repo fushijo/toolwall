@@ -25,10 +25,6 @@ function M.new(doc)
         live = {},    -- id -> scene object
         active = {},  -- id -> true
         pinned = {},  -- id -> true, shown by hand rather than by a mode
-
-        -- The resolution a mode is switching to, so a crosshair mirror can be
-        -- centred before waywall has been asked for the new size.
-        resolution_hint = nil,
     }, Scene)
 end
 
@@ -43,65 +39,9 @@ local function shader_of(spec)
     return s
 end
 
---[[
-    EyeZoom: a source rect centred on the crosshair.
-
-    The crosshair sits at the centre of the Minecraft window, so the region to
-    magnify depends on the resolution currently in effect — which changes every
-    time you switch modes. It is therefore computed when the mirror is created
-    rather than stored, and mode switches already close and recreate scene
-    objects, so the zoom follows the resolution for free.
-
-    waywall.active_res() reports 0x0 when no resolution has been set (the game
-    is stretched to the window), and Lua has no way to ask how big that window
-    is. The mode's own configured resolution is the fallback; failing both,
-    there is no crosshair to centre on.
-]]
-function Scene:_crosshair_rect(spec)
-    local size = spec.crosshair
-    local w, h = size.w or 0, size.h or 0
-    if w <= 0 or h <= 0 then
-        return nil, "crosshair size must be positive"
-    end
-
-    local res_w, res_h = 0, 0
-    local ok, aw, ah = pcall(waywall.active_res)
-    if ok then
-        res_w, res_h = aw or 0, ah or 0
-    end
-
-    if res_w <= 0 or res_h <= 0 then
-        local fallback = self.resolution_hint
-        if fallback then
-            res_w, res_h = fallback.width or 0, fallback.height or 0
-        end
-    end
-
-    if res_w <= 0 or res_h <= 0 then
-        return nil, "no known resolution to centre on"
-    end
-
-    return {
-        x = math.floor(res_w / 2 - w / 2),
-        y = math.floor(res_h / 2 - h / 2),
-        w = w,
-        h = h,
-    }
-end
-
 function Scene:_create_mirror(spec)
-    local src = rect(spec.src)
-
-    if spec.crosshair and spec.crosshair ~= util.NULL then
-        local centred, err = self:_crosshair_rect(spec)
-        if not centred then
-            error("crosshair mirror: " .. err, 0)
-        end
-        src = centred
-    end
-
     local opts = {
-        src = src,
+        src = rect(spec.src),
         dst = rect(spec.dst),
         depth = spec.depth,
         shader = shader_of(spec),
@@ -215,16 +155,7 @@ function Scene:set_active(ids)
     end
 
     for id in pairs(self.live) do
-        --[[
-            A crosshair mirror's source is derived from the resolution, so a
-            live one is stale the moment the resolution changes. Closing it
-            here means show() below rebuilds it centred on the new size,
-            rather than short-circuiting on the object that already exists.
-        ]]
-        local spec = self.doc._mirrors[id]
-        local follows_crosshair = spec and spec.crosshair and spec.crosshair ~= util.NULL
-
-        if not want[id] or follows_crosshair then
+        if not want[id] then
             self:hide(id)
         end
     end

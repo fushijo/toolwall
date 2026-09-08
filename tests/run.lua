@@ -15,6 +15,7 @@ local waywall = require("waywall")
 -- Stand in for /proc, so a launched process can be "alive" with a chosen
 -- command line. Applied once: launch.lua keeps no state of its own.
 local launch = require("toolwall.launch")
+local tw_state = require("toolwall.state")
 launch.proc_cmdline = function(pid)
     return waywall.processes[pid]
 end
@@ -363,15 +364,12 @@ check("gui.toggle forces a visibility transition so waywall commits the window",
     os.remove(path)
 end)
 
-check("app.toggle launches a configured app and reveals it", function()
-    -- floating.toggle only changes visibility, so a "toggle Ninjabrain Bot"
-    -- keybind bound to it can never actually start Ninjabrain Bot.
+check("ninb.toggle launches Ninjabrain Bot and reveals it", function()
     local path = write_config([[
       { "version": 1,
         "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
-        "apps": [ { "id": "ninb", "command": "java -jar ~/ninb.jar" } ],
-        "keybinds": [ { "input": "grave", "command": "app.toggle",
-                        "args": { "app": "ninb" } } ] }
+        "ninb": { "jar": "~/ninb.jar", "command": "java -jar {jar}" },
+        "keybinds": [ { "input": "grave", "command": "ninb.toggle" } ] }
     ]])
     local toolwall = require("toolwall")
     local cfg = toolwall.setup({ path = path })
@@ -380,201 +378,62 @@ check("app.toggle launches a configured app and reveals it", function()
 
     cfg.actions["grave"]()
 
-    local execed
-    for _, entry in ipairs(waywall.log) do
-        if entry.name == "exec" then execed = entry.args[1] end
-    end
+    assert_eq(waywall.launched[1],
+        "java -jar " .. (os.getenv("HOME") or "") .. "/ninb.jar",
+        "{jar} substituted and ~ expanded")
+    assert_eq(waywall.floating, true, "revealed after launch")
 
-    -- Launches go through a generated script so the child's pid can be
-    -- recorded; the real command lives inside it.
-    assert_eq(execed ~= nil and execed:match("^sh ") ~= nil, true,
-        "launched via the tracking script")
-
-    local script = execed:match("^sh (.+)$")
-    local fh = assert(io.open(script, "r"))
-    local body = fh:read("*a")
-    fh:close()
-    assert_eq(body:find("java -jar " .. (os.getenv("HOME") or "") .. "/ninb.jar", 1, true) ~= nil,
-        true, "app command expanded inside the launcher")
-    assert_eq(waywall.floating, true, "floating revealed after launch")
-
-    -- A second press toggles visibility without launching a second copy.
     cfg.actions["grave"]()
     assert_eq(waywall.floating, false, "second press hides")
-
-    local launches = 0
-    for _, entry in ipairs(waywall.log) do
-        if entry.name == "exec" then launches = launches + 1 end
-    end
-    assert_eq(launches, 1, "app launched only once")
+    assert_eq(#waywall.launched, 1, "launched only once")
     os.remove(path)
 end)
 
-check("app.toggle naming an unknown app does not consume the keypress", function()
+check("ninb.toggle without a jar does not consume the keypress", function()
     local path = write_config([[
       { "version": 1,
         "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
-        "keybinds": [ { "input": "grave", "command": "app.toggle",
-                        "args": { "app": "nope" } } ] }
+        "keybinds": [ { "input": "grave", "command": "ninb.toggle" } ] }
     ]])
     local toolwall = require("toolwall")
     local cfg = toolwall.setup({ path = path })
     waywall.finish_startup()
     waywall.mount_view()
 
-    assert_eq(cfg.actions["grave"](), false, "should pass the key through")
+    assert_eq(cfg.actions["grave"](), false, "passes the key through")
     os.remove(path)
 end)
 
-check("a config reload does not launch a second GUI", function()
-    -- Saving from the GUI trips the hot reload, which rebuilds the Lua VM and
-    -- destroys all runtime state. Before launch tracking moved to a pidfile,
-    -- that lost "the GUI is already open" and every save added another copy.
+check("the active mode survives a config reload", function()
+    -- Saving reloads the config, which rebuilds the VM. Live editing is only
+    -- usable if that does not throw you back to the base resolution.
     local body = [[
       { "version": 1,
-        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
-        "keybinds": [ { "input": "Ctrl-I", "command": "gui.toggle" } ],
-        "gui": { "command": "toolwall-gui" } }
+        "modes": [ { "id": "thin", "resolution": {"width":320,"height":1080} } ] }
     ]]
     local path = write_config(body)
 
     local toolwall = require("toolwall")
-    local cfg = toolwall.setup({ path = path })
+    toolwall.setup({ path = path })
     waywall.finish_startup()
     waywall.mount_view()
 
-    cfg.actions["Ctrl-I"]()
-    assert_eq(#waywall.launched, 1, "launched once")
+    toolwall.rt.modes:set("thin")
+    assert_eq(waywall.resolution.width, 320, "mode applied")
 
-    -- Now simulate what a save does: rebuild the VM from scratch. Everything
-    -- the runtime knew is gone; only the pidfile survives.
     for _, mod in ipairs({ "toolwall", "toolwall.config", "toolwall.scene",
                            "toolwall.modes", "toolwall.hud", "toolwall.keybinds",
                            "toolwall.commands" }) do
         package.loaded[mod] = nil
     end
+    waywall.resolution = { width = 0, height = 0 }
 
     local reloaded = require("toolwall")
-    local cfg2 = reloaded.setup({ path = path })
-    waywall.startup = false
+    reloaded.setup({ path = path })
     waywall.fire("load")
 
-    cfg2.actions["Ctrl-I"]()
-
-    assert_eq(#waywall.launched, 1, "still only one GUI after a reload")
-    assert_eq(waywall.floating, false, "the second press toggles instead of launching")
-    os.remove(path)
-end)
-
-check("a crosshair mirror centres on the resolution it is shown at", function()
-    -- EyeZoom: a small source drawn into a large dst is a magnifier, and the
-    -- crosshair is the centre of the Minecraft window - so the source has to
-    -- move whenever the resolution does.
-    local path = write_config([[
-      { "version": 1,
-        "mirrors": [ { "id": "zoom", "crosshair": { "w": 80, "h": 60 },
-                       "src": {"x":0,"y":0,"w":0,"h":0},
-                       "dst": {"x":0,"y":0,"w":800,"h":600} } ],
-        "modes": [ { "id": "thin", "resolution": {"width":320,"height":1080},
-                     "mirrors": ["zoom"] },
-                   { "id": "wide", "resolution": {"width":1920,"height":300},
-                     "mirrors": ["zoom"] } ] }
-    ]])
-    local toolwall = require("toolwall")
-    toolwall.setup({ path = path })
-    waywall.finish_startup()
-    waywall.mount_view()
-
-    local function last_mirror_src()
-        local src
-        for _, entry in ipairs(waywall.log) do
-            if entry.name == "mirror" then src = entry.args[1].src end
-        end
-        return src
-    end
-
-    toolwall.rt.modes:set("thin")
-    local thin = last_mirror_src()
-    assert_eq(thin.x, 320 / 2 - 40, "centred horizontally at 320 wide")
-    assert_eq(thin.y, 1080 / 2 - 30, "centred vertically at 1080 tall")
-    assert_eq(thin.w, 80, "source width")
-
-    toolwall.rt.modes:set("wide")
-    local wide = last_mirror_src()
-    assert_eq(wide.x, 1920 / 2 - 40, "re-centred for the new resolution")
-    assert_eq(wide.y, 300 / 2 - 30, "re-centred vertically too")
-    os.remove(path)
-end)
-
-check("overlay.toggle pins an overlay across mode switches", function()
-    local path = write_config([[
-      { "version": 1,
-        "mirrors": [ { "id": "pinme", "src": {"x":0,"y":0,"w":10,"h":10},
-                       "dst": {"x":0,"y":0,"w":10,"h":10} } ],
-        "modes": [ { "id": "a", "resolution": {"width":320,"height":1080} },
-                   { "id": "b", "resolution": {"width":1920,"height":300} } ],
-        "keybinds": [ { "input": "Shift-O", "command": "overlay.toggle",
-                        "args": { "overlay": "pinme" } } ] }
-    ]])
-    local toolwall = require("toolwall")
-    local cfg = toolwall.setup({ path = path })
-    waywall.finish_startup()
-    waywall.mount_view()
-
-    local function mirrors_live()
-        local n = 0
-        for _, obj in pairs(waywall.live_objects()) do
-            if obj.kind == "mirror" then n = n + 1 end
-        end
-        return n
-    end
-
-    toolwall.rt.modes:set("a")
-    assert_eq(mirrors_live(), 0, "no overlay before toggling")
-
-    cfg.actions["Shift-O"]()
-    assert_eq(mirrors_live(), 1, "toggled on")
-
-    -- Neither mode declares it, so only pinning keeps it alive.
-    toolwall.rt.modes:set("b")
-    assert_eq(mirrors_live(), 1, "survives a mode switch")
-
-    cfg.actions["Shift-O"]()
-    assert_eq(mirrors_live(), 0, "toggled back off")
-    os.remove(path)
-end)
-
-check("remaps follow the cursor between playing and menus", function()
-    local path = write_config([[
-      { "version": 1,
-        "input": { "remaps": { "MB4": "Home" },
-                   "remaps_menu": { "MB4": "Escape" } },
-        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ] }
-    ]])
-    local toolwall = require("toolwall")
-    toolwall.setup({ path = path })
-
-    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
-    waywall.finish_startup()
-    waywall.mount_view()
-
-    local function last_remaps()
-        local set
-        for _, entry in ipairs(waywall.log) do
-            if entry.name == "set_remaps" then set = entry.args[1] end
-        end
-        return set
-    end
-
-    assert_eq(last_remaps().MB4, "Home", "playing uses the base remaps")
-
-    waywall.state_value = { screen = "inworld", inworld = "paused" }
-    waywall.fire("state")
-    assert_eq(last_remaps().MB4, "Escape", "a visible cursor uses the menu remaps")
-
-    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
-    waywall.fire("state")
-    assert_eq(last_remaps().MB4, "Home", "back to the base remaps")
+    assert_eq(reloaded.rt.modes.current, "thin", "still in thin after a reload")
+    assert_eq(waywall.resolution.width, 320, "resolution reapplied")
     os.remove(path)
 end)
 

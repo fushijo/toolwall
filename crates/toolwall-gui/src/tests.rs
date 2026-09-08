@@ -41,7 +41,6 @@ fn sample() -> Document {
         ],
         mirrors: vec![Mirror {
             id: "eye".into(),
-            crosshair: Some(toolwall_core::schema::Size { w: 80, h: 60 }),
             label: Some("Boat eye".into()),
             src: Rect { x: 0, y: 0, w: 100, h: 100 },
             dst: Rect { x: 0, y: 300, w: 300, h: 300 },
@@ -95,6 +94,12 @@ fn sample() -> Document {
                 label: None,
             },
             Keybind {
+                input: "grave".into(),
+                command: Command::NinbToggle,
+                args: None,
+                label: None,
+            },
+            Keybind {
                 input: "Ctrl-E".into(),
                 command: Command::Exec,
                 args: Some(json!({ "command": "ls" })),
@@ -115,6 +120,8 @@ fn sample() -> Document {
         Shader { vertex: None, fragment: Some("invert.frag".into()) },
     );
     doc.input.remaps.insert("MB4".into(), "Home".into());
+    doc.input.remaps_menu.insert("MB4".into(), "Escape".into());
+    doc.ninb.jar = "~/Ninjabrain-Bot.jar".into();
     doc
 }
 
@@ -134,48 +141,48 @@ fn every_tab_renders() {
 
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
-        tabs::modes::show(ui, doc, &found);
+        tabs::modes::show(ui, doc, &found, true);
     });
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
-        tabs::mirrors::show(ui, doc, &found);
+        tabs::mirrors::show(ui, doc, &found, true);
     });
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
         let mut browser = FileBrowser::default();
-        tabs::images::show(ui, doc, &found, &mut browser);
+        tabs::images::show(ui, doc, &found, &mut browser, true);
     });
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
         let mut capturing = None;
-        tabs::keybinds::show(ui, doc, &found, &mut capturing);
+        tabs::keybinds::show(ui, doc, &found, &mut capturing, true);
     });
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
-        tabs::input::show(ui, doc, &found);
+        tabs::input::show(ui, doc, &found, true, &mut None);
     });
-    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc));
+    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true));
 }
 
 #[test]
 fn tabs_render_an_empty_document() {
     let mut doc = Document::default();
 
-    render(&mut doc, |ui, doc| tabs::modes::show(ui, doc, &[]));
-    render(&mut doc, |ui, doc| tabs::mirrors::show(ui, doc, &[]));
+    render(&mut doc, |ui, doc| tabs::modes::show(ui, doc, &[], false));
+    render(&mut doc, |ui, doc| tabs::mirrors::show(ui, doc, &[], false));
     render(&mut doc, |ui, doc| {
         let mut browser = FileBrowser::default();
-        tabs::images::show(ui, doc, &[], &mut browser);
+        tabs::images::show(ui, doc, &[], &mut browser, false);
     });
     render(&mut doc, |ui, doc| {
         let mut capturing = None;
-        tabs::keybinds::show(ui, doc, &[], &mut capturing);
+        tabs::keybinds::show(ui, doc, &[], &mut capturing, false);
     });
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
-        tabs::input::show(ui, doc, &found);
+        tabs::input::show(ui, doc, &found, true, &mut None);
     });
-    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc));
+    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true));
 }
 
 /// waywall configures floating windows with `xdg_toplevel.configure(0, 0)`,
