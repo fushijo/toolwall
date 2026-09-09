@@ -343,6 +343,7 @@ mod tests {
         let mut doc = doc_with_mode();
         for _ in 0..2 {
             doc.keybinds.push(Keybind {
+                f3_safe: true,
                 input: "Shift-T".into(),
                 command: Command::ModeReset,
                 args: None,
@@ -362,6 +363,7 @@ mod tests {
     fn rejects_a_ninb_key_with_no_jar_configured() {
         let mut doc = doc_with_mode();
         doc.keybinds.push(Keybind {
+            f3_safe: true,
             input: "grave".into(),
             command: Command::NinbToggle,
             args: None,
@@ -381,12 +383,14 @@ mod tests {
         doc.modes[0].resolution.width = 20000;
         doc.modes[0].mirrors.push("nope".into());
         doc.keybinds.push(Keybind {
+            f3_safe: true,
             input: "Shift-T".into(),
             command: Command::ModeReset,
             args: None,
             label: None,
         });
         doc.keybinds.push(Keybind {
+            f3_safe: true,
             input: "Shift-T".into(),
             command: Command::ModeReset,
             args: None,

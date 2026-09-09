@@ -98,6 +98,13 @@ pub fn show(
                             optional_text(ui, &mut bind.label);
                             ui.end_row();
 
+                            ui.label("Ignore while F3 is held").on_hover_text(
+                                "So F3 combos reach Minecraft. Shift, Ctrl and Alt \
+                                 are already safe: waywall matches modifiers exactly.",
+                            );
+                            ui.checkbox(&mut bind.f3_safe, "");
+                            ui.end_row();
+
                             ui.label("Does");
                             egui::ComboBox::from_id_salt(("command", index))
                                 .selected_text(command_name(bind.command))
@@ -135,6 +142,7 @@ pub fn show(
 
         if ui.button("Add keybind").clicked() {
             doc.keybinds.push(Keybind {
+                f3_safe: true,
                 input: String::new(),
                 command: Command::ModeReset,
                 args: None,

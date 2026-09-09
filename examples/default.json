@@ -224,7 +224,8 @@
     {
       "input": "bracketleft",
       "command": "gui.toggle",
-      "label": "Open settings"
+      "label": "Open settings",
+      "f3_safe": true
     },
     {
       "input": "B",
@@ -232,7 +233,8 @@
       "args": {
         "mode": "thin"
       },
-      "label": "Thin BT"
+      "label": "Thin BT",
+      "f3_safe": true
     },
     {
       "input": "Caps_Lock",
@@ -240,7 +242,8 @@
       "args": {
         "mode": "wide"
       },
-      "label": "Wide"
+      "label": "Wide",
+      "f3_safe": true
     },
     {
       "input": "Y",
@@ -248,12 +251,14 @@
       "args": {
         "mode": "eye"
       },
-      "label": "Eye measure"
+      "label": "Eye measure",
+      "f3_safe": true
     },
     {
       "input": "backslash",
       "command": "mode.reset",
-      "label": "Reset"
+      "label": "Reset",
+      "f3_safe": true
     },
     {
       "input": "Shift-Z",
@@ -261,7 +266,8 @@
       "args": {
         "overlay": "eye_zoom"
       },
-      "label": "Eye zoom"
+      "label": "Eye zoom",
+      "f3_safe": true
     },
     {
       "input": "Shift-X",
@@ -269,7 +275,8 @@
       "args": {
         "overlay": "eye_measure_grid"
       },
-      "label": "Eye grid"
+      "label": "Eye grid",
+      "f3_safe": true
     },
     {
       "input": "P",
@@ -277,7 +284,8 @@
       "args": {
         "overlay": "pie_chart"
       },
-      "label": "Pie chart"
+      "label": "Pie chart",
+      "f3_safe": true
     },
     {
       "input": "equal",
@@ -285,7 +293,8 @@
       "args": {
         "overlay": "entity_count"
       },
-      "label": "Entity counter"
+      "label": "Entity counter",
+      "f3_safe": true
     }
   ],
   "hud": {
@@ -299,7 +308,7 @@
     "appearance": {
       "opacity": 0.9,
       "dark": true,
-      "font_size": 13.0
+      "font_size": 18.0
     }
   }
 }

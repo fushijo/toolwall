@@ -275,7 +275,8 @@ separate repository or as PRs against waywall itself.
   affiliated with or endorsed by it.
 - [Linux MCSR Resources](https://linux-mcsr-resources.github.io/), the
   community index.
-- The measuring overlay in `resources/` comes from the waywall generic config
-  by Arjun Gore, used under the MIT Licence. The capture geometry, the pie
-  chart source rectangles and the god-sens multipliers all come from that
-  config.
+- [waywall_generic_config](https://github.com/arjuncgore/waywall_generic_config)
+  by gore. The capture geometry for the pie chart and entity counter, and the
+  god-sens multipliers, are taken from that config.
+- [Pixel-Perfect Tools](https://priffin.github.io/Pixel-Perfect-Tools/overlayGen.html)
+  by priffin, for generating measuring overlays.

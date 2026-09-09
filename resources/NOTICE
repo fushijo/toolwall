@@ -1,8 +1,15 @@
-measuring_overlay.png is from the waywall generic config by Arjun Gore
-(gore), used under the MIT Licence.
+measuring_overlay.png is a pixel-perfect boat-eye measuring grid.
 
-    https://github.com/gorebutcher/waywall-config
+It is a 1920x1080 frame whose measuring band is exactly 576px wide, 18 bands
+of 32px, centred on x=960. Those numbers are what make it measurable: see
+"Measuring window" in the README for the capture and destination geometry that
+keeps one band equal to one game pixel.
 
-It is a 1920x1080 frame whose measuring band is exactly 576px wide - 18 bands
-of 32px - centred on x=960. Those numbers matter: see "Measuring window" in
-the README for the geometry that keeps a band equal to one game pixel.
+You can generate your own for a different panel size with priffin's
+Pixel-Perfect Tools:
+
+    https://priffin.github.io/Pixel-Perfect-Tools/overlayGen.html
+
+Whatever you generate has to satisfy the same two constraints, or the scale
+drifts: a 60 game pixel capture, and a destination width that is a multiple
+of 60.

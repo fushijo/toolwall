@@ -60,6 +60,7 @@ function M.reset()
     M.launched = {}
     M.processes = {}
     M.next_pid = 1000
+    M.held = {}
 
     -- Launch records outlive a Lua VM by design, so a test must clear them.
     local runtime = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
@@ -274,9 +275,12 @@ function M.press_key(key)
     record("press_key", key)
 end
 
+-- Keys the test says are physically held, for f3_safe checks.
+M.held = {}
+
 function M.get_key(key)
     guard("get_key")
-    return false
+    return M.held[key] == true
 end
 
 function M.set_keymap(options)

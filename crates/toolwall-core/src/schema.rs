@@ -361,6 +361,13 @@ impl Default for Ninb {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Keybind {
+    /// Suppress this bind while F3 is held, so F3 combos reach Minecraft.
+    ///
+    /// waywall matches modifiers exactly, so Shift, Ctrl and Alt are already
+    /// safe. F3 is an ordinary key, so without this a bind on B also fires
+    /// for F3+B.
+    #[serde(default = "yes")]
+    pub f3_safe: bool,
     /// waywall keysym with modifiers, e.g. `Ctrl-I`, `Shift-T`, `*-F3`.
     pub input: String,
     pub command: Command,
@@ -466,7 +473,7 @@ pub struct Appearance {
 
 impl Default for Appearance {
     fn default() -> Self {
-        Self { opacity: 0.92, dark: true, font_size: 14.0 }
+        Self { opacity: 0.92, dark: true, font_size: 18.0 }
     }
 }
 
@@ -480,4 +487,4 @@ fn launch_delay() -> u32 { 400 }
 fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }
 fn ninb_command() -> String { "java -jar {jar}".into() }
 fn default_opacity() -> f32 { 0.92 }
-fn default_font_size() -> f32 { 14.0 }
+fn default_font_size() -> f32 { 18.0 }

@@ -28,7 +28,7 @@ const APPLY_AFTER: Duration = Duration::from_millis(350);
 use widgets::{FileBrowser, PickTarget};
 
 /// Also the size re-asserted when waywall configures us to nothing.
-const DEFAULT_SIZE: [f32; 2] = [720.0, 520.0];
+const DEFAULT_SIZE: [f32; 2] = [936.0, 676.0];
 
 fn main() -> Result<()> {
     let store = Store::at_default_path()?;
@@ -162,7 +162,7 @@ impl App {
 
         // Zoom scales the whole UI with the text, which keeps hit targets and
         // spacing proportional - setting a font size alone does not.
-        let zoom = (look.font_size / 14.0).clamp(0.7, 1.8);
+        let zoom = (look.font_size / 14.0).clamp(0.7, 2.2);
         if (ctx.zoom_factor() - zoom).abs() > 0.01 {
             ctx.set_zoom_factor(zoom);
         }

@@ -462,6 +462,40 @@ check("the active mode survives a config reload", function()
     os.remove(path)
 end)
 
+check("a keybind does not fire while F3 is held", function()
+    -- waywall matches modifiers exactly, so Shift/Ctrl/Alt are already safe.
+    -- F3 is an ordinary key, so without a guard F3+B would flip you into thin
+    -- while you were only reaching for hitboxes.
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "thin", "resolution": {"width":320,"height":1080} } ],
+        "keybinds": [ { "input": "B", "command": "mode.set",
+                        "args": { "mode": "thin" } },
+                      { "input": "N", "command": "mode.set",
+                        "args": { "mode": "thin" }, "f3_safe": false } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    waywall.held["F3"] = true
+
+    assert_eq(cfg.actions["B"](), false, "passes F3+B through to Minecraft")
+    assert_eq(toolwall.rt.modes.current, nil, "mode not switched")
+
+    -- Opting out still fires, for a bind that wants to work during F3.
+    cfg.actions["N"]()
+    assert_eq(toolwall.rt.modes.current, "thin", "f3_safe = false still fires")
+
+    -- And without F3 held the guarded bind works normally.
+    toolwall.rt.modes:reset()
+    waywall.held["F3"] = false
+    cfg.actions["B"]()
+    assert_eq(toolwall.rt.modes.current, "thin", "fires normally without F3")
+    os.remove(path)
+end)
+
 check("unknown commands do not consume the keypress", function()
     local path = write_config([[
       { "version": 1,

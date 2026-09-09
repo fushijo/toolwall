@@ -597,6 +597,11 @@
         },
         "label": {
           "type": "string"
+        },
+        "f3_safe": {
+          "type": "boolean",
+          "default": true,
+          "description": "Suppress this bind while F3 is held, so F3 combos reach Minecraft. Modifiers are already matched exactly, so Shift/Ctrl/Alt need no guard."
         }
       }
     }

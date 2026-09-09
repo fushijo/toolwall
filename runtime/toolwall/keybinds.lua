@@ -7,6 +7,8 @@
     exist yet.
 ]]
 
+local waywall = require("waywall")
+
 local commands = require("toolwall.commands")
 local util = require("toolwall.util")
 
@@ -23,6 +25,7 @@ function M.build(doc, rt)
         local input = bind.input
         local command = bind.command
         local args = bind.args or {}
+        local f3_safe = util.bool(bind.f3_safe, true)
 
         if type(input) ~= "string" or input == "" then
             util.warn("keybind is missing an input")
@@ -35,6 +38,23 @@ function M.build(doc, rt)
                 -- The scene does not exist until the load event has fired.
                 if not rt.modes then
                     return false
+                end
+
+                --[[
+                    Do not fire while F3 is held.
+
+                    waywall matches modifiers exactly, so a bind on "B" already
+                    ignores Shift, Ctrl and Alt. F3 is an ordinary key rather
+                    than a modifier, so nothing stops F3+B from also triggering
+                    a bind on B, and reaching for hitboxes would flip you into
+                    thin. Returning false passes the key through to Minecraft,
+                    so the F3 combo does what it should.
+                ]]
+                if f3_safe then
+                    local held, pressed = pcall(waywall.get_key, "F3")
+                    if held and pressed then
+                        return false
+                    end
                 end
 
                 local fn = commands.get(command)
