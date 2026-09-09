@@ -242,6 +242,8 @@ pub enum Anchor {
     TopRight,
     BottomLeft,
     BottomRight,
+    /// Centred on the crosshair. `src.x` / `src.y` are ignored.
+    Center,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

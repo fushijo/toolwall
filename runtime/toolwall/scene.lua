@@ -74,9 +74,25 @@ function Scene:_anchored_rect(spec)
         return nil, "no known resolution"
     end
 
-    -- x and y are distances from the anchored edges to the near edge of the
-    -- region, which is how gore's config expresses the same rectangles.
     local anchor = spec.src_anchor
+
+    --[[
+        "center" puts the region on the crosshair, which is the middle of the
+        Minecraft window. This is what an eye measuring view needs: the region
+        has to track the centre as the resolution changes, and hand-placing it
+        means re-deriving (res - size) / 2 every time.
+    ]]
+    if anchor == "center" then
+        return {
+            x = math.floor((res_w - w) / 2),
+            y = math.floor((res_h - h) / 2),
+            w = w,
+            h = h,
+        }
+    end
+
+    -- Otherwise x and y are distances from the anchored edges to the near edge
+    -- of the region, which is how gore's config expresses the same rectangles.
     local x, y = src.x or 0, src.y or 0
 
     if anchor == "topright" or anchor == "bottomright" then
