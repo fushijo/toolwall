@@ -1,79 +1,67 @@
 {
   "version": 1,
-
   "meta": {
-    "name": "default",
-    "description": "Starting point. Replace the rects with your own measurements."
+    "name": "boat eye",
+    "description": "Thin/wide/eye modes with a pixel-exact measuring window, pie chart and entity counter."
   },
-
   "input": {
     "layout": "us",
-    "repeat_rate": 20,
-    "repeat_delay": 300,
-    "sensitivity": 1.0,
-    "confine_pointer": false,
+    "model": "",
+    "rules": "",
+    "variant": "",
+    "options": "",
     "remaps": {
       "MB4": "Home"
-    }
+    },
+    "remaps_menu": {},
+    "repeat_rate": 20,
+    "repeat_delay": 300,
+    "sensitivity": 12.8000006,
+    "confine_pointer": false
   },
-
   "theme": {
-    "background": "#303030ff",
-    "ninb_anchor": { "position": "right", "x": -10, "y": 10 },
+    "background": "#000000",
+    "background_png": "~/.config/waywall/resources/background.png",
+    "cursor_theme": "",
+    "cursor_icon": "",
+    "cursor_size": 5,
+    "ninb_anchor": {
+      "position": "bottomright",
+      "x": -40,
+      "y": -30
+    },
     "ninb_opacity": 1.0
   },
-
   "window": {
     "fullscreen_width": 0,
     "fullscreen_height": 0
   },
-
   "default_mode": null,
-
   "base_overlays": [],
-
-  "mirrors": [
-    {
-      "id": "eye_measure",
-      "label": "Boat eye measurement",
-      "src": { "x": 160, "y": 900, "w": 100, "h": 100 },
-      "dst": { "x": 0, "y": 300, "w": 300, "h": 300 },
-      "depth": 1
-    },
-    {
-      "id": "pie_chart",
-      "label": "F3 pie chart",
-      "src": { "x": 0, "y": 0, "w": 200, "h": 200 },
-      "dst": { "x": 0, "y": 0, "w": 200, "h": 200 },
-      "color_key": { "input": "#dddddd", "output": "#ee1111" },
-      "depth": 1
-    }
-  ],
-
-  "images": [
-    {
-      "id": "boateye_grid",
-      "label": "Boat eye grid",
-      "path": "~/.config/waywall/overlays/boateye.png",
-      "dst": { "x": 0, "y": 300, "w": 300, "h": 300 },
-      "depth": 2
-    }
-  ],
-
   "modes": [
     {
       "id": "thin",
       "label": "Thin BT",
-      "resolution": { "width": 320, "height": 1080 },
+      "resolution": {
+        "width": 340,
+        "height": 1080
+      },
       "sensitivity": null,
       "toggle": true,
-      "mirrors": [],
+      "mirrors": [
+        "entity_count",
+        "pie_chart",
+        "pie_percent"
+      ],
       "images": []
     },
     {
       "id": "wide",
       "label": "Wide",
-      "resolution": { "width": 1920, "height": 300 },
+      "resolution": {
+        "width": 1920,
+        "height": 300
+      },
       "sensitivity": null,
       "toggle": true,
       "mirrors": [],
@@ -82,14 +70,141 @@
     {
       "id": "eye",
       "label": "Eye measure",
-      "resolution": { "width": 384, "height": 16384 },
-      "sensitivity": 0.4,
+      "resolution": {
+        "width": 384,
+        "height": 16384
+      },
+      "sensitivity": 0.86348038,
       "toggle": true,
-      "mirrors": ["eye_measure"],
-      "images": ["boateye_grid"]
+      "mirrors": [
+        "eye_zoom",
+        "entity_count"
+      ],
+      "images": [
+        "eye_measure_grid"
+      ]
     }
   ],
-
+  "mirrors": [
+    {
+      "id": "eye_zoom",
+      "label": "Eye measure zoom",
+      "src_anchor": "center",
+      "src": {
+        "x": 0,
+        "y": 0,
+        "w": 60,
+        "h": 580
+      },
+      "dst": {
+        "x": 30,
+        "y": 300,
+        "w": 600,
+        "h": 338
+      },
+      "depth": 5
+    },
+    {
+      "id": "pie_chart",
+      "label": "F3 pie chart",
+      "src_anchor": "bottomright",
+      "src": {
+        "x": 340,
+        "y": 406,
+        "w": 340,
+        "h": 178
+      },
+      "dst": {
+        "x": 1180,
+        "y": 300,
+        "w": 420,
+        "h": 423
+      },
+      "depth": 5,
+      "color_keys": [
+        {
+          "input": "#EC6E4E",
+          "output": "#ff5555ff"
+        },
+        {
+          "input": "#46CE66",
+          "output": "#55ff55ff"
+        },
+        {
+          "input": "#CC6C46",
+          "output": "#ffaa00ff"
+        },
+        {
+          "input": "#464C46",
+          "output": "#aaaaaaff"
+        },
+        {
+          "input": "#E446C4",
+          "output": "#ff55ffff"
+        }
+      ]
+    },
+    {
+      "id": "pie_percent",
+      "label": "Pie percentages",
+      "src_anchor": "bottomright",
+      "src": {
+        "x": 93,
+        "y": 221,
+        "w": 33,
+        "h": 25
+      },
+      "dst": {
+        "x": 1320,
+        "y": 490,
+        "w": 198,
+        "h": 150
+      },
+      "depth": 6,
+      "color_keys": [
+        {
+          "input": "#E96D4D",
+          "output": "#ffffffff"
+        },
+        {
+          "input": "#45CB65",
+          "output": "#ffffffff"
+        }
+      ]
+    },
+    {
+      "id": "entity_count",
+      "label": "Entity counter",
+      "src_anchor": "topleft",
+      "src": {
+        "x": 13,
+        "y": 37,
+        "w": 37,
+        "h": 9
+      },
+      "dst": {
+        "x": 430,
+        "y": 120,
+        "w": 185,
+        "h": 45
+      },
+      "depth": 6
+    }
+  ],
+  "images": [
+    {
+      "id": "eye_measure_grid",
+      "label": "Eye measuring grid",
+      "path": "~/.config/waywall/resources/measuring_overlay.png",
+      "dst": {
+        "x": 30,
+        "y": 300,
+        "w": 600,
+        "h": 338
+      },
+      "depth": 6
+    }
+  ],
   "text": [
     {
       "id": "hud_mode",
@@ -101,24 +216,95 @@
       "depth": 10
     }
   ],
-
+  "ninb": {
+    "jar": "~/.config/waywall/resources/Ninjabrain-Bot-1.5.2.jar",
+    "command": "java -jar {jar}"
+  },
   "keybinds": [
-    { "input": "Ctrl-I", "command": "gui.toggle", "label": "Open settings" },
-    { "input": "Shift-T", "command": "mode.set", "args": { "mode": "thin" }, "label": "Thin BT" },
-    { "input": "Shift-W", "command": "mode.set", "args": { "mode": "wide" }, "label": "Wide" },
-    { "input": "Shift-E", "command": "mode.set", "args": { "mode": "eye" }, "label": "Eye measure" },
-    { "input": "Shift-R", "command": "mode.reset", "label": "Reset" },
-    { "input": "Ctrl-Shift-N", "command": "floating.toggle", "label": "Toggle Ninjabrain Bot" }
+    {
+      "input": "bracketleft",
+      "command": "gui.toggle",
+      "label": "Open settings"
+    },
+    {
+      "input": "B",
+      "command": "mode.set",
+      "args": {
+        "mode": "thin"
+      },
+      "label": "Thin BT"
+    },
+    {
+      "input": "Caps_Lock",
+      "command": "mode.set",
+      "args": {
+        "mode": "wide"
+      },
+      "label": "Wide"
+    },
+    {
+      "input": "Y",
+      "command": "mode.set",
+      "args": {
+        "mode": "eye"
+      },
+      "label": "Eye measure"
+    },
+    {
+      "input": "backslash",
+      "command": "mode.reset",
+      "label": "Reset"
+    },
+    {
+      "input": "grave",
+      "command": "ninb.toggle",
+      "label": "Ninjabrain Bot"
+    },
+    {
+      "input": "Shift-Z",
+      "command": "overlay.toggle",
+      "args": {
+        "overlay": "eye_zoom"
+      },
+      "label": "Eye zoom"
+    },
+    {
+      "input": "Shift-X",
+      "command": "overlay.toggle",
+      "args": {
+        "overlay": "eye_measure_grid"
+      },
+      "label": "Eye grid"
+    },
+    {
+      "input": "P",
+      "command": "overlay.toggle",
+      "args": {
+        "overlay": "pie_chart"
+      },
+      "label": "Pie chart"
+    },
+    {
+      "input": "equal",
+      "command": "overlay.toggle",
+      "args": {
+        "overlay": "entity_count"
+      },
+      "label": "Entity counter"
+    }
   ],
-
   "hud": {
     "idle_label": "base",
     "follow_state": false
   },
-
   "gui": {
     "command": "~/.cargo/bin/toolwall-gui",
     "launch_delay_ms": 400,
-    "allow_exec": false
+    "allow_exec": false,
+    "appearance": {
+      "opacity": 0.9,
+      "dark": true,
+      "font_size": 13.0
+    }
   }
 }
