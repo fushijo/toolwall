@@ -48,6 +48,60 @@ its Lua VM, and the runtime re-reads the JSON.
 That trigger file is doing real work. waywall watches `.lua` files only, so it
 will never notice a change to `toolwall.json` by itself.
 
+## Screenshots
+
+### Thin BT with the overlays live
+
+![Thin BT at 340x1080 with entity counter, mirrored pie chart and magnified percentages](docs/screenshots/01-thin-bt-overlays.png)
+
+Thin BT mode at 340x1080. The game is the narrow strip down the middle; the
+rest of the screen is background image. Everything else here is drawn by
+toolwall:
+
+- **Top left**: the HUD text, showing the active mode and its resolution.
+- **`0/49`**: the entity counter, a mirror of the `E:` line from F3, captured
+  at 37x9 game pixels and drawn 5x larger so it is readable at a glance while
+  eraying a bastion.
+- **Right**: the F3 pie chart, mirrored out of the bottom-right corner of the
+  game and magnified. It is drawn as one layer per pie colour, because colour
+  keying passes only the colour it matches, which is what lifts the chart off
+  the world behind it.
+- **`7.46%` / `2.89%`**: the pie percentages as their own overlay, captured
+  from a 33x25 region and drawn at 6x.
+
+Captures are anchored to a corner rather than pinned to absolute coordinates,
+so the same overlay stays correct when the resolution changes.
+
+### The editor: Modes
+
+![The Modes tab with Thin BT expanded](docs/screenshots/02-editor-modes.png)
+
+`Ctrl+I` opens the editor over the game. Modes set a resolution, an optional
+sensitivity override, and which overlays come up automatically. Basic hides the
+ids and layering; Advanced shows everything.
+
+Note the status bar: there is no save button. Edits apply about a third of a
+second after you stop making them, and the mode you are in survives the reload.
+
+### The editor: Mirrors
+
+![The Mirrors tab with the entity counter expanded](docs/screenshots/03-editor-mirrors.png)
+
+Every rectangle has -/+ steppers, because placing an overlay is nudging rather
+than typing. Changes apply live, so the overlay moves on screen while you
+adjust it.
+
+### The editor: Theme
+
+![The Theme tab, with Ninjabrain Bot open beside it](docs/screenshots/04-editor-theme.png)
+
+Background colour picks from a swatch, background image has a file browser.
+Ninjabrain Bot is open on the right, launched by toolwall and positioned by the
+anchor settings shown here.
+
+The editor styles itself from the same config: opacity over the game, dark or
+light, and font size, all applied as you drag them.
+
 ## Install
 
 You need a working waywall setup, a Rust toolchain, and `luajit` if you want to
