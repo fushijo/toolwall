@@ -404,6 +404,31 @@ check("ninb.toggle without a jar does not consume the keypress", function()
     os.remove(path)
 end)
 
+check("a second press while starting does not launch a rival copy", function()
+    -- The pid is recorded by the launcher script, which cannot have run yet
+    -- when exec returns. A press in that window used to see "not running" and
+    -- start another Ninjabrain Bot.
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "ninb": { "jar": "~/ninb.jar", "command": "java -jar {jar}" },
+        "keybinds": [ { "input": "grave", "command": "ninb.toggle" } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["grave"]()
+
+    -- Drop the pid, so only the claim can hold the second press off.
+    os.remove(launch.pid_path("ninb"))
+
+    cfg.actions["grave"]()
+    assert_eq(#waywall.launched, 1, "still exactly one Ninjabrain Bot")
+    os.remove(path)
+end)
+
 check("the active mode survives a config reload", function()
     -- Saving reloads the config, which rebuilds the VM. Live editing is only
     -- usable if that does not throw you back to the base resolution.

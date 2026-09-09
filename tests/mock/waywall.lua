@@ -65,6 +65,7 @@ function M.reset()
     local runtime = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
     for _, id in ipairs({ "gui", "ninb" }) do
         os.remove(runtime .. "/toolwall-" .. id .. ".pid")
+        os.remove(runtime .. "/toolwall-" .. id .. ".starting")
     end
     os.remove(runtime .. "/toolwall-state-mode")
 end

@@ -35,11 +35,17 @@ pub fn show(
             .num_columns(2)
             .spacing([12.0, 6.0])
             .show(ui, |ui| {
-                ui.label("Sensitivity");
+                ui.label("Sensitivity").on_hover_text(
+                    "Multiplies Minecraft's own setting. A god-sens setup keeps \
+                     Minecraft very low and multiplies it back up here, so values \
+                     well above 10 are normal.",
+                );
                 ui.add(
                     egui::DragValue::new(&mut doc.input.sensitivity)
                         .speed(0.01)
-                        .range(0.01..=10.0),
+                        // waywall requires only a positive number; a cap here
+                        // silently rewrites a god-sens multiplier.
+                        .range(0.0001..=1000.0),
                 );
                 ui.end_row();
 

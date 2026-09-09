@@ -41,6 +41,51 @@ function M.pid_path(id)
     return runtime_dir() .. "/toolwall-" .. id .. ".pid"
 end
 
+local function claim_path(id)
+    return runtime_dir() .. "/toolwall-" .. id .. ".starting"
+end
+
+--[[
+    How long a launch is believed to be in progress.
+
+    The pid is recorded by the launcher script, which cannot run until after
+    exec returns, so for a moment after launching there is no pid to find. A
+    second keypress in that window would see "not running" and start a rival
+    copy - which is how you end up with several Ninjabrain Bots.
+]]
+local CLAIM_MS = 8000
+
+local function claim(id)
+    local fh = io.open(claim_path(id), "w")
+    if not fh then return end
+    fh:write(tostring(M.now()))
+    fh:close()
+end
+
+local function claimed(id)
+    local fh = io.open(claim_path(id), "r")
+    if not fh then return false end
+
+    local at = tonumber((fh:read("*a") or ""):match("%-?%d+"))
+    fh:close()
+
+    if not at then return false end
+    return (M.now() - at) < CLAIM_MS
+end
+
+--[[
+    Milliseconds from a monotonic clock. Overridable for tests, which have no
+    waywall to ask.
+]]
+function M.now()
+    local waywall = package.loaded["waywall"]
+    if waywall and waywall.current_time then
+        local ok, value = pcall(waywall.current_time)
+        if ok and value then return value end
+    end
+    return os.time() * 1000
+end
+
 local function script_path(id)
     return runtime_dir() .. "/toolwall-" .. id .. ".sh"
 end
@@ -106,9 +151,12 @@ end
     Returns true if a new process was started.
 ]]
 function M.once(waywall, id, command)
-    if M.running(id, command) then
+    if M.running(id, command) or claimed(id) then
         return false
     end
+
+    -- Staked before exec, because the pid cannot exist until afterwards.
+    claim(id)
 
     local path = script_path(id)
     local fh = io.open(path, "w")

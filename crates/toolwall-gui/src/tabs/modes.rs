@@ -63,7 +63,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                                 }
                                 if let Some(sens) = &mut mode.sensitivity {
                                     ui.add(
-                                        egui::DragValue::new(sens).speed(0.01).range(0.01..=10.0),
+                                        egui::DragValue::new(sens).speed(0.01).range(0.0001..=1000.0),
                                     );
                                 }
                             });
