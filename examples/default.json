@@ -21,7 +21,7 @@
   },
   "theme": {
     "background": "#000000",
-    "background_png": "~/.config/waywall/resources/background.png",
+    "background_png": "",
     "cursor_theme": "",
     "cursor_icon": "",
     "cursor_size": 5,
@@ -217,7 +217,7 @@
     }
   ],
   "ninb": {
-    "jar": "~/.config/waywall/resources/Ninjabrain-Bot-1.5.2.jar",
+    "jar": "",
     "command": "java -jar {jar}"
   },
   "keybinds": [
@@ -254,11 +254,6 @@
       "input": "backslash",
       "command": "mode.reset",
       "label": "Reset"
-    },
-    {
-      "input": "grave",
-      "command": "ninb.toggle",
-      "label": "Ninjabrain Bot"
     },
     {
       "input": "Shift-Z",

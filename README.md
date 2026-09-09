@@ -48,28 +48,85 @@ will never notice a change to `toolwall.json` on its own.
 
 ## Install
 
-```sh
-# 1. Runtime (Lua) into your waywall config directory
-cp -r runtime/toolwall.lua runtime/toolwall ~/.config/waywall/
+Requires a working waywall setup, a Rust toolchain, and `luajit` if you want to
+run the runtime tests.
 
-# 2. Your init.lua becomes two lines
-cat > ~/.config/waywall/init.lua <<'EOF'
+```sh
+git clone https://github.com/OWNER/toolwall
+cd toolwall
+
+./install.sh                              # runtime + overlays into ~/.config/waywall
+cargo install --path crates/toolwall-cli  # the `toolwall` command
+cargo install --path crates/toolwall-gui  # the in-game editor
+
+toolwall validate
+```
+
+`install.sh` copies the Lua runtime and the measuring overlay into your waywall
+config directory, backs up your existing `init.lua` as `init.lua.pre-toolwall`,
+and replaces it with two lines:
+
+```lua
 local toolwall = require("toolwall")
 return toolwall.setup()
-EOF
-
-# 3. A starting config
-cp examples/default.json ~/.config/waywall/toolwall.json
-
-# 4. Tools
-cargo install --path crates/toolwall-cli
-cargo install --path crates/toolwall-gui
 ```
 
 waywall adds its config directory to `package.path`, which is what makes
 `require("toolwall")` resolve.
 
+### Two things that will otherwise catch you out
+
+**`gui.command` needs a full path.** waywall `exec()`s it with the compositor's
+own `PATH`, which comes from however waywall was launched - a launcher, a
+desktop entry - and so usually does *not* include `~/.cargo/bin` the way an
+interactive shell does. A bare `toolwall-gui` fails silently with nothing but
+an `execvp` line in waywall's log. The shipped config uses
+`~/.cargo/bin/toolwall-gui`.
+
+**Overlay coordinates are waywall window pixels, not your monitor.** waywall
+reports its window size to the instance - check `Display:` in F3. On a 1920x1200
+panel at 125% scaling that is 1707x1067, and an overlay positioned past that
+edge simply does not draw. No warning, no error.
+
 ## Use
+
+```sh
+toolwall validate                                  # check without applying
+toolwall modes                                     # list modes
+toolwall get modes.thin.resolution.width
+toolwall set modes.thin.resolution.width 340       # applies live
+toolwall reload                                    # re-trigger without editing
+```
+
+Dotted paths index arrays by their `id`, so `modes.thin` works and survives
+reordering.
+
+In game, `Ctrl+I` opens the editor as a floating window. Edits apply about a
+third of a second after you stop making them - there is no save button. The
+mode you are in survives the reload, so you can nudge a rectangle and watch it
+move.
+
+Minecraft has to let go of the cursor before you can click a floating window;
+opening the editor presses Escape into the game to do that. `Esc` closes the
+editor.
+
+## Measuring window
+
+The boat-eye measuring view is a mirror magnifying a slice of the game, with
+the numbered grid drawn on the *same rectangle* so its centre line lands on the
+crosshair. Two numbers decide whether it measures anything real:
+
+- The capture must be **60 game pixels wide**. The grid is 18 bands, so 60/18
+  makes one band exactly one game pixel.
+- The destination width must be a **multiple of 60**, or a band is a
+  fractional number of screen pixels and the error compounds across the scale.
+  960, 720 and 600 are exact; 980 is not, and drifts about two pixels end to
+  end.
+
+The capture is anchored `center`, so it tracks the crosshair as the resolution
+changes rather than needing to be re-placed per mode.
+
+
 
 ```sh
 toolwall validate                                  # check without applying
@@ -104,8 +161,8 @@ completion and inline validation.
 ## Testing
 
 ```sh
-lua tests/run.lua      # runtime, against a mock waywall
-cargo test             # schema validation
+luajit tests/run.lua        # runtime, against a mock waywall
+cargo test --workspace      # schema, validation, and headless GUI layout
 ```
 
 `tests/mock/waywall.lua` stands in for the real module and enforces the two
@@ -161,3 +218,6 @@ separate repository or as PRs against waywall itself.
   is not affiliated with or endorsed by it.
 - [Linux MCSR Resources](https://linux-mcsr-resources.github.io/) — the
   community index.
+- The measuring overlay in `resources/` is from the waywall generic config by
+  Arjun Gore, used under the MIT Licence. Its capture geometry, the pie chart
+  source rectangles and the god-sens multipliers all come from that config.
