@@ -1,7 +1,7 @@
 //! toolwall GUI.
 //!
 //! Launched *inside* waywall via `waywall.exec()`, so it appears as a floating
-//! window over the game — the same mechanism Ninjabrain Bot uses.
+//! window over the game, the same mechanism Ninjabrain Bot uses.
 //!
 //! It never talks to waywall directly. It edits `toolwall.json` and saves
 //! through `toolwall_core::Store`, which trips waywall's hot reload. That is
@@ -295,7 +295,7 @@ impl eframe::App for App {
                 } else if blocked {
                     ui.colored_label(
                         egui::Color32::from_rgb(255, 120, 120),
-                        format!("{} problem(s) — see the highlighted items", problems.len()),
+                        format!("{} problem(s), see the highlighted items", problems.len()),
                     );
                 } else if let Some((ok, message)) = &self.status {
                     let color = if *ok {

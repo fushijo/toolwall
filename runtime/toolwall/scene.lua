@@ -1,5 +1,5 @@
 --[[
-    toolwall.scene — a registry of scene objects addressed by id.
+    toolwall.scene, a registry of scene objects addressed by id.
 
     waywall scene objects have no visibility flag. The only lifecycle methods
     are close(), get_depth() and set_depth(). To "hide" something we therefore
@@ -46,7 +46,7 @@ end
 --[[
     Resolve a capture region measured from a corner.
 
-    Minecraft pins its debug HUD to the corners at fixed pixel offsets — the
+    Minecraft pins its debug HUD to the corners at fixed pixel offsets, the
     pie chart is the same size and the same distance from the bottom-right
     corner at 340x1080 as it is at fullscreen. A region pinned to absolute
     coordinates is therefore correct at exactly one resolution, which is how a

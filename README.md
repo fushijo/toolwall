@@ -3,30 +3,32 @@
 A GUI and configuration layer for [waywall](https://github.com/tesselslate/waywall),
 the Wayland compositor for Minecraft speedrunning on Linux.
 
-waywall is configured by hand-writing Lua. toolwall makes that configuration
-**data** — a single JSON document — and gives you a CLI and an in-game GUI to
-edit it, with changes applying live.
+> Inspired by [Toolscreen](https://github.com/jojoe77777/Toolscreen), which is
+> Windows only. There was no equivalent on Linux, so this is an attempt at one.
+> Plenty more is planned over the coming days.
+>
+> I used Claude to help debug this and to write the code comments.
 
-> Status: early. The Lua runtime is implemented and tested; the GUI is a
-> skeleton. See [Milestones](#milestones).
+waywall is configured by hand-writing Lua. toolwall turns that configuration
+into data, a single JSON file, and gives you a CLI and an in-game editor to
+change it, with edits applying live.
 
-## Why not just fork waywall
+## Why not fork waywall
 
-Because a fork is a worse product. toolwall is deliberately *not* a patched
-waywall:
+toolwall is not a patched waywall, on purpose:
 
 - It installs alongside any waywall version and survives waywall updates.
-- People can adopt the runtime library without the GUI, or the GUI without your
+- You can use the runtime library without the GUI, or the GUI without the
   presets.
-- It stays licensable separately (see [Licence](#licence)).
+- It stays separately licensable (see [Licence](#licence)).
 
-The entire integration surface is two facts about waywall:
+The whole integration relies on two facts about waywall:
 
-1. Its Lua config can be a thin shim that reads a data file.
+1. Its Lua config can be a small shim that reads a data file.
 2. It hot-reloads on any `.lua` change in its config directory.
 
-That is enough for live-applying config edits with **zero changes to waywall's
-C source**.
+That is enough to apply config edits live with no changes to waywall's C
+source.
 
 ## How it works
 
@@ -43,16 +45,16 @@ The GUI and CLI never talk to waywall. They write JSON, then bump a counter in
 `toolwall_reload.lua`. waywall's file watcher sees the `.lua` change, rebuilds
 its Lua VM, and the runtime re-reads the JSON.
 
-**This trigger file is load-bearing.** waywall watches `.lua` files only — it
-will never notice a change to `toolwall.json` on its own.
+That trigger file is doing real work. waywall watches `.lua` files only, so it
+will never notice a change to `toolwall.json` by itself.
 
 ## Install
 
-Requires a working waywall setup, a Rust toolchain, and `luajit` if you want to
+You need a working waywall setup, a Rust toolchain, and `luajit` if you want to
 run the runtime tests.
 
 ```sh
-git clone https://github.com/OWNER/toolwall
+git clone https://github.com/fushijo/toolwall
 cd toolwall
 
 ./install.sh                              # runtime + overlays into ~/.config/waywall
@@ -74,19 +76,18 @@ return toolwall.setup()
 waywall adds its config directory to `package.path`, which is what makes
 `require("toolwall")` resolve.
 
-### Two things that will otherwise catch you out
+### Two things that will otherwise waste your time
 
-**`gui.command` needs a full path.** waywall `exec()`s it with the compositor's
-own `PATH`, which comes from however waywall was launched - a launcher, a
-desktop entry - and so usually does *not* include `~/.cargo/bin` the way an
-interactive shell does. A bare `toolwall-gui` fails silently with nothing but
-an `execvp` line in waywall's log. The shipped config uses
-`~/.cargo/bin/toolwall-gui`.
+**`gui.command` needs a full path.** waywall `exec()`s it using the
+compositor's own `PATH`, which comes from however waywall was launched, so it
+usually does not include `~/.cargo/bin` the way an interactive shell does. A
+bare `toolwall-gui` fails silently, leaving only an `execvp` line in waywall's
+log. The shipped config uses `~/.cargo/bin/toolwall-gui`.
 
 **Overlay coordinates are waywall window pixels, not your monitor.** waywall
-reports its window size to the instance - check `Display:` in F3. On a 1920x1200
-panel at 125% scaling that is 1707x1067, and an overlay positioned past that
-edge simply does not draw. No warning, no error.
+reports its window size to the instance, which you can read from `Display:` in
+F3. On a 1920x1200 panel at 125% scaling that is 1707x1067. An overlay
+positioned past that edge just does not draw, with no warning and no error.
 
 ## Use
 
@@ -102,57 +103,52 @@ Dotted paths index arrays by their `id`, so `modes.thin` works and survives
 reordering.
 
 In game, `Ctrl+I` opens the editor as a floating window. Edits apply about a
-third of a second after you stop making them - there is no save button. The
-mode you are in survives the reload, so you can nudge a rectangle and watch it
-move.
+third of a second after you stop making them, so there is no save button. The
+mode you are in survives the reload, which means you can nudge a rectangle and
+watch it move. `Esc` closes the editor.
 
-Minecraft has to let go of the cursor before you can click a floating window;
-opening the editor presses Escape into the game to do that. `Esc` closes the
-editor.
+Minecraft has to release the cursor before you can click a floating window.
+Opening the editor presses Escape into the game to make that happen.
 
 ## Measuring window
 
 The boat-eye measuring view is a mirror magnifying a slice of the game, with
-the numbered grid drawn on the *same rectangle* so its centre line lands on the
+the numbered grid drawn on the same rectangle, so its centre line lands on the
 crosshair. Two numbers decide whether it measures anything real:
 
-- The capture must be **60 game pixels wide**. The grid is 18 bands, so 60/18
-  makes one band exactly one game pixel.
-- The destination width must be a **multiple of 60**, or a band is a
-  fractional number of screen pixels and the error compounds across the scale.
-  960, 720 and 600 are exact; 980 is not, and drifts about two pixels end to
+- The capture has to be **60 game pixels wide**. The grid is 18 bands, and
+  60/18 makes one band exactly one game pixel.
+- The destination width has to be a **multiple of 60**. Otherwise a band covers
+  a fractional number of screen pixels and the error adds up across the scale.
+  960, 720 and 600 are exact. 980 is not, and drifts about two pixels end to
   end.
 
-The capture is anchored `center`, so it tracks the crosshair as the resolution
-changes rather than needing to be re-placed per mode.
-
-
-
-```sh
-toolwall validate                                  # check without applying
-toolwall modes                                     # list modes
-toolwall get modes.thin.resolution.width
-toolwall set modes.thin.resolution.width 340       # applies live
-toolwall reload                                    # re-trigger without editing
-```
-
-Dotted paths index arrays by their `id`, so `modes.thin` works and survives
-reordering.
-
-In game, `Ctrl+I` opens the GUI as a floating window.
+The capture is anchored `center`, so it follows the crosshair as the resolution
+changes instead of needing to be repositioned for each mode.
 
 ## Config model
 
 | Concept | What it is |
 | --- | --- |
-| **mode** | A resolution + optional sensitivity + the set of overlays live while selected. Thin BT, wide, eye measure. |
+| **mode** | A resolution, an optional sensitivity, and the overlays live while it is selected. Thin BT, wide, eye measure. |
 | **mirror** | A region of the Minecraft window drawn elsewhere, with optional colour keying and shader. |
 | **image** | A PNG overlay. |
 | **text** | A HUD element with `{mode}`, `{res}`, `{sens}`, `{state}` placeholders. |
-| **keybind** | An input string bound to a command from a closed set. |
+| **keybind** | An input string bound to a command from a fixed set. |
 
-Keybinds name commands; they never contain Lua source. A config downloaded from
-someone else cannot execute arbitrary code when it loads. `exec` exists but is
+Captures can be anchored to a corner or to the centre, so one rectangle stays
+correct at every resolution. Minecraft pins its debug HUD to the corners at
+fixed pixel offsets, which is why a capture written in absolute coordinates
+only works at the resolution it was written for.
+
+A mirror can carry several colour keys, drawn as one layer each. Colour keying
+passes only the matching colour, so pulling something many-coloured like the
+pie chart out of the world behind it means stacking one layer per colour. A
+crop shader does the same job in one pass and looks better, but waywall
+compiles shaders at startup only, so shaders cannot be edited live.
+
+Keybinds name commands and never contain Lua source, so a config downloaded
+from someone else cannot run arbitrary code when it loads. `exec` exists but is
 off unless `gui.allow_exec` is set.
 
 `schema/toolwall.schema.json` is the contract. Point your editor at it for
@@ -165,35 +161,42 @@ luajit tests/run.lua        # runtime, against a mock waywall
 cargo test --workspace      # schema, validation, and headless GUI layout
 ```
 
-`tests/mock/waywall.lua` stands in for the real module and enforces the two
+`tests/mock/waywall.lua` stands in for the real module and enforces the
 lifecycle rules that are painful to debug live: most API calls are illegal
-during startup, and a closed scene object may not be reused.
+during startup, a closed scene object cannot be reused, and `set_resolution`
+fails until the Minecraft window exists.
 
-You can develop the entire runtime without launching Minecraft.
+The GUI tabs are covered by headless egui layout passes, so no compositor or
+GPU is needed. You can develop the whole thing without launching Minecraft.
 
-## Milestones
+## Status
 
-- [x] **M0** — Schema extracted from a working hand-written config
-- [x] **M1** — Lua runtime; behaviour identical to a hand-written config
-- [x] **M2** — CLI proving the write path and hot reload
-- [ ] **M3** — GUI (Modes tab wired; the rest follow the same pattern)
-- [ ] **M4** — HUD polish and per-mode text
-- [ ] **M5** — Upstream: per-window floating control and generalised anchoring
+Working: modes, mirrors, images, keybinds, input, the measuring window, pie
+chart and entity counter overlays, Ninjabrain Bot launching, and the in-game
+editor with live apply.
+
+Planned:
+
+- More of Toolscreen's feature set.
+- A visual rectangle editor, so overlays can be dragged instead of typed.
+- HUD text polish and per-mode text.
+- Upstream waywall work: per-window floating control and general anchoring.
 
 ## Known limitations
 
-These are waywall constraints, not bugs here:
+These come from waywall, not from toolwall:
 
-- **`show_floating` is global.** Opening the GUI also reveals Ninjabrain Bot.
-  Fixing this properly means an upstream patch for per-window control.
-- **Anchoring is Ninjabrain-only.** `theme.ninb_anchor` is hardcoded; other
-  floating windows can only be shift-dragged.
+- **`show_floating` is global.** Opening the editor also reveals Ninjabrain
+  Bot. Fixing it properly needs an upstream patch for per-window control.
+- **There is one anchor slot**, and it goes to whichever floating window opened
+  first. Other floating windows can only be shift-dragged.
 - **No mouse position in Lua.** waywall exposes key and button actions and
-  `get_key()` polling, but no cursor coordinates. This is why the GUI is a
+  `get_key()` polling, but no cursor coordinates. That is why the editor is a
   floating window rather than drawn with scene objects.
 - **Scene objects have no visibility flag.** Hiding means closing and
-  recreating. Negative depth is not a substitute — it draws *behind* Minecraft,
-  which only hides things while Minecraft covers that region.
+  recreating. Negative depth is not a substitute, since it draws behind
+  Minecraft, which only hides things while Minecraft covers that region.
+- **Shaders compile at startup only**, so they cannot be edited live.
 - **Ninjabrain Bot calibration does not work correctly inside waywall.** Use
   boat eye, or calibrate outside.
 
@@ -201,23 +204,24 @@ These are waywall constraints, not bugs here:
 
 MIT.
 
-toolwall is a separate program that communicates with waywall through
-configuration files. It does not link against or derive from waywall's source,
-so waywall's **GPL-3.0-only** licence does not extend to it.
+toolwall is a separate program that talks to waywall through configuration
+files. It does not link against or derive from waywall's source, so waywall's
+GPL-3.0-only licence does not extend to it.
 
-If you patch or vendor waywall's C source into this repository, that changes:
-the derivative work must then be GPL-3.0-only. Keep upstream patches in a
+If you patch or vendor waywall's C source into this repository that changes,
+and the derivative work has to be GPL-3.0-only. Keep upstream patches in a
 separate repository or as PRs against waywall itself.
 
 ## Credits
 
-- [waywall](https://github.com/tesselslate/waywall) by tesselslate — the
+- [waywall](https://github.com/tesselslate/waywall) by tesselslate, the
   compositor this is built on.
-- [Toolscreen](https://github.com/jojoe77777/Toolscreen) by jojoe77777 — the
-  Windows tool whose feature set defined the target. No shared code; toolwall
-  is not affiliated with or endorsed by it.
-- [Linux MCSR Resources](https://linux-mcsr-resources.github.io/) — the
+- [Toolscreen](https://github.com/jojoe77777/Toolscreen) by jojoe77777, the
+  Windows tool this is modelled on. No shared code, and toolwall is not
+  affiliated with or endorsed by it.
+- [Linux MCSR Resources](https://linux-mcsr-resources.github.io/), the
   community index.
-- The measuring overlay in `resources/` is from the waywall generic config by
-  Arjun Gore, used under the MIT Licence. Its capture geometry, the pie chart
-  source rectangles and the god-sens multipliers all come from that config.
+- The measuring overlay in `resources/` comes from the waywall generic config
+  by Arjun Gore, used under the MIT Licence. The capture geometry, the pie
+  chart source rectangles and the god-sens multipliers all come from that
+  config.

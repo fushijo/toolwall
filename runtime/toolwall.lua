@@ -1,5 +1,5 @@
 --[[
-    toolwall — a data-driven configuration layer for waywall.
+    toolwall, a data-driven configuration layer for waywall.
 
     Your ~/.config/waywall/init.lua becomes:
 
@@ -160,7 +160,7 @@ local function on_load()
 
         Every save reloads the config, which rebuilds the VM. Without this,
         editing a rectangle and watching it apply would drop you back to the
-        base resolution on every keystroke — which makes live editing useless
+        base resolution on every keystroke, which makes live editing useless
         exactly when you want it most.
     ]]
     local resume = state.read("mode")
@@ -189,7 +189,7 @@ end
     Entry point. Returns the table waywall expects from init.lua.
 
     opts:
-      path  — override the config path (default $XDG_CONFIG_HOME/waywall/toolwall.json)
+      path , override the config path (default $XDG_CONFIG_HOME/waywall/toolwall.json)
 ]]
 function M.setup(opts)
     opts = opts or {}

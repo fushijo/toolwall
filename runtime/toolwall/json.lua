@@ -1,5 +1,5 @@
 --[[
-    toolwall.json — a decode-only JSON parser.
+    toolwall.json, a decode-only JSON parser.
 
     waywall's Lua environment has no package manager and no cjson, and its
     package.path only covers the waywall config directory. Rather than ask

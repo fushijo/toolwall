@@ -1,5 +1,5 @@
 --[[
-    toolwall.keybinds — turn declarative keybind entries into waywall actions.
+    toolwall.keybinds, turn declarative keybind entries into waywall actions.
 
     The actions table must be built synchronously, before the "load" event,
     because waywall reads it from the returned config. The handlers themselves

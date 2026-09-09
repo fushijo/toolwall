@@ -8,15 +8,17 @@ covers the parts that need prose.
 | Command | Arguments | Notes |
 | --- | --- | --- |
 | `mode.set` | `{ "mode": "<id>" }` | Repressing toggles back to base if the mode has `toggle: true`. |
-| `mode.reset` | — | Stretch to window, default sensitivity, base overlays only. |
+| `mode.reset` | none | Stretch to window, default sensitivity, base overlays only. |
 | `mode.cycle` | `{ "modes": ["a","b"] }` | Omit `modes` to cycle all, in document order. Always advances; never toggles off. |
 | `sens.set` | `{ "sensitivity": 0.6 }` | `0` restores `input.sensitivity`. |
 | `keymap.set` | `{ "layout": "de", ... }` | For search crafting in another language. |
 | `remaps.set` | `{ "remaps": { "X": "F3" } }` | Replaces the active remap set wholesale. |
 | `key.press` | `{ "key": "F3" }` | Synthetic keypress into Minecraft. |
-| `fullscreen.toggle` | — | For compositors without undecorated fullscreen. |
-| `floating.toggle` / `.show` / `.hide` | — | Global across all floating windows. |
-| `gui.toggle` | — | Launches `gui.command` on first use, then toggles visibility. |
+| `fullscreen.toggle` | none | For compositors without undecorated fullscreen. |
+| `floating.toggle` / `.show` / `.hide` | none | Global across all floating windows. |
+| `gui.toggle` | none | Launches `gui.command` on first use, then toggles visibility. |
+| `ninb.toggle` | none | Launches Ninjabrain Bot from `ninb.jar` on first use, then toggles visibility. |
+| `overlay.toggle` | `{ "overlay": "<id>" }` | Pins one mirror or image on top of the current mode until toggled off. |
 | `exec` | `{ "command": "..." }` | Requires `gui.allow_exec: true`. |
 
 An unknown command logs a warning and returns `false`, which passes the keypress
@@ -42,7 +44,7 @@ Caps Lock and Num Lock are ignored unless named explicitly.
 | `{res}` | `WxH`, or `auto` when unset |
 | `{width}` / `{height}` | Individually |
 | `{sens}` | Effective sensitivity |
-| `{state}` | Instance state, e.g. `inworld/paused` — requires State Output |
+| `{state}` | Instance state, e.g. `inworld/paused`, requires State Output |
 
 A template rendering to an empty string is skipped, so an element can disappear
 conditionally.

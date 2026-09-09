@@ -159,7 +159,7 @@ fn args_editor(
             ui.label("mode");
             let current = arg_str(&bind.args, "mode");
             egui::ComboBox::from_id_salt(("arg-mode", index))
-                .selected_text(if current.is_empty() { "—".into() } else { current.clone() })
+                .selected_text(if current.is_empty() { "-".into() } else { current.clone() })
                 .show_ui(ui, |ui| {
                     for id in mode_ids {
                         if ui.selectable_label(&current == id, id).clicked() {
@@ -175,7 +175,7 @@ fn args_editor(
                 .on_hover_text("Shown on top of whatever mode is active, until toggled off");
             let current = arg_str(&bind.args, "overlay");
             egui::ComboBox::from_id_salt(("arg-overlay", index))
-                .selected_text(if current.is_empty() { "—".into() } else { current.clone() })
+                .selected_text(if current.is_empty() { "-".into() } else { current.clone() })
                 .show_ui(ui, |ui| {
                     for id in overlay_ids {
                         if ui.selectable_label(&current == id, id).clicked() {

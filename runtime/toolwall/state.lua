@@ -1,5 +1,5 @@
 --[[
-    toolwall.state — small facts that must outlive a config reload.
+    toolwall.state, small facts that must outlive a config reload.
 
     Saving from the editor rebuilds waywall's Lua VM, so anything held in a
     module-level table is gone by the time the new VM runs. That is fine for

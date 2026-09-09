@@ -1,12 +1,12 @@
 --[[
-    toolwall.launch — starting a program once, across config reloads.
+    toolwall.launch, starting a program once, across config reloads.
 
     THE PROBLEM
 
     Saving from the GUI trips waywall's hot reload, which rebuilds the whole
     Lua VM. Every bit of runtime state goes with it, including "I already
     started the GUI". So the next keypress would launch a second copy, and the
-    one after that a third — one more per save.
+    one after that a third, one more per save.
 
     Module-level state cannot survive this, because the module itself is
     reloaded. The record has to outlive the VM, so it goes in a file.
@@ -15,7 +15,7 @@
 
     waywall.exec() gives us no handle on the child, so we cannot ask it for a
     pid. Instead we exec a tiny generated shell script which records its own
-    pid and then `exec`s the real command — `exec` replaces the shell with the
+    pid and then `exec`s the real command, `exec` replaces the shell with the
     program while keeping the same pid, so the file ends up holding the pid of
     the thing we actually wanted.
 

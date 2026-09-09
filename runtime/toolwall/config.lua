@@ -1,5 +1,5 @@
 --[[
-    toolwall.config — loading, validating and recovering the config document.
+    toolwall.config, loading, validating and recovering the config document.
 ]]
 
 local json = require("toolwall.json")

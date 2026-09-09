@@ -1,5 +1,5 @@
 --[[
-    toolwall.modes — mode switching.
+    toolwall.modes, mode switching.
 
     A "mode" bundles a resolution, an optional sensitivity override, and the
     set of scene objects that should be live while it is selected. This is the
@@ -70,7 +70,7 @@ end
 
 --[[
     Select a mode. If the mode is already current and declares toggle = true,
-    this resets to the base state instead — matching helpers.toggle_res.
+    this resets to the base state instead, matching helpers.toggle_res.
 ]]
 function Modes:set(id)
     local mode = self:get(id)
@@ -87,7 +87,7 @@ function Modes:set(id)
 
     --[[
         waywall fires the "load" event as soon as its own config finishes
-        parsing — before Minecraft's window has connected and mapped a view.
+        parsing, before Minecraft's window has connected and mapped a view.
         set_resolution() throws until that view exists, which is why
         toolwall.lua's on_load applying default_mode/reset() must not be able
         to crash the load listener. Fail soft here instead: the next real

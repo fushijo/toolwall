@@ -1,5 +1,5 @@
 --[[
-    toolwall.commands — the closed set of verbs a keybind may invoke.
+    toolwall.commands, the closed set of verbs a keybind may invoke.
 
     Keybinds in toolwall.json name a command and pass arguments. They never
     contain Lua source. That is the whole point: a GUI can safely author a
@@ -74,7 +74,7 @@ function M.bind(rt)
     --[[
         Force every floating window to be shown, and committed.
 
-        KNOWN LIMITATION: waywall.show_floating() is global — it shows or hides
+        KNOWN LIMITATION: waywall.show_floating() is global, it shows or hides
         every floating window at once, so revealing the GUI also reveals
         Ninjabrain Bot. Per-window control is an upstream change.
 
@@ -167,7 +167,7 @@ function M.bind(rt)
         --[[
             Launch state lives in a pidfile, not in this table. Saving from
             the GUI reloads the config, which rebuilds the Lua VM and would
-            otherwise lose the fact that the GUI is already open — so the
+            otherwise lose the fact that the GUI is already open, so the
             next press would open a second one, and the next a third.
         ]]
         if launch.once(waywall, "gui", cmd) then

@@ -7,10 +7,10 @@ changing the integration boundary.
 
 waywall's Lua API exposes:
 
-- `actions` — key/button combos with modifiers, plus `get_key()` polling
-- `mirror()` — copy a rect of the Minecraft window elsewhere
-- `image()` — load a PNG **from a filesystem path**
-- `text()` — draw a string in a bundled bitmap font
+- `actions`, key/button combos with modifiers, plus `get_key()` polling
+- `mirror()`, copy a rect of the Minecraft window elsewhere
+- `image()`, load a PNG **from a filesystem path**
+- `text()`, draw a string in a bundled bitmap font
 - custom GLSL shaders on any of the above
 
 It does **not** expose the mouse cursor position. There is no motion event, no
@@ -24,7 +24,7 @@ every panel pre-rendered as a PNG. That is a fine way to build a BIOS menu and a
 bad way to build something with sliders and rect pickers.
 
 **Therefore the GUI is a separate Wayland client**, launched with
-`waywall.exec()` and hosted as a floating window — exactly what Ninjabrain Bot
+`waywall.exec()` and hosted as a floating window, exactly what Ninjabrain Bot
 already is. That path is proven in production by every waywall user running
 ninb.
 
@@ -38,7 +38,7 @@ runtime re-reads it. Live apply, for free.
 
 The catch: **waywall watches `.lua` files, not `.json`.** Writing
 `toolwall.json` alone does nothing. Every save must also rewrite
-`toolwall_reload.lua` with changed content — a monotonic counter, since some
+`toolwall_reload.lua` with changed content, a monotonic counter, since some
 watchers coalesce byte-identical writes. See `store::Store::trigger_reload`.
 
 Order matters: JSON is written atomically via temp-file-plus-rename *first*, so
@@ -48,7 +48,7 @@ written last.
 ## Why data-driven, and why the runtime came first
 
 The original config was hand-written Lua. A GUI cannot safely edit hand-written
-Lua — you would be parsing and rewriting arbitrary code, destroying comments and
+Lua, you would be parsing and rewriting arbitrary code, destroying comments and
 control flow, and the round-trip would never be lossless.
 
 So the first deliverable was not the GUI. It was separating declarative data
@@ -59,7 +59,7 @@ from imperative config:
    behaviour to the hand-written config. Checkpoint: nothing changes for the
    user.
 3. **CLI.** Prove the write path and hot reload with no pixels involved.
-4. **GUI.** Now it is just an editor for a JSON file — a solved problem.
+4. **GUI.** Now it is just an editor for a JSON file, a solved problem.
 
 Building the GUI first would have meant iterating the data model through the
 UI, which is the expensive direction.
@@ -121,7 +121,7 @@ that overlay instead of taking down the config.
 
 Keybinds name commands from a closed enum. They never carry Lua source.
 
-This matters because configs get shared — the Linux MCSR Resources site has a
+This matters because configs get shared, the Linux MCSR Resources site has a
 whole category for them, and waywall's own documentation warns that config Lua
 can spawn subprocesses and write files. A toolwall config downloaded from a
 stranger cannot execute arbitrary code on load. The `exec` command exists but is
@@ -129,7 +129,7 @@ gated behind `gui.allow_exec`, which defaults to false.
 
 ## Open upstream work
 
-`waywall.show_floating()` is global — it shows and hides every floating window
+`waywall.show_floating()` is global, it shows and hides every floating window
 at once. Anchoring via `theme.ninb_anchor` is hardcoded to Ninjabrain Bot.
 
 Consequence: opening the toolwall GUI also reveals ninb, and the GUI window

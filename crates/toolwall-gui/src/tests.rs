@@ -2,9 +2,9 @@
 //!
 //! egui runs perfectly well without a window, so every tab can be driven
 //! through a real layout pass with no compositor, GPU or display. That catches
-//! the failures that actually happen when editing this code — panics, id
+//! the failures that actually happen when editing this code, panics, id
 //! collisions between repeated widgets, and index handling in the
-//! add/remove paths — none of which need pixels to detect.
+//! add/remove paths, none of which need pixels to detect.
 
 use serde_json::json;
 use toolwall_core::schema::{

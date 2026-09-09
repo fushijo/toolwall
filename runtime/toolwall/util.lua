@@ -1,5 +1,5 @@
 --[[
-    toolwall.util — small shared helpers.
+    toolwall.util, small shared helpers.
 ]]
 
 local M = {}
@@ -55,7 +55,7 @@ end
     Expand a command line rather than a single path.
 
     waywall.exec() splits on spaces into argv, so a command usually carries
-    its arguments — "java -jar ~/.config/waywall/resources/ninb.jar". The ~
+    its arguments, "java -jar ~/.config/waywall/resources/ninb.jar". The ~
     is therefore not at the start of the string, where M.expand looks for it.
 ]]
 function M.expand_command(command)

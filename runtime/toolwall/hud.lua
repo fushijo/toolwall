@@ -1,5 +1,5 @@
 --[[
-    toolwall.hud — persistent text readout drawn with waywall scene objects.
+    toolwall.hud, persistent text readout drawn with waywall scene objects.
 
     waywall.text() creates an immutable text object. There is no set_text, so
     updating the HUD means closing every text object and recreating it. That is
