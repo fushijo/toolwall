@@ -1,0 +1,565 @@
+diff --git a/include/scene.h b/include/scene.h
+index 2094e76..614ffa4 100644
+--- a/include/scene.h
++++ b/include/scene.h
+@@ -29,6 +29,7 @@ struct scene {
+         unsigned int stencil_rect;
+ 
+         unsigned int font_tex;
++        unsigned int solid_tex;
+     } buffers;
+ 
+     struct {
+@@ -42,6 +43,7 @@ struct scene {
+ 
+         struct wl_list unsorted_images;  // scene_object.link
+         struct wl_list unsorted_mirrors; // scene_object.link
++        struct wl_list unsorted_rects;   // scene_object.link
+         struct wl_list unsorted_text;    // scene_object.link
+     } objects;
+ 
+@@ -73,6 +75,14 @@ struct scene_mirror_options {
+     char *shader_name;
+ };
+ 
++struct scene_rect_options {
++    struct box dst;
++    float rgba[4];
++
++    int32_t depth;
++    char *shader_name;
++};
++
+ struct scene_text_options {
+     int32_t x;
+     int32_t y;
+@@ -80,6 +90,10 @@ struct scene_text_options {
+     float rgba[4];
+     int32_t size_multiplier;
+ 
++    // Outline drawn behind each glyph. Zero width (or zero alpha) disables it.
++    float outline_rgba[4];
++    int32_t outline_width;
++
+     int32_t depth;
+     char *shader_name;
+ };
+@@ -93,6 +107,7 @@ struct scene_image *scene_add_image(struct scene *scene, const struct scene_imag
+                                     const char *path);
+ struct scene_mirror *scene_add_mirror(struct scene *scene,
+                                       const struct scene_mirror_options *options);
++struct scene_rect *scene_add_rect(struct scene *scene, const struct scene_rect_options *options);
+ struct scene_text *scene_add_text(struct scene *scene, const char *data,
+                                   const struct scene_text_options *options);
+ 
+diff --git a/waywall/config/api.c b/waywall/config/api.c
+index e7bf565..0ac1ed2 100644
+--- a/waywall/config/api.c
++++ b/waywall/config/api.c
+@@ -79,6 +79,7 @@ static constexpr int DEFAULT_DEPTH = 0;
+ 
+ static constexpr char METATABLE_IMAGE[] = "waywall.image";
+ static constexpr char METATABLE_MIRROR[] = "waywall.mirror";
++static constexpr char METATABLE_RECT[] = "waywall.rect";
+ static constexpr char METATABLE_TEXT[] = "waywall.text";
+ 
+ #define STARTUP_ERRMSG(function) function " cannot be called during startup"
+@@ -194,6 +195,46 @@ mirror_gc(lua_State *L) {
+     return 0;
+ }
+ 
++static int
++rect_close(lua_State *L) {
++    struct scene_rect **rect = lua_touserdata(L, 1);
++    CHECK_OBJECT(rect);
++
++    scene_object_destroy((struct scene_object *)*rect);
++    *rect = nullptr;
++
++    return 0;
++}
++
++static int
++rect_index(lua_State *L) {
++    const char *key = luaL_checkstring(L, 2);
++
++    if (strcmp(key, "close") == 0) {
++        lua_pushcfunction(L, rect_close);
++    } else if (strcmp(key, "get_depth") == 0) {
++        lua_pushcfunction(L, object_get_depth);
++    } else if (strcmp(key, "set_depth") == 0) {
++        lua_pushcfunction(L, object_set_depth);
++    } else {
++        lua_pushnil(L);
++    }
++
++    return 1;
++}
++
++static int
++rect_gc(lua_State *L) {
++    struct scene_rect **rect = lua_touserdata(L, 1);
++
++    if (*rect) {
++        scene_object_destroy((struct scene_object *)*rect);
++    }
++    *rect = nullptr;
++
++    return 0;
++}
++
+ static int
+ text_close(lua_State *L) {
+     struct scene_text **text = lua_touserdata(L, 1);
+@@ -1072,6 +1113,84 @@ l_text_legacy(lua_State *L, struct wrap *wrap) {
+     return 1;
+ }
+ 
++// Reads a "#rrggbb" or "#rrggbbaa" string from a table key into rgba. Leaves the value untouched
++// if the key is missing.
++static int
++unmarshal_hex_key(lua_State *L, int table_index, const char *key, float rgba[static 4]) {
++    lua_pushstring(L, key);
++    lua_rawget(L, table_index);
++
++    if (lua_type(L, -1) == LUA_TSTRING) {
++        const char *raw_color = lua_tostring(L, -1);
++
++        uint8_t u8_rgba[4] = {};
++        if (config_parse_hex(u8_rgba, raw_color) != 0) {
++            return luaL_error(L, "expected a valid hex color, got '%s'", raw_color);
++        }
++
++        for (size_t i = 0; i < 4; i++) {
++            rgba[i] = (float)u8_rgba[i] / UINT8_MAX;
++        }
++    }
++    lua_pop(L, 1);
++
++    return 0;
++}
++
++static int
++l_rect(lua_State *L) {
++    static constexpr int ARG_OPTIONS = 1;
++
++    // Prologue
++    struct config_vm *vm = config_vm_from(L);
++    struct wrap *wrap = config_vm_get_wrap(vm);
++    if (!wrap) {
++        return luaL_error(L, STARTUP_ERRMSG("rect"));
++    }
++
++    luaL_checktype(L, ARG_OPTIONS, LUA_TTABLE);
++    lua_settop(L, ARG_OPTIONS);
++
++    struct scene_rect_options options = {
++        .rgba = {1.0, 1.0, 1.0, 1.0},
++    };
++
++    unmarshal_box_key(L, "dst", &options.dst);
++    unmarshal_hex_key(L, ARG_OPTIONS, "color", options.rgba);
++
++    lua_pushstring(L, "shader");
++    lua_rawget(L, ARG_OPTIONS);
++    if (lua_type(L, -1) == LUA_TSTRING) {
++        options.shader_name = ww_strdup(lua_tostring(L, -1));
++    }
++    lua_pop(L, 1);
++
++    lua_pushstring(L, "depth");
++    lua_rawget(L, ARG_OPTIONS);
++    if (lua_type(L, -1) == LUA_TNUMBER) {
++        options.depth = lua_tointeger(L, -1);
++    } else {
++        options.depth = DEFAULT_DEPTH;
++    }
++    lua_pop(L, 1);
++
++    // Body
++    struct scene_rect **rect = lua_newuserdata(L, sizeof(*rect));
++    check_alloc(rect);
++
++    luaL_getmetatable(L, METATABLE_RECT);
++    lua_setmetatable(L, -2);
++
++    *rect = scene_add_rect(wrap->scene, &options);
++    free(options.shader_name);
++    if (!*rect) {
++        return luaL_error(L, "failed to create rect");
++    }
++
++    // Epilogue. The userdata (rect) was already pushed to the stack by the above code.
++    return 1;
++}
++
+ static int
+ l_text(lua_State *L) {
+     static constexpr int ARG_TEXT = 1;
+@@ -1137,6 +1256,17 @@ l_text(lua_State *L) {
+     }
+     lua_pop(L, 1);
+ 
++    lua_pushstring(L, "outline");
++    lua_rawget(L, ARG_OPTIONS);
++    if (lua_type(L, -1) == LUA_TNUMBER) {
++        options.outline_width = lua_tointeger(L, -1);
++    }
++    lua_pop(L, 1);
++
++    options.outline_rgba[0] = options.outline_rgba[1] = options.outline_rgba[2] = 0;
++    options.outline_rgba[3] = 1;
++    unmarshal_hex_key(L, ARG_OPTIONS, "outline_color", options.outline_rgba);
++
+     lua_pushstring(L, "shader");
+     lua_rawget(L, ARG_OPTIONS);
+     if (lua_type(L, -1) == LUA_TSTRING) {
+@@ -1258,6 +1388,7 @@ static const struct luaL_Reg lua_lib[] = {
+     {"image", l_image},
+     {"mirror", l_mirror},
+     {"press_key", l_press_key},
++    {"rect", l_rect},
+     {"get_key", l_get_key},
+     {"profile", l_profile},
+     {"set_keymap", l_set_keymap},
+@@ -1303,6 +1434,16 @@ config_api_init(struct config_vm *vm) {
+     lua_settable(vm->L, -3);                    // stack: n+1
+     lua_pop(vm->L, 1);                          // stack: n
+ 
++    // Create the metatable for "rect" objects.
++    luaL_newmetatable(vm->L, METATABLE_RECT); // stack: n+1
++    lua_pushstring(vm->L, "__gc");            // stack: n+2
++    lua_pushcfunction(vm->L, rect_gc);        // stack: n+3
++    lua_settable(vm->L, -3);                  // stack: n+1
++    lua_pushstring(vm->L, "__index");         // stack: n+2
++    lua_pushcfunction(vm->L, rect_index);     // stack: n+3
++    lua_settable(vm->L, -3);                  // stack: n+1
++    lua_pop(vm->L, 1);                        // stack: n
++
+     // Create the metatable for "text" objects.
+     luaL_newmetatable(vm->L, METATABLE_TEXT); // stack: n+1
+     lua_pushstring(vm->L, "__gc");            // stack: n+2
+diff --git a/waywall/lua/api.lua b/waywall/lua/api.lua
+index 791c454..2750aa5 100644
+--- a/waywall/lua/api.lua
++++ b/waywall/lua/api.lua
+@@ -143,6 +143,11 @@ M.sleep = priv.sleep
+ -- @return state A table containing information about the instance state.
+ M.state = priv.state
+ 
++--- Creates a "rect" object which fills an area with a solid color.
++-- @param options The options to create the rect with.
++-- @return rect The rect object.
++M.rect = priv.rect
++
+ --- Creates a "text" object which displays arbitrary text.
+ -- @param options The options to create the text with.
+ -- @return text The text object.
+diff --git a/waywall/scene.c b/waywall/scene.c
+index 9b366d2..dbef12c 100644
+--- a/waywall/scene.c
++++ b/waywall/scene.c
+@@ -41,6 +41,7 @@ struct vtx_shader {
+ enum scene_object_type {
+     SCENE_OBJECT_IMAGE,
+     SCENE_OBJECT_MIRROR,
++    SCENE_OBJECT_RECT,
+     SCENE_OBJECT_TEXT,
+ };
+ 
+@@ -73,6 +74,16 @@ struct scene_mirror {
+     float src_rgba[4], dst_rgba[4];
+ };
+ 
++struct scene_rect {
++    struct scene_object object;
++    struct scene *parent;
++
++    size_t shader_index;
++
++    GLuint vbo;
++    bool visible;
++};
++
+ struct scene_text {
+     struct scene_object object;
+     struct scene *parent;
+@@ -100,6 +111,7 @@ static void rect_build(struct vtx_shader out[static 6], const struct box *src,
+                        const float dst_rgba[static 4]);
+ static inline struct scene_image *scene_image_from_object(struct scene_object *object);
+ static inline struct scene_mirror *scene_mirror_from_object(struct scene_object *object);
++static inline struct scene_rect *scene_rect_from_object(struct scene_object *object);
+ static inline struct scene_text *scene_text_from_object(struct scene_object *object);
+ 
+ static void
+@@ -212,47 +224,122 @@ mirror_render(struct scene_object *object) {
+     }
+ }
+ 
++static void
++rect_object_build(struct scene_rect *rect, const struct scene_rect_options *options,
++                  struct scene *scene) {
++    struct vtx_shader vertices[6] = {};
++
++    // The rect is drawn as a 1x1 white texture with a color key that always matches, which is
++    // the cheapest way to get a solid fill out of the existing texcopy shader.
++    rect_build(vertices, &(struct box){0, 0, 1, 1}, &options->dst, (float[4]){1, 1, 1, 1},
++               (float[4]){options->rgba[0], options->rgba[1], options->rgba[2], options->rgba[3]});
++
++    server_gl_with(scene->gl, false) {
++        glGenBuffers(1, &rect->vbo);
++        ww_assert(rect->vbo != 0);
++
++        gl_using_buffer(GL_ARRAY_BUFFER, rect->vbo) {
++            glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
++        }
++    }
++}
++
++static void
++rect_object_release(struct scene_object *object) {
++    struct scene_rect *rect = scene_rect_from_object(object);
++
++    if (rect->parent) {
++        server_gl_with(rect->parent->gl, false) {
++            glDeleteBuffers(1, &rect->vbo);
++        }
++    }
++
++    rect->parent = nullptr;
++}
++
++static void
++rect_object_render(struct scene_object *object) {
++    // The OpenGL context must be current.
++    struct scene_rect *rect = scene_rect_from_object(object);
++    struct scene *scene = rect->parent;
++
++    // A zero alpha would disable the color key and draw the solid texture as-is.
++    if (!rect->visible) {
++        return;
++    }
++
++    server_gl_shader_use(scene->shaders.data[rect->shader_index].shader);
++    glUniform2f(scene->shaders.data[rect->shader_index].shader_u_dst_size, scene->ui->render_width,
++                scene->ui->render_height);
++    glUniform2f(scene->shaders.data[rect->shader_index].shader_u_src_size, 1, 1);
++
++    gl_using_buffer(GL_ARRAY_BUFFER, rect->vbo) {
++        gl_using_texture(GL_TEXTURE_2D, scene->buffers.solid_tex) {
++            // Each rect has 6 vertices in its vertex buffer.
++            draw_vertex_list(&scene->shaders.data[rect->shader_index], 6);
++        }
++    }
++}
++
++// The 8 directions an outline is drawn in, as multiples of the outline width.
++static constexpr int32_t OUTLINE_OFFSETS[8][2] = {
++    {-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1},
++};
++
+ static size_t
+ text_build(GLuint vbo, struct scene *scene, const char *data,
+            const struct scene_text_options *options) {
+     // The OpenGL context must be current.
+ 
+-    size_t vtxcount = strlen(data) * 6;
++    bool outline = options->outline_width > 0 && options->outline_rgba[3] > 0.0;
++    size_t passes = outline ? STATIC_ARRLEN(OUTLINE_OFFSETS) + 1 : 1;
++
++    size_t vtxcount = strlen(data) * 6 * passes;
+ 
+     struct vtx_shader *vertices = zalloc(vtxcount, sizeof(*vertices));
+     struct vtx_shader *ptr = vertices;
+ 
+-    int32_t x = options->x;
+-    int32_t y = options->y;
+-
+-    for (const char *c = data; *c != '\0'; c++) {
+-        if (*c == '\n') {
+-            y += FONT_CHAR_HEIGHT * options->size_multiplier;
+-            x = options->x;
+-            continue;
+-        } else if (*c == ' ') {
+-            x += FONT_CHAR_WIDTH * options->size_multiplier;
+-            continue;
+-        }
++    // The outline is the same glyphs drawn offset in each direction. They come first in the
++    // vertex buffer so that alpha blending leaves the text itself on top.
++    for (size_t pass = 0; pass < passes; pass++) {
++        bool is_outline = outline && pass < STATIC_ARRLEN(OUTLINE_OFFSETS);
++
++        int32_t off_x = is_outline ? OUTLINE_OFFSETS[pass][0] * options->outline_width : 0;
++        int32_t off_y = is_outline ? OUTLINE_OFFSETS[pass][1] * options->outline_width : 0;
++        const float *rgba = is_outline ? options->outline_rgba : options->rgba;
++
++        int32_t x = options->x;
++        int32_t y = options->y;
++
++        for (const char *c = data; *c != '\0'; c++) {
++            if (*c == '\n') {
++                y += FONT_CHAR_HEIGHT * options->size_multiplier;
++                x = options->x;
++                continue;
++            } else if (*c == ' ') {
++                x += FONT_CHAR_WIDTH * options->size_multiplier;
++                continue;
++            }
+ 
+-        struct box src = {
+-            .x = (*c % CHARS_PER_ROW) * FONT_CHAR_WIDTH,
+-            .y = (*c / CHARS_PER_ROW) * FONT_CHAR_HEIGHT,
+-            .width = FONT_CHAR_WIDTH,
+-            .height = FONT_CHAR_HEIGHT,
+-        };
++            struct box src = {
++                .x = (*c % CHARS_PER_ROW) * FONT_CHAR_WIDTH,
++                .y = (*c / CHARS_PER_ROW) * FONT_CHAR_HEIGHT,
++                .width = FONT_CHAR_WIDTH,
++                .height = FONT_CHAR_HEIGHT,
++            };
+ 
+-        struct box dst = {
+-            .x = x,
+-            .y = y,
+-            .width = FONT_CHAR_WIDTH * options->size_multiplier,
+-            .height = FONT_CHAR_HEIGHT * options->size_multiplier,
+-        };
++            struct box dst = {
++                .x = x + off_x,
++                .y = y + off_y,
++                .width = FONT_CHAR_WIDTH * options->size_multiplier,
++                .height = FONT_CHAR_HEIGHT * options->size_multiplier,
++            };
+ 
+-        rect_build(ptr, &src, &dst, (float[4]){1.0, 1.0, 1.0, 1.0}, options->rgba);
+-        ptr += 6;
++            rect_build(ptr, &src, &dst, (float[4]){1.0, 1.0, 1.0, 1.0}, rgba);
++            ptr += 6;
+ 
+-        x += FONT_CHAR_WIDTH * options->size_multiplier;
++            x += FONT_CHAR_WIDTH * options->size_multiplier;
++        }
+     }
+ 
+     gl_using_buffer(GL_ARRAY_BUFFER, vbo) {
+@@ -334,6 +421,9 @@ object_release(struct scene_object *object) {
+     case SCENE_OBJECT_MIRROR:
+         mirror_release(object);
+         break;
++    case SCENE_OBJECT_RECT:
++        rect_object_release(object);
++        break;
+     case SCENE_OBJECT_TEXT:
+         text_release(object);
+         break;
+@@ -349,6 +439,9 @@ object_render(struct scene_object *object) {
+     case SCENE_OBJECT_MIRROR:
+         mirror_render(object);
+         break;
++    case SCENE_OBJECT_RECT:
++        rect_object_render(object);
++        break;
+     case SCENE_OBJECT_TEXT:
+         text_render(object);
+         break;
+@@ -365,6 +458,9 @@ object_sort(struct scene *scene, struct scene_object *object) {
+         case SCENE_OBJECT_MIRROR:
+             wl_list_insert(&scene->objects.unsorted_mirrors, &object->link);
+             break;
++        case SCENE_OBJECT_RECT:
++            wl_list_insert(&scene->objects.unsorted_rects, &object->link);
++            break;
+         case SCENE_OBJECT_TEXT:
+             wl_list_insert(&scene->objects.unsorted_text, &object->link);
+             break;
+@@ -537,6 +633,9 @@ draw_frame(struct scene *scene) {
+     wl_list_for_each (object, &scene->objects.unsorted_mirrors, link) {
+         mirror_render(object);
+     }
++    wl_list_for_each (object, &scene->objects.unsorted_rects, link) {
++        rect_object_render(object);
++    }
+     wl_list_for_each (object, &scene->objects.unsorted_images, link) {
+         image_render(object);
+     }
+@@ -628,6 +727,12 @@ scene_mirror_from_object(struct scene_object *object) {
+     return (struct scene_mirror *)object;
+ }
+ 
++static inline struct scene_rect *
++scene_rect_from_object(struct scene_object *object) {
++    ww_assert(object->type == SCENE_OBJECT_RECT);
++    return (struct scene_rect *)object;
++}
++
+ static inline struct scene_text *
+ scene_text_from_object(struct scene_object *object) {
+     ww_assert(object->type == SCENE_OBJECT_TEXT);
+@@ -758,6 +863,16 @@ scene_create(struct config *cfg, struct server_gl *gl, struct server_ui *ui) {
+         }
+ 
+         free(atlas);
++
++        // A single white pixel, used as the source for solid rects.
++        glGenTextures(1, &scene->buffers.solid_tex);
++        gl_using_texture(GL_TEXTURE_2D, scene->buffers.solid_tex) {
++            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
++                         (unsigned char[4]){0xFF, 0xFF, 0xFF, 0xFF});
++
++            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++        }
+     }
+ 
+     scene->on_gl_frame.notify = on_gl_frame;
+@@ -766,6 +881,7 @@ scene_create(struct config *cfg, struct server_gl *gl, struct server_ui *ui) {
+     wl_list_init(&scene->objects.sorted);
+     wl_list_init(&scene->objects.unsorted_images);
+     wl_list_init(&scene->objects.unsorted_mirrors);
++    wl_list_init(&scene->objects.unsorted_rects);
+     wl_list_init(&scene->objects.unsorted_text);
+ 
+     return scene;
+@@ -781,6 +897,7 @@ scene_destroy(struct scene *scene) {
+     object_list_destroy(&scene->objects.sorted);
+     object_list_destroy(&scene->objects.unsorted_images);
+     object_list_destroy(&scene->objects.unsorted_mirrors);
++    object_list_destroy(&scene->objects.unsorted_rects);
+     object_list_destroy(&scene->objects.unsorted_text);
+ 
+     server_gl_with(scene->gl, false) {
+@@ -790,7 +907,7 @@ scene_destroy(struct scene *scene) {
+         }
+ 
+         glDeleteBuffers(2, (GLuint[]){scene->buffers.debug, scene->buffers.stencil_rect});
+-        glDeleteTextures(1, &scene->buffers.font_tex);
++        glDeleteTextures(2, (GLuint[]){scene->buffers.font_tex, scene->buffers.solid_tex});
+     }
+     free(scene->shaders.data);
+ 
+@@ -842,6 +959,24 @@ scene_add_mirror(struct scene *scene, const struct scene_mirror_options *options
+     return mirror;
+ }
+ 
++struct scene_rect *
++scene_add_rect(struct scene *scene, const struct scene_rect_options *options) {
++    struct scene_rect *rect = zalloc(1, sizeof(*rect));
++
++    rect->parent = scene;
++    rect->visible = options->rgba[3] > 0.0;
++
++    // Find correct shader for this rect
++    rect->shader_index = shader_find_index(scene, options->shader_name);
++
++    rect_object_build(rect, options, scene);
++
++    rect->object.depth = options->depth;
++    object_add(scene, (struct scene_object *)rect, SCENE_OBJECT_RECT);
++
++    return rect;
++}
++
+ struct scene_text *
+ scene_add_text(struct scene *scene, const char *data, const struct scene_text_options *options) {
+     struct scene_text *text = zalloc(1, sizeof(*text));
