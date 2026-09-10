@@ -42,8 +42,15 @@ function M.runtime_dir()
     return dir
 end
 
-local function cache_path(name)
-    return M.runtime_dir() .. "/toolwall-ninb-" .. name .. ".json"
+--[[
+    Where an answer lands. The stream and the one-shot fetch write different
+    files on purpose: sharing one would make "the stream is working" and "a
+    fetch happened once" indistinguishable, and the fallback has to be able to
+    tell them apart.
+]]
+local function cache_path(name, poll)
+    return M.runtime_dir() .. "/toolwall-ninb-" .. name ..
+        (poll and "-poll.json" or ".json")
 end
 
 function M.now()
@@ -65,7 +72,7 @@ end
 function M.fetch(query, port)
     -- exec splits on spaces, so every token here has to be space-free
     waywall.exec(("curl -sS --max-time 2 %s -o %s"):format(
-        url_for(query, port), cache_path(query)))
+        url_for(query, port), cache_path(query, true)))
 end
 
 --[[
@@ -121,14 +128,15 @@ end
 ]]
 function M.forget(query)
     os.remove(cache_path(query))
+    os.remove(cache_path(query, true))
 end
 
 --[[
     read whatever the last fetch left behind. nil when there is nothing yet,
     or when ninb handed back something that is not json.
 ]]
-function M.read(query)
-    local fh = io.open(cache_path(query), "r")
+function M.read(query, poll)
+    local fh = io.open(cache_path(query, poll), "r")
     if not fh then return nil end
 
     local body = fh:read("*a") or ""

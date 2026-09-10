@@ -59,6 +59,7 @@ function M.reset()
     M.view_ready = false
     M.launched = {}
     M.sleep_budget = nil
+    M.clock = 1000000
     M.processes = {}
     M.next_pid = 1000
     M.held = {}
@@ -272,6 +273,8 @@ function M.sleep(ms)
     guard("sleep")
     record("sleep", ms)
 
+    M.clock = M.clock + (tonumber(ms) or 0)
+
     if M.sleep_budget then
         M.sleep_budget = M.sleep_budget - 1
         if M.sleep_budget < 0 then
@@ -324,8 +327,13 @@ function M.state()
     return M.state_value
 end
 
+--[[
+    A clock the tests own. Sleeping moves it, the way it does for real, so a
+    loop that paces itself off current_time can be driven through hours of its
+    own schedule in a few milliseconds of ours.
+]]
 function M.current_time()
-    return os.time() * 1000
+    return M.clock
 end
 
 function M.profile()

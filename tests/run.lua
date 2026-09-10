@@ -774,6 +774,40 @@ check("the readout stays off when it is not enabled", function()
     os.remove(path)
 end)
 
+check("the readout keeps trying to stream instead of giving up on it", function()
+    -- ninb takes seconds to boot, so the first attempt after a reload nearly
+    -- always fails. giving up on that would mean never streaming at all.
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "ninb": { "jar": "~/ninb.jar",
+                  "overlay": { "enabled": true, "live": true, "poll_ms": 16 } } }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    -- long enough to pass the old three second give-up
+    waywall.sleep_budget = 400
+    waywall.finish_startup()
+
+    local streams, fetches = 0, 0
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "exec" then
+            local command = tostring(entry.args[1])
+            if command:match("%-ninb%-stronghold%.sh$") then
+                streams = streams + 1
+            elseif command:match("^curl") then
+                fetches = fetches + 1
+            end
+        end
+    end
+
+    assert_eq(streams > 1, true, "the stream is started again, not abandoned")
+    assert_eq(fetches > 0, true, "and fetches cover the gap meanwhile")
+
+    os.remove(path)
+end)
+
 print(("\n%d passed, %d failed"):format(passed, failed))
 
 os.exit(failed == 0 and 0 or 1)

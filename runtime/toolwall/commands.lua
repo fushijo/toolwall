@@ -63,50 +63,55 @@ function M.run_ninb_overlay(st)
     st.ninb_panel = ninb_overlay.new(cfg)
 
     --[[
-        Streaming holds the connection open and ninb pushes on every
-        change, so the readout keeps up with F3+C spam. Restarting the
-        script is a no-op while it is alive (flock), so it doubles as the
-        way to recover after ninb restarts.
+        Streaming holds the connection open and ninb pushes on every change, so
+        the readout keeps up with F3+C spam.
 
-        If no stream file appears at all - no flock, no curl, api off - fall
-        back to the one-shot fetches, which are slower but always work.
+        Starting the script again is a no-op while one is alive (flock), which
+        makes it both how the stream starts and how it recovers. That matters:
+        ninb takes seconds to boot, so the first attempt after a reload nearly
+        always fails, and anything that gave up on the first failure would end
+        up never streaming at all.
+
+        One-shot fetches cover the gap until the stream lands its first answer,
+        and stop once it has. If streaming is impossible here (no flock, no
+        curl) the stream file never appears and the fetches simply carry on,
+        which is the fallback.
     ]]
     local RESTART_MS = 5000
-    local GIVE_UP_MS = 3000
     local FETCH_MS = 250
 
-    local streaming = live
-    local began = ninb_api.now()
     local last_start, last_fetch = 0, 0
 
     util.warn(("ninb overlay on, %s :%d"):format(
-        streaming and "streaming from" or "polling", port))
+        live and "streaming from" or "polling", port))
 
     while st.ninb_overlay do
         local now = ninb_api.now()
 
-        if streaming then
-            if now - last_start >= RESTART_MS then
-                last_start = now
-                for _, query in ipairs(queries) do
-                    ninb_api.stream(query, port)
-                end
-            end
-
-            if not ninb_api.read(ninb_api.STRONGHOLD) and (now - began) > GIVE_UP_MS then
-                util.warn("ninb stream did not start, falling back to polling")
-                streaming = false
-            end
-        elseif now - last_fetch >= FETCH_MS then
-            last_fetch = now
+        if live and now - last_start >= RESTART_MS then
+            last_start = now
             for _, query in ipairs(queries) do
-                ninb_api.fetch(query, port)
+                ninb_api.stream(query, port)
             end
         end
 
+        -- nil means the stream has never delivered anything, so keep asking
+        local data = live and ninb_api.read(ninb_api.STRONGHOLD) or nil
+
+        if not data then
+            if now - last_fetch >= FETCH_MS then
+                last_fetch = now
+                for _, query in ipairs(queries) do
+                    ninb_api.fetch(query, port)
+                end
+            end
+            data = ninb_api.read(ninb_api.STRONGHOLD, true)
+        end
+
         local ok = pcall(function()
-            st.ninb_panel:draw(ninb_api.read(ninb_api.STRONGHOLD), now,
-                ninb_api.messages(ninb_api.read(ninb_api.MESSAGES)))
+            st.ninb_panel:draw(data, now, ninb_api.messages(
+                ninb_api.read(ninb_api.MESSAGES) or
+                ninb_api.read(ninb_api.MESSAGES, true)))
         end)
         if not ok then
             util.warn("ninb overlay: draw failed")
