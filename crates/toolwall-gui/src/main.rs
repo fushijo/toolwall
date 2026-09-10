@@ -9,6 +9,7 @@
 //! waywall and no IPC.
 
 mod keys;
+mod ninb_keys;
 mod tabs;
 mod widgets;
 
@@ -63,6 +64,7 @@ fn main() -> Result<()> {
                 tab: Tab::Modes,
                 browser: FileBrowser::default(),
                 capturing: None,
+                ninb_keys: ninb_keys::NinbKeys::default(),
                 remap_capture: None,
                 advanced: false,
                 saved,
@@ -97,6 +99,7 @@ struct App {
     browser: FileBrowser,
     /// Index of the keybind currently swallowing the next keypress.
     capturing: Option<usize>,
+    ninb_keys: ninb_keys::NinbKeys,
     remap_capture: Option<RemapCapture>,
     advanced: bool,
 
@@ -372,6 +375,7 @@ impl eframe::App for App {
                     &problems,
                     self.advanced,
                     &mut self.browser,
+                    &mut self.ninb_keys,
                 ),
                 Tab::Input => tabs::input::show(
                     ui,

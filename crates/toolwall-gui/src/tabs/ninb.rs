@@ -1,7 +1,9 @@
 //! Ninjabrain Bot: the jar, the API, and the readout drawn into the scene.
 
+use toolwall_core::ninb_prefs::ACTIONS;
 use toolwall_core::{Document, Problem, Scope, NINB_PRESETS};
 
+use crate::ninb_keys::{self, NinbKeys};
 use crate::widgets::{color_field, path_field, problems_for, FileBrowser, PickTarget};
 
 const COORDS: &[(&str, &str, &str)] = &[
@@ -18,7 +20,20 @@ pub fn show(
     problems: &[Problem],
     advanced: bool,
     browser: &mut FileBrowser,
+    keys: &mut NinbKeys,
 ) {
+    // A capture in progress swallows the next keypress into the hotkey.
+    if let Some(index) = keys.capturing {
+        if let Some(hotkey) = ninb_keys::capture(ui.ctx()) {
+            if let Some(list) = keys.hotkeys.as_mut() {
+                if let Some(slot) = list.get_mut(index) {
+                    slot.1 = hotkey;
+                }
+            }
+            keys.capturing = None;
+        }
+    }
+
     egui::ScrollArea::vertical().show(ui, |ui| {
         problems_for(ui, problems, &Scope::Ninb);
 
@@ -46,6 +61,9 @@ pub fn show(
                     ui.end_row();
                 }
             });
+
+        ui.separator();
+        hotkeys(ui, doc, keys);
 
         ui.separator();
         ui.heading("Readout");
@@ -331,3 +349,119 @@ pub fn show(
 const PLACEHOLDERS: &str = "{x} {z} {certainty} {distance} {netherX} {netherZ} \
                             {netherDistance} {chunkX} {chunkZ} {blockX} {blockZ} \
                             {angle} {angleDelta} {throws} {n}";
+
+/// Ninjabrain Bot's own hotkeys.
+///
+/// These are not toolwall keybinds and cannot be: ninb watches the keyboard
+/// itself. They normally live in ninb's settings window, which is unreachable
+/// once that window is hidden, so they are edited here and written straight
+/// into ninb's preferences.
+fn hotkeys(ui: &mut egui::Ui, doc: &mut Document, keys: &mut NinbKeys) {
+    ui.heading("Its hotkeys");
+    ui.weak(
+        "Ninjabrain Bot watches the keyboard itself, so these are its own \
+         keys, not toolwall's.",
+    );
+
+    ui.add_space(4.0);
+    let mut shown = !doc.theme.ninb_hidden;
+    if ui
+        .checkbox(&mut shown, "Show its window")
+        .on_hover_text("Its own settings window, for anything not listed here")
+        .changed()
+    {
+        doc.theme.ninb_hidden = !shown;
+    }
+    if shown {
+        ui.weak("Reveal floating windows to see it, the same key that opens this editor.");
+    }
+
+    if keys.hotkeys.is_none() {
+        ui.add_space(4.0);
+        if ui.button("Load from Ninjabrain Bot").clicked() {
+            keys.load();
+        }
+        if let Some(status) = &keys.status {
+            ui.colored_label(egui::Color32::from_rgb(255, 120, 120), status);
+        }
+        return;
+    }
+
+    ui.add_space(4.0);
+
+    let mut rows: Vec<(usize, &'static str, String, bool)> = Vec::new();
+    if let Some(list) = &keys.hotkeys {
+        for (index, (name, hotkey)) in list.iter().enumerate() {
+            let label = ACTIONS
+                .iter()
+                .find(|(id, _)| id == name)
+                .map(|(_, label)| *label)
+                .unwrap_or("");
+            rows.push((index, label, hotkey.label(), grabbed(hotkey)));
+        }
+    }
+
+    let mut capture_clicked = None;
+
+    egui::Grid::new("ninb-hotkeys")
+        .num_columns(2)
+        .spacing([12.0, 6.0])
+        .show(ui, |ui| {
+            for (index, label, current, taken) in &rows {
+                ui.label(*label);
+                ui.horizontal(|ui| {
+                    let capturing = keys.capturing == Some(*index);
+                    let text = if capturing { "press a key…" } else { current.as_str() };
+
+                    if ui.selectable_label(capturing, text).clicked() {
+                        capture_clicked = Some(*index);
+                    }
+
+                    if *taken && !capturing {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(255, 170, 80),
+                            "⚠ your desktop takes this key",
+                        );
+                    }
+                });
+                ui.end_row();
+            }
+        });
+
+    if let Some(index) = capture_clicked {
+        keys.capturing = if keys.capturing == Some(index) { None } else { Some(index) };
+    }
+
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        if ui.button("Save and restart ninb").clicked() {
+            let launch = ninb_keys::launch_command(&doc.ninb.jar, &doc.ninb.command);
+            keys.save(launch.as_deref());
+        }
+        if ui.button("Reload").clicked() {
+            keys.load();
+        }
+    });
+
+    if let Some(status) = &keys.status {
+        ui.add_space(4.0);
+        ui.weak(status);
+    }
+
+    ui.add_space(4.0);
+    ui.weak(
+        "Saving restarts ninb, because it rewrites its settings when it exits \
+         and would undo the change.",
+    );
+}
+
+/// Keys the desktop compositor keeps for itself, which therefore never reach
+/// waywall and never reach ninb. This is the usual reason a hotkey "does
+/// nothing": it is being answered somewhere else entirely.
+fn grabbed(hotkey: &toolwall_core::ninb_prefs::Hotkey) -> bool {
+    if hotkey.modifier & toolwall_core::ninb_prefs::ANY_META != 0 {
+        return true;
+    }
+
+    matches!(hotkey.key(), Some("Print Screen") | Some("Super") | Some("Menu"))
+}

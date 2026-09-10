@@ -4,6 +4,7 @@
 //! only ever *reads* the document; every write goes through [`store::Store`],
 //! which is also responsible for tripping waywall's hot reload.
 
+pub mod ninb_prefs;
 pub mod schema;
 pub mod store;
 

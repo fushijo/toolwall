@@ -195,6 +195,26 @@ start at all, it falls back to one-shot fetches and says so in the log.
 Set **Enabled** and it starts with waywall, which is what you want alongside
 `theme.ninb_hidden`. Otherwise bind `ninb.overlay` to a key.
 
+### Its hotkeys
+
+ninb's own hotkeys, the ones that nudge the last angle and undo a throw, are
+not toolwall keybinds and cannot be. ninb watches the keyboard itself rather
+than being sent keys, so they live in its settings, which is exactly what
+hiding its window takes away.
+
+The Ninjabrain tab edits them directly, in `~/.java/.userPrefs/ninjabrainbot/
+prefs.xml`. Saving restarts ninb, because it rewrites that file when it exits
+and would otherwise undo the change.
+
+**A hotkey your desktop has claimed never arrives.** Print Screen and anything
+with Super are the usual ones: the outer compositor answers them and waywall
+never sees the key, so neither does ninb. The tab marks those. Function keys
+and Page Up / Page Down are safe choices.
+
+Modifiers are saved as the left-hand key, because ninb stores a side and
+requires that exact side to be held. A hotkey saved here fires on left Ctrl,
+not right.
+
 ### Two things that will otherwise waste your time
 
 **`gui.command` needs a full path.** waywall `exec()`s it using the
