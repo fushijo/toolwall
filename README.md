@@ -30,12 +30,13 @@ The whole integration relies on two facts about waywall:
 That is enough to apply config edits live with no changes to waywall's C
 source.
 
-There is one exception, and it is opt-in. `patches/` holds two small additions
-to waywall itself, for the Ninjabrain Bot readout: a filled rectangle, and an
-outline on scene text. Neither can be done from Lua, because waywall has no
-fill primitive and no outline parameter. toolwall checks for them at runtime
-and drops the background and outline if they are missing, so an unpatched
-waywall still works. See [Patching waywall](#patching-waywall).
+There is one exception, and it is opt-in. `patches/` holds small additions to
+waywall itself, all of them for the Ninjabrain Bot readout: a filled rectangle,
+an outline on scene text, and a way to keep ninb's own window hidden. None can
+be done from Lua, because waywall has no fill primitive, no outline parameter,
+and one visibility flag shared by every floating window. toolwall checks for
+them at runtime and does without if they are missing, so an unpatched waywall
+still works. See [Patching waywall](#patching-waywall).
 
 ## How it works
 
@@ -152,20 +153,47 @@ your password once to install. If you do not have a checkout, clone one first:
 git clone https://github.com/tesselslate/waywall ~/waywall
 ```
 
-The patches add two things:
+The patches add three things:
 
 | | what it does | why it cannot be done in Lua |
 |---|---|---|
 | `waywall.rect` | fills an area with a solid colour | `image` draws a PNG as-is, and colour keys are mirror-only upstream, so there is no way to fill anything |
 | `outline` on `waywall.text` | draws each glyph eight times behind itself | `text` takes x, y, colour, size and depth, and nothing else |
+| `theme.ninb_hidden` | keeps the anchored window hidden | `show_floating` is one flag for every floating window, so revealing the editor reveals Ninjabrain Bot too |
 
-Both are additive. A config that does not ask for them renders exactly as it
-did before. Written against waywall `150026e`; `git apply` refuses rather than
-making a mess if the code has moved. Full detail in
+Building waywall from scratch needs meson 1.4 or newer, since it is C23. An
+existing `build/` directory is reused.
+
+All three are additive. A config that does not ask for them behaves exactly as
+it did before. Written against waywall `150026e`; `git apply` refuses rather
+than making a mess if the code has moved. Full detail in
 [`patches/README.md`](patches/README.md).
 
 Skip this and the readout still works, just flat on the game with no panel
-behind it.
+behind it, and ninb's own window still appears whenever the editor does.
+
+## Ninjabrain Bot readout
+
+ninb's window is a floating window, and `show_floating` is global, so it
+appears and disappears with the editor. The Ninjabrain tab draws the same
+readout into the scene instead, where nothing else can hide it. Two presets:
+the labelled Ninjabrain Bot layout with a panel, or Compact, which is one
+templated line per prediction.
+
+It reads ninb's HTTP API, which is off by default and has to be turned on in
+ninb's own settings. With **Live** on it holds ninb's event stream open, so a
+change shows up as ninb makes it rather than on the next poll. That is the
+difference you feel when spamming F3+C to line up a throw.
+
+waywall's Lua has no sockets and `exec()` returns no handle, so the stream is
+held by a generated shell script: `curl` streams, the loop keeps only the
+newest event, and it lands in a cache file by rename. The file never grows and
+Lua only ever reads it. `flock` is the single-instance guard, which also makes
+"start it again" the way to recover after ninb restarts. If the stream cannot
+start at all, it falls back to one-shot fetches and says so in the log.
+
+Set **Enabled** and it starts with waywall, which is what you want alongside
+`theme.ninb_hidden`. Otherwise bind `ninb.overlay` to a key.
 
 ### Two things that will otherwise waste your time
 
@@ -294,6 +322,8 @@ These come from waywall, not from toolwall:
   which is what lets the Ninjabrain readout line up its labels and values.
   Multiple colours on one line means multiple text objects.
 - **No fill primitive and no text outline** without the patches in `patches/`.
+- **`show_floating` has no per-window form.** `theme.ninb_hidden` in `patches/`
+  is the narrow fix: it keeps only the anchored window hidden.
 - **Ninjabrain Bot calibration does not work correctly inside waywall.** Use
   boat eye, or calibrate outside.
 
