@@ -203,6 +203,14 @@ function M.image(path, options)
     return new_object("image", payload)
 end
 
+function M.rect(options)
+    guard("rect")
+    record("rect", options)
+
+    local payload = { options = options }
+    return new_object("rect", payload)
+end
+
 function M.text(body, options)
     guard("text")
     record("text", body, options)

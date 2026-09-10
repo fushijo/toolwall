@@ -510,5 +510,148 @@ check("unknown commands do not consume the keypress", function()
     os.remove(path)
 end)
 
+--[[
+    The ninb readout. These run against a real API response, so the field names
+    are the ones ninb 1.5.2 actually sends.
+]]
+
+local NINB_RESPONSE = [==[
+  { "resultType": "TRIANGULATION",
+    "playerPosition": { "xInOverworld": -214.71, "zInOverworld": 196.78,
+                        "horizontalAngle": -16.41, "isInOverworld": true },
+    "predictions": [
+      { "chunkX": 14, "chunkZ": 106, "certainty": 0.849, "overworldDistance": 1567.0 },
+      { "chunkX": 22, "chunkZ": 133, "certainty": 0.149, "overworldDistance": 2132.0 } ],
+    "eyeThrows": [
+      { "xInOverworld": -214.71, "zInOverworld": 196.78,
+        "angle": -16.49, "error": 0.0002 } ] }
+]==]
+
+local function ninb_data()
+    return require("toolwall.json").decode(NINB_RESPONSE)
+end
+
+local function drawn(cfg, data, messages)
+    waywall.reset()
+    waywall.finish_startup()
+
+    package.loaded["toolwall.ninb_overlay"] = nil
+    local overlay = require("toolwall.ninb_overlay")
+
+    overlay.new(cfg):draw(data or ninb_data(), 1000, messages)
+
+    local text, rects = {}, {}
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "text" then
+            table.insert(text, { body = entry.args[1], options = entry.args[2] })
+        elseif entry.name == "rect" then
+            table.insert(rects, entry.args[1])
+        end
+    end
+    return text, rects
+end
+
+local function joined(text)
+    local out = {}
+    for _, item in ipairs(text) do table.insert(out, item.body) end
+    return table.concat(out, "|")
+end
+
+check("the readout converts a stronghold chunk to block and nether coordinates", function()
+    local api = require("toolwall.ninb_api")
+    local data = ninb_data()
+
+    local fields = api.prediction_fields(data.predictions[1], data, "block")
+
+    -- chunk 14 is blocks 228..243, and ninb points at the centre
+    assert_eq(fields.blockX, "228", "block x")
+    assert_eq(fields.blockZ, "1700", "block z")
+
+    -- the nether is an eighth of the scale, which is the coordinate a run
+    -- actually travels to
+    assert_eq(fields.netherX, "28", "nether x")
+    assert_eq(fields.netherZ, "212", "nether z")
+    assert_eq(fields.netherDistance, "195", "nether distance")
+    assert_eq(fields.certainty, "84.9%", "certainty")
+end)
+
+check("the readout works out which way to turn", function()
+    local api = require("toolwall.ninb_api")
+    local data = ninb_data()
+
+    local fields = api.prediction_fields(data.predictions[1], data, "block")
+
+    -- minecraft yaw: 0 faces +z and decreases anticlockwise
+    assert_eq(fields.angle, "-16.41", "heading to the stronghold")
+    assert_eq(fields.angleDelta, "0.0", "already pointing there, and not '-0.0'")
+end)
+
+check("the ninbot layout lays labels and values out in columns", function()
+    local text = drawn({
+        layout = "ninbot", x = 8, y = 40, size = 2, line_gap = 2, coords = "block",
+        show_location = true, show_certainty = true, show_nether = true,
+        show_distance = true, background = false,
+    })
+
+    assert_eq(joined(text),
+        "Location:|(228, 1700), 1567 blocks away|" ..
+        "Certainty:|84.9%|" ..
+        "Nether coords:|(28, 212), 195 blocks away",
+        "three labelled rows")
+
+    -- every value starts in the same column, one past the widest label
+    assert_eq(text[2].options.x, text[4].options.x, "values share a column")
+    assert_eq(text[2].options.x, text[6].options.x, "values share a column")
+
+    -- rows cannot overlap: the pitch clears the 16px glyph at size 2
+    assert_eq(text[3].options.y - text[1].options.y, 34, "row pitch")
+end)
+
+check("certainty is coloured by how good it is", function()
+    local cfg = {
+        layout = "compact", shown_predictions = 2, coords = "block",
+        template = "{x}, {z} {certainty}", background = false,
+        certainty_high_above = 80, certainty_mid_above = 50,
+        certainty_high_color = "#55ff55ff", certainty_low_color = "#ff5555ff",
+    }
+    local text = drawn(cfg)
+
+    assert_eq(text[1].options.color, "#55ff55ff", "84.9% is high")
+    assert_eq(text[2].options.color, "#ff5555ff", "14.9% is low")
+end)
+
+check("the panel is measured from the text, not guessed", function()
+    local _, rects = drawn({
+        layout = "compact", shown_predictions = 1, coords = "block",
+        template = "{x}, {z}", background = true, padding = 8, size = 2,
+        line_gap = 2, x = 100, y = 100,
+    })
+
+    assert_eq(#rects, 1, "one panel, no border")
+
+    -- "228, 1700" is 9 characters of an 8px face at size 2
+    assert_eq(rects[1].dst.w, 9 * 8 * 2 + 8 * 2, "panel width")
+    assert_eq(rects[1].dst.h, 16 * 2 + 8 * 2, "panel height")
+    assert_eq(rects[1].dst.x, 100 - 8, "panel starts a padding left of the text")
+end)
+
+check("the readout says something before the first throw", function()
+    local text = drawn({ layout = "ninbot", idle_text = "no eye throws yet" },
+        { predictions = {}, eyeThrows = {} })
+
+    assert_eq(joined(text), "no eye throws yet", "idle line")
+end)
+
+check("eye throws keep the precision ninb reports them with", function()
+    local text = drawn({
+        layout = "ninbot", show_location = false, show_certainty = false,
+        show_nether = false, throw_rows = 3, show_throw_header = false,
+        background = false,
+    })
+
+    assert_eq(joined(text), "-214.71|196.78|-16.49|0.0002", "one throw, four columns")
+end)
+
 print(("\n%d passed, %d failed"):format(passed, failed))
+
 os.exit(failed == 0 and 0 or 1)

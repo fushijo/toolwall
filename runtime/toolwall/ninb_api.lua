@@ -86,12 +86,48 @@ function M.number(value)
 end
 
 --[[
+    format at a fixed number of decimals, the way ninb prints its own table.
+    round() alone is not enough: 0.0002 and -16.49 both have to survive.
+]]
+function M.fixed(value, places)
+    if type(value) ~= "number" then return tostring(value or "") end
+
+    local out = ("%." .. tostring(places) .. "f"):format(value)
+
+    -- a tiny negative rounds to "-0.0", which reads as an error rather than
+    -- as "you are already pointing the right way"
+    if out:match("^%-0%.?0*$") then
+        out = out:sub(2)
+    end
+
+    return out
+end
+
+--[[
+    minecraft's yaw: 0 looks towards +z and the value decreases anticlockwise,
+    so the heading from one point to another is -atan2(dx, dz).
+]]
+function M.angle_to(px, pz, tx, tz)
+    return -math.deg(math.atan2(tx - px, tz - pz))
+end
+
+--[[
+    shortest signed difference between two headings, in (-180, 180].
+]]
+function M.angle_delta(from, to)
+    local d = (to - from) % 360
+    if d > 180 then d = d - 360 end
+    return d
+end
+
+--[[
     flatten one prediction into template fields.
 
-    chunk_coords picks between ninb's chunk numbers and block coordinates,
-    which is the "block or chunk" toggle every tool offers.
+    every coordinate space is filled in, because a run crosses all three: the
+    stronghold is found in chunk coordinates, walked to in block coordinates
+    and travelled to through the nether at an eighth of the scale.
 ]]
-function M.prediction_fields(best, data, chunk_coords)
+function M.prediction_fields(best, data, coords)
     if type(best) ~= "table" then return nil end
 
     local fields = {}
@@ -104,18 +140,48 @@ function M.prediction_fields(best, data, chunk_coords)
     end
 
     if type(best.certainty) == "number" then
-        fields.certainty = M.number(round(best.certainty * 100, 1)) .. "%"
+        fields.certaintyValue = best.certainty * 100
+        fields.certainty = M.number(round(fields.certaintyValue, 1)) .. "%"
     end
 
-    -- ninb reports chunk coordinates; block is the chunk centre
+    -- ninb reports the stronghold chunk; the block is that chunk's centre, and
+    -- the nether portal for it is an eighth of the way out
     local cx, cz = best.chunkX, best.chunkZ
     if type(cx) == "number" and type(cz) == "number" then
-        if chunk_coords == false then
-            fields.x = M.number(cx * 16 + 4)
-            fields.z = M.number(cz * 16 + 4)
+        local bx, bz = cx * 16 + 4, cz * 16 + 4
+
+        fields.blockX, fields.blockZ = M.number(bx), M.number(bz)
+        fields.netherX = M.number(math.floor(bx / 8))
+        fields.netherZ = M.number(math.floor(bz / 8))
+
+        if coords == "chunk" then
+            fields.x, fields.z = M.number(cx), M.number(cz)
+        elseif coords == "nether" then
+            fields.x, fields.z = fields.netherX, fields.netherZ
         else
-            fields.x = M.number(cx)
-            fields.z = M.number(cz)
+            fields.x, fields.z = fields.blockX, fields.blockZ
+        end
+    end
+
+    if type(best.overworldDistance) == "number" then
+        fields.distance = M.number(math.floor(best.overworldDistance))
+        fields.netherDistance = M.number(math.floor(best.overworldDistance / 8))
+    end
+
+    -- the heading to the stronghold, and how far the player has to turn to
+    -- reach it. both need the player, which lives outside the prediction.
+    local player = type(data) == "table" and data.playerPosition or nil
+    if type(player) == "table" and type(player.xInOverworld) == "number" and
+        type(best.chunkX) == "number" then
+        local angle = M.angle_to(player.xInOverworld, player.zInOverworld,
+            best.chunkX * 16 + 4, best.chunkZ * 16 + 4)
+
+        fields.angle = M.fixed(angle, 2)
+
+        if type(player.horizontalAngle) == "number" then
+            fields.playerAngle = M.fixed(player.horizontalAngle, 2)
+            fields.angleDelta = M.fixed(
+                M.angle_delta(player.horizontalAngle, angle), 1)
         end
     end
 
@@ -124,18 +190,23 @@ function M.prediction_fields(best, data, chunk_coords)
 end
 
 --[[
-    the best prediction. ninb sorts them, so [1] is the one you want. an empty
-    list means no throws yet, which is not an error.
+    the information messages ninb shows under the readout, as plain strings.
 ]]
-function M.stronghold_fields(data)
-    if type(data) ~= "table" then return nil end
+function M.messages(data)
+    local out = {}
+    local list = type(data) == "table" and data.informationMessages or nil
 
-    local predictions = data.predictions
-    if type(predictions) ~= "table" or #predictions == 0 then
-        return nil
+    if type(list) == "table" then
+        for _, entry in ipairs(list) do
+            if type(entry) == "table" and type(entry.message) == "string" then
+                table.insert(out, entry.message)
+            elseif type(entry) == "string" then
+                table.insert(out, entry)
+            end
+        end
     end
 
-    return M.prediction_fields(predictions[1], data, true)
+    return out
 end
 
 --[[

@@ -260,11 +260,17 @@ function M.bind(rt)
         st.ninb_panel = ninb_overlay.new(cfg)
         util.warn(("ninb overlay on, polling :%d every %dms"):format(port, poll))
 
+        local want_info = util.bool((cfg.show_info), false)
+
         while st.ninb_overlay do
             ninb_api.fetch("stronghold", port)
+            if want_info then
+                ninb_api.fetch("informationMessages", port)
+            end
 
             local ok = pcall(function()
-                st.ninb_panel:draw(ninb_api.read("stronghold"), ninb_api.now())
+                st.ninb_panel:draw(ninb_api.read("stronghold"), ninb_api.now(),
+                    want_info and ninb_api.messages(ninb_api.read("informationMessages")) or nil)
             end)
             if not ok then
                 util.warn("ninb overlay: draw failed")
