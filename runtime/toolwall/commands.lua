@@ -13,6 +13,7 @@
 
 local waywall = require("waywall")
 local launch = require("toolwall.launch")
+local ninb_api = require("toolwall.ninb_api")
 local util = require("toolwall.util")
 
 local M = {}
@@ -225,6 +226,65 @@ function M.bind(rt)
             waywall.show_floating(false)
         else
             force_show_floating()
+        end
+    end)
+
+    --[[
+        ninb's stronghold readout, drawn as scene text.
+
+        runs as a loop inside the keybind's coroutine: waywall.sleep yields, so
+        other handlers keep running while this waits. the loop dies with the
+        lua vm, so a config reload stops it without any cleanup.
+
+        the fetch is fire-and-forget, so each pass draws what the previous pass
+        fetched. one poll of lag, invisible at this refresh rate.
+    ]]
+    M.register("ninb.overlay", function(st)
+        if st.ninb_overlay then
+            st.ninb_overlay = false
+            if st.ninb_text then
+                st.ninb_text:close()
+                st.ninb_text = nil
+            end
+            return
+        end
+
+        local ninb = st.doc.ninb or {}
+        local overlay = ninb.overlay or {}
+        local port = ninb.port or ninb_api.DEFAULT_PORT
+        local poll = overlay.poll_ms or 500
+        local template = overlay.template or "{chunkX}, {chunkZ}  {certainty}"
+
+        st.ninb_overlay = true
+
+        while st.ninb_overlay do
+            ninb_api.fetch("stronghold", port)
+
+            local fields = ninb_api.stronghold_fields(ninb_api.read("stronghold"))
+            local line = fields and ninb_api.render(template, fields) or ""
+
+            -- text has no setter, so redrawing means replacing the object
+            if st.ninb_text then
+                st.ninb_text:close()
+                st.ninb_text = nil
+            end
+
+            if line ~= "" then
+                local ok, obj = pcall(waywall.text, line, {
+                    x = overlay.x or 8,
+                    y = overlay.y or 40,
+                    color = overlay.color or "#ffffffff",
+                    size = overlay.size or 2,
+                    depth = 10,
+                })
+                if ok then st.ninb_text = obj end
+            end
+
+            local slept = pcall(waywall.sleep, poll)
+            if not slept then
+                util.warn("ninb overlay: sleep failed, stopping")
+                st.ninb_overlay = false
+            end
         end
     end)
 

@@ -357,11 +357,63 @@ pub struct Ninb {
     /// Command used to launch it. `{jar}` is replaced with the path above.
     #[serde(default = "ninb_command")]
     pub command: String,
+    /// port ninb's http api listens on. off by default in ninb's settings.
+    #[serde(default = "ninb_port")]
+    pub port: u16,
+    /// draw ninb's readout into the scene instead of reading its window
+    #[serde(default)]
+    pub overlay: NinbOverlay,
+}
+
+/// ninb's stronghold prediction, drawn as scene text.
+///
+/// a floating window is subject to show_floating, which is global, so ninb's
+/// own window appears and vanishes with the editor. scene text is not a
+/// window, so it stays put.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NinbOverlay {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub x: i32,
+    #[serde(default)]
+    pub y: i32,
+    #[serde(default = "two")]
+    pub size: u32,
+    #[serde(default = "white")]
+    pub color: String,
+    /// placeholders come from the best prediction: chunkX, chunkZ, certainty,
+    /// overworldDistance, throws
+    #[serde(default = "ninb_template")]
+    pub template: String,
+    /// how often to re-fetch, in milliseconds
+    #[serde(default = "ninb_poll")]
+    pub poll_ms: u32,
+}
+
+impl Default for NinbOverlay {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            x: 8,
+            y: 40,
+            size: 2,
+            color: white(),
+            template: ninb_template(),
+            poll_ms: ninb_poll(),
+        }
+    }
 }
 
 impl Default for Ninb {
     fn default() -> Self {
-        Self { jar: String::new(), autostart: false, command: ninb_command() }
+        Self {
+            jar: String::new(),
+            autostart: false,
+            command: ninb_command(),
+            port: ninb_port(),
+            overlay: NinbOverlay::default(),
+        }
     }
 }
 
@@ -415,6 +467,8 @@ pub enum Command {
     GuiToggle,
     #[serde(rename = "ninb.toggle")]
     NinbToggle,
+    #[serde(rename = "ninb.overlay")]
+    NinbOverlay,
     #[serde(rename = "overlay.toggle")]
     OverlayToggle,
     #[serde(rename = "exec")]
@@ -495,5 +549,10 @@ fn gui_command() -> String { "toolwall-gui".into() }
 fn launch_delay() -> u32 { 400 }
 fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }
 fn ninb_command() -> String { "java -jar {jar}".into() }
+fn ninb_port() -> u16 { 52533 }
+fn ninb_poll() -> u32 { 500 }
+fn ninb_template() -> String { "{chunkX}, {chunkZ}  {certainty}".into() }
+fn two() -> u32 { 2 }
+fn white() -> String { "#ffffffff".into() }
 fn default_opacity() -> f32 { 0.92 }
 fn default_font_size() -> f32 { 18.0 }
