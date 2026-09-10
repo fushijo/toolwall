@@ -389,6 +389,10 @@ pub struct NinbOverlay {
     /// how often to re-fetch, in milliseconds
     #[serde(default = "ninb_poll")]
     pub poll_ms: u32,
+    /// shown while ninb has no prediction yet. without this the overlay draws
+    /// nothing before the first throw and looks broken.
+    #[serde(default = "ninb_idle")]
+    pub idle_text: String,
 }
 
 impl Default for NinbOverlay {
@@ -401,6 +405,7 @@ impl Default for NinbOverlay {
             color: white(),
             template: ninb_template(),
             poll_ms: ninb_poll(),
+            idle_text: ninb_idle(),
         }
     }
 }
@@ -551,6 +556,7 @@ fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }
 fn ninb_command() -> String { "java -jar {jar}".into() }
 fn ninb_port() -> u16 { 52533 }
 fn ninb_poll() -> u32 { 500 }
+fn ninb_idle() -> String { "ninb: no throws".into() }
 fn ninb_template() -> String { "{chunkX}, {chunkZ}  {certainty}".into() }
 fn two() -> u32 { 2 }
 fn white() -> String { "#ffffffff".into() }

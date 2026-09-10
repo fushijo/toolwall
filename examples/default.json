@@ -219,7 +219,10 @@
   "ninb": {
     "jar": "",
     "command": "java -jar {jar}",
-    "autostart": true
+    "autostart": true,
+    "overlay": {
+      "idle_text": "ninb: no throws"
+    }
   },
   "keybinds": [
     {

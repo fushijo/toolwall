@@ -246,6 +246,7 @@ function M.bind(rt)
                 st.ninb_text:close()
                 st.ninb_text = nil
             end
+            util.warn("ninb overlay off")
             return
         end
 
@@ -256,12 +257,16 @@ function M.bind(rt)
         local template = overlay.template or "{chunkX}, {chunkZ}  {certainty}"
 
         st.ninb_overlay = true
+        util.warn(("ninb overlay on, polling :%d every %dms"):format(port, poll))
 
         while st.ninb_overlay do
             ninb_api.fetch("stronghold", port)
 
+            -- idle text keeps the overlay visible before the first throw, so
+            -- you can see it is alive and where it sits
             local fields = ninb_api.stronghold_fields(ninb_api.read("stronghold"))
-            local line = fields and ninb_api.render(template, fields) or ""
+            local line = fields and ninb_api.render(template, fields)
+                or (overlay.idle_text or "ninb: no throws")
 
             -- text has no setter, so redrawing means replacing the object
             if st.ninb_text then
