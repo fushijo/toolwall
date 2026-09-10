@@ -42,7 +42,7 @@ local CHAR_W = 8
 local CHAR_H = 16
 
 -- eye throw table, as character columns
-local THROW_COLS = { 1, 10, 19, 28 }
+local THROW_COLS = { 1, 10, 19, 30 }
 
 function M.new(cfg)
     return setmetatable({
@@ -50,6 +50,9 @@ function M.new(cfg)
         objects = {},
         last_line = nil,
         last_change = 0,
+        -- what is on screen right now, so an unchanged readout costs nothing
+        signature = nil,
+        shown = false,
         warned = false,
     }, Overlay)
 end
@@ -59,6 +62,8 @@ function Overlay:clear()
         pcall(function() obj:close() end)
     end
     self.objects = {}
+    self.shown = false
+    self.signature = nil
 end
 
 local function opt(cfg, key, fallback)
@@ -69,6 +74,15 @@ end
 
 local function cell(text, colour, col)
     return { text = tostring(text or ""), colour = colour, col = col or 0 }
+end
+
+-- a rule between sections. it is a row so that it takes part in layout.
+local SEPARATOR = { separator = true }
+
+function Overlay:_separator(rows)
+    if util.bool(opt(self.cfg, "separators", false), false) and #rows > 0 then
+        table.insert(rows, SEPARATOR)
+    end
 end
 
 --[[
@@ -109,6 +123,29 @@ local function wrap(text, width)
 
     if line ~= "" then table.insert(lines, line) end
     return lines
+end
+
+--[[
+    one throw's angle, with its correction shown the way ninb shows it.
+
+    nudging a throw with ninb's hotkeys does not rewrite the angle you measured,
+    it records how many increments you moved it by. "120.02+2" is the measured
+    angle and two nudges up, which is the number you need when you are deciding
+    whether to nudge again.
+]]
+function Overlay:_angle_cell(throw)
+    local base = throw.angleWithoutCorrection
+    if type(base) ~= "number" or
+        not util.bool(opt(self.cfg, "show_correction", true), true) then
+        return api.fixed(throw.angle, 2)
+    end
+
+    local increments = tonumber(throw.correctionIncrements) or 0
+    if increments == 0 then
+        return api.fixed(base, 2)
+    end
+
+    return ("%s%+d"):format(api.fixed(base, 2), increments)
 end
 
 --[[
@@ -174,7 +211,9 @@ function Overlay:_ninbot_rows(fields, data, messages)
         })
     end
 
-    if util.bool(opt(cfg, "show_info", false), false) then
+    if util.bool(opt(cfg, "show_info", false), false) and #(messages or {}) > 0 then
+        self:_separator(rows)
+
         local width = math.max(16, math.floor(opt(cfg, "wrap_width", 44)))
         for _, message in ipairs(messages or {}) do
             for _, line in ipairs(wrap(message, width)) do
@@ -188,6 +227,7 @@ function Overlay:_ninbot_rows(fields, data, messages)
 
     if throw_rows > 0 and type(throws) == "table" and #throws > 0 then
         local header_colour = opt(cfg, "header_color", "#8899aaff")
+        self:_separator(rows)
 
         if util.bool(opt(cfg, "show_throw_header", true), true) then
             table.insert(rows, {
@@ -206,7 +246,7 @@ function Overlay:_ninbot_rows(fields, data, messages)
                 table.insert(rows, {
                     cell(api.fixed(t.xInOverworld, 2), value_colour, THROW_COLS[1]),
                     cell(api.fixed(t.zInOverworld, 2), value_colour, THROW_COLS[2]),
-                    cell(api.fixed(t.angle, 2), value_colour, THROW_COLS[3]),
+                    cell(self:_angle_cell(t), value_colour, THROW_COLS[3]),
                     cell(api.fixed(t.error, 4), header_colour, THROW_COLS[4]),
                 })
             end
@@ -317,20 +357,67 @@ function Overlay:_text(line, x, y, colour, size, depth)
 end
 
 --[[
-    redraw everything. text objects cannot be mutated, so a change of any kind
-    means closing and recreating, which is cheap enough at poll rates.
+    where every row sits, and how big the whole thing is.
+
+    separators take part in layout so the panel grows to hold them, and so the
+    rows after one are pushed down by exactly the rule's own height.
+]]
+function Overlay:_layout(rows)
+    local cfg = self.cfg
+
+    local size = math.max(1, math.floor(opt(cfg, "size", 2)))
+    local gap = math.floor(opt(cfg, "line_gap", 2))
+    local pitch = CHAR_H * size + gap
+    local rule = math.max(1, math.floor(opt(cfg, "separator_width", 1)))
+    local rule_pitch = rule + gap
+
+    local out, y, widest = {}, 0, 0
+
+    for _, row in ipairs(rows) do
+        if row.separator then
+            table.insert(out, { separator = true, y = y })
+            y = y + rule_pitch
+        else
+            table.insert(out, { cells = row, y = y })
+            for _, c in ipairs(row) do
+                widest = math.max(widest, c.col + #c.text)
+            end
+            y = y + pitch
+        end
+    end
+
+    -- every row advanced by its own trailing gap; the last one has nothing
+    -- underneath it to be separated from
+    local height = math.max(0, y - gap)
+
+    return out, widest * CHAR_W * size, height, size, rule
+end
+
+--[[
+    redraw. text objects cannot be mutated, so any change means closing and
+    recreating everything, which is why nothing is touched when the readout
+    reads the same as last time. That is what makes a fast poll cheap.
 ]]
 function Overlay:draw(data, now, messages)
     local cfg = self.cfg
-    self:clear()
 
     local rows = self:rows(data, messages)
-    if #rows == 0 then return end
+    if #rows == 0 then
+        if self.shown then
+            self:clear()
+            self.shown = false
+        end
+        return
+    end
 
     local joined = ""
     for _, row in ipairs(rows) do
-        for _, c in ipairs(row) do joined = joined .. c.text .. "\t" end
-        joined = joined .. "\n"
+        if row.separator then
+            joined = joined .. "-\n"
+        else
+            for _, c in ipairs(row) do joined = joined .. c.text .. "\t" .. c.colour .. "\t" end
+            joined = joined .. "\n"
+        end
     end
 
     -- stale handling: drop the readout when nothing has changed for a while
@@ -341,28 +428,32 @@ function Overlay:draw(data, now, messages)
 
     local hide_after = math.floor(opt(cfg, "hide_after_ms", 0))
     if hide_after > 0 and now and (now - self.last_change) > hide_after then
+        if self.shown then
+            self:clear()
+            self.shown = false
+        end
         return
     end
 
+    -- nothing on screen would change, so leave the scene objects alone
+    if self.shown and joined == self.signature then
+        return
+    end
+
+    self:clear()
+
     local x = math.floor(opt(cfg, "x", 8))
     local y = math.floor(opt(cfg, "y", 40))
-    local size = math.max(1, math.floor(opt(cfg, "size", 2)))
     local pad = math.floor(opt(cfg, "padding", 6))
 
-    -- rows never overlap: the pitch is the glyph height plus a chosen gap
-    local pitch = CHAR_H * size + math.floor(opt(cfg, "line_gap", 2))
+    local placed, text_w, text_h, size, rule = self:_layout(rows)
 
-    if util.bool(opt(cfg, "background", false), false) then
-        -- fixed width face, so the widest row is a character count
-        local widest = 0
-        for _, row in ipairs(rows) do
-            for _, c in ipairs(row) do
-                widest = math.max(widest, c.col + #c.text)
-            end
-        end
+    local panel = util.bool(opt(cfg, "background", false), false)
+    local rule_x = panel and (x - pad) or x
+    local rule_w = panel and (text_w + pad * 2) or text_w
 
-        local w = widest * CHAR_W * size + pad * 2
-        local h = (#rows - 1) * pitch + CHAR_H * size + pad * 2
+    if panel then
+        local w, h = text_w + pad * 2, text_h + pad * 2
 
         local border = math.floor(opt(cfg, "border_width", 0))
         if border > 0 then
@@ -378,12 +469,20 @@ function Overlay:draw(data, now, messages)
             opt(cfg, "background_color", "#000000b0"), 8)
     end
 
-    for index, row in ipairs(rows) do
-        for _, c in ipairs(row) do
-            self:_text(c.text, x + c.col * CHAR_W * size, y + (index - 1) * pitch,
-                c.colour, size, 9)
+    for _, row in ipairs(placed) do
+        if row.separator then
+            self:_rect({ x = rule_x, y = y + row.y, w = rule_w, h = rule },
+                opt(cfg, "separator_color", "#8899aa80"), 9)
+        else
+            for _, c in ipairs(row.cells) do
+                self:_text(c.text, x + c.col * CHAR_W * size, y + row.y,
+                    c.colour, size, 10)
+            end
         end
     end
+
+    self.signature = joined
+    self.shown = true
 end
 
 return M

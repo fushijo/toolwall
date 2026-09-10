@@ -58,6 +58,7 @@ function M.reset()
     M.state_value = { screen = "title" }
     M.view_ready = false
     M.launched = {}
+    M.sleep_budget = nil
     M.processes = {}
     M.next_pid = 1000
     M.held = {}
@@ -262,9 +263,21 @@ function M.exec(command)
     end
 end
 
+--[[
+    Tests drive loops that only stop when a sleep fails, which is also what
+    happens for real when the coroutine is torn down. Budget the sleeps so a
+    loop runs a known number of times and then unwinds the way it would.
+]]
 function M.sleep(ms)
     guard("sleep")
     record("sleep", ms)
+
+    if M.sleep_budget then
+        M.sleep_budget = M.sleep_budget - 1
+        if M.sleep_budget < 0 then
+            error("sleep budget exhausted", 0)
+        end
+    end
 end
 
 function M.show_floating(show)

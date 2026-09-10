@@ -32,6 +32,100 @@ function M.get(name)
 end
 
 --[[
+    Run the ninb readout until something turns it off.
+
+    Lives out here because both a keybind and the load event start it, and both
+    of those run inside a waywall coroutine, which is what waywall.sleep needs.
+]]
+function M.run_ninb_overlay(st)
+    local ninb = st.doc.ninb or {}
+    local cfg = ninb.overlay or {}
+    local port = ninb.port or ninb_api.DEFAULT_PORT
+
+    local live = util.bool(cfg.live, true)
+    local tick = math.max(16, math.floor(cfg.poll_ms or (live and 50 or 500)))
+
+    local queries = { ninb_api.STRONGHOLD }
+    if util.bool(cfg.show_info, false) then
+        table.insert(queries, ninb_api.MESSAGES)
+    end
+
+    -- a readout left over from a previous session is worse than none
+    for _, query in ipairs(queries) do
+        ninb_api.forget(query)
+    end
+
+    if st.ninb_overlay then
+        return
+    end
+
+    st.ninb_overlay = true
+    st.ninb_panel = ninb_overlay.new(cfg)
+
+    --[[
+        Streaming holds the connection open and ninb pushes on every
+        change, so the readout keeps up with F3+C spam. Restarting the
+        script is a no-op while it is alive (flock), so it doubles as the
+        way to recover after ninb restarts.
+
+        If no stream file appears at all - no flock, no curl, api off - fall
+        back to the one-shot fetches, which are slower but always work.
+    ]]
+    local RESTART_MS = 5000
+    local GIVE_UP_MS = 3000
+    local FETCH_MS = 250
+
+    local streaming = live
+    local began = ninb_api.now()
+    local last_start, last_fetch = 0, 0
+
+    util.warn(("ninb overlay on, %s :%d"):format(
+        streaming and "streaming from" or "polling", port))
+
+    while st.ninb_overlay do
+        local now = ninb_api.now()
+
+        if streaming then
+            if now - last_start >= RESTART_MS then
+                last_start = now
+                for _, query in ipairs(queries) do
+                    ninb_api.stream(query, port)
+                end
+            end
+
+            if not ninb_api.read(ninb_api.STRONGHOLD) and (now - began) > GIVE_UP_MS then
+                util.warn("ninb stream did not start, falling back to polling")
+                streaming = false
+            end
+        elseif now - last_fetch >= FETCH_MS then
+            last_fetch = now
+            for _, query in ipairs(queries) do
+                ninb_api.fetch(query, port)
+            end
+        end
+
+        local ok = pcall(function()
+            st.ninb_panel:draw(ninb_api.read(ninb_api.STRONGHOLD), now,
+                ninb_api.messages(ninb_api.read(ninb_api.MESSAGES)))
+        end)
+        if not ok then
+            util.warn("ninb overlay: draw failed")
+        end
+
+        local slept = pcall(waywall.sleep, tick)
+        if not slept then
+            util.warn("ninb overlay: sleep failed, stopping")
+            st.ninb_overlay = false
+        end
+    end
+
+    if st.ninb_panel then
+        st.ninb_panel:clear()
+        st.ninb_panel = nil
+    end
+end
+
+--[[
     Bind the built-in commands. Called once the runtime state is populated.
 ]]
 function M.bind(rt)
@@ -251,42 +345,7 @@ function M.bind(rt)
             return
         end
 
-        local ninb = st.doc.ninb or {}
-        local cfg = ninb.overlay or {}
-        local port = ninb.port or ninb_api.DEFAULT_PORT
-        local poll = math.max(100, math.floor(cfg.poll_ms or 500))
-
-        st.ninb_overlay = true
-        st.ninb_panel = ninb_overlay.new(cfg)
-        util.warn(("ninb overlay on, polling :%d every %dms"):format(port, poll))
-
-        local want_info = util.bool((cfg.show_info), false)
-
-        while st.ninb_overlay do
-            ninb_api.fetch("stronghold", port)
-            if want_info then
-                ninb_api.fetch("informationMessages", port)
-            end
-
-            local ok = pcall(function()
-                st.ninb_panel:draw(ninb_api.read("stronghold"), ninb_api.now(),
-                    want_info and ninb_api.messages(ninb_api.read("informationMessages")) or nil)
-            end)
-            if not ok then
-                util.warn("ninb overlay: draw failed")
-            end
-
-            local slept = pcall(waywall.sleep, poll)
-            if not slept then
-                util.warn("ninb overlay: sleep failed, stopping")
-                st.ninb_overlay = false
-            end
-        end
-
-        if st.ninb_panel then
-            st.ninb_panel:clear()
-            st.ninb_panel = nil
-        end
+        M.run_ninb_overlay(st)
     end)
 
     --[[

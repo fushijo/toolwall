@@ -105,6 +105,10 @@ local function build_waywall_config(doc)
 
             ninb_anchor = ninb_anchor_value(theme.ninb_anchor),
             ninb_opacity = theme.ninb_opacity or 1.0,
+
+            -- needs the toolwall patch. an unpatched waywall ignores unknown
+            -- keys, so this is safe to send either way.
+            ninb_hidden = util.bool(theme.ninb_hidden, false),
         },
 
         window = {
@@ -254,6 +258,19 @@ function M.setup(opts)
     if doc.hud and doc.hud.follow_state then
         waywall.listen("state", function()
             if rt.hud then rt.hud:refresh() end
+        end)
+    end
+
+    --[[
+        Start the ninb readout on its own, if it is enabled.
+
+        It has to be its own listener: the loop only returns when the readout
+        is turned off, and every listener gets its own coroutine, so anything
+        sharing one with it would never run.
+    ]]
+    if util.bool((doc.ninb and doc.ninb.overlay or {}).enabled, false) then
+        waywall.listen("load", function()
+            commands.run_ninb_overlay(rt)
         end)
     end
 

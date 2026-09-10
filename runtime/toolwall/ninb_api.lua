@@ -26,12 +26,24 @@ local M = {}
 
 M.DEFAULT_PORT = 52533
 
-local function cache_path(name)
+-- ninb's route names, which are hyphenated and not the json field names
+M.STRONGHOLD = "stronghold"
+M.MESSAGES = "information-messages"
+
+--[[
+    Where the cache and stream scripts live. Overridable so the test suite can
+    keep out of a running session's files.
+]]
+function M.runtime_dir()
     local dir = os.getenv("XDG_RUNTIME_DIR")
     if not dir or dir == "" then
-        dir = "/tmp"
+        return "/tmp"
     end
-    return dir .. "/toolwall-ninb-" .. name .. ".json"
+    return dir
+end
+
+local function cache_path(name)
+    return M.runtime_dir() .. "/toolwall-ninb-" .. name .. ".json"
 end
 
 function M.now()
@@ -40,15 +52,75 @@ function M.now()
     return os.time() * 1000
 end
 
+local function url_for(query, port)
+    return ("http://localhost:%d/api/v1/%s"):format(port or M.DEFAULT_PORT, query)
+end
+
 --[[
-    kick off a fetch. returns immediately; the answer lands in the cache file
-    whenever curl gets round to it.
+    kick off a one-shot fetch. returns immediately; the answer lands in the
+    cache file whenever curl gets round to it, so a read always sees the
+    previous fetch. that is a whole poll of lag, which is why streaming below
+    exists.
 ]]
 function M.fetch(query, port)
-    local url = ("http://localhost:%d/api/v1/%s"):format(port or M.DEFAULT_PORT, query)
-
     -- exec splits on spaces, so every token here has to be space-free
-    waywall.exec(("curl -sS --max-time 2 %s -o %s"):format(url, cache_path(query)))
+    waywall.exec(("curl -sS --max-time 2 %s -o %s"):format(
+        url_for(query, port), cache_path(query)))
+end
+
+--[[
+    STREAMING
+
+    ninb serves server-sent events at <query>/events and pushes the whole
+    document every time it changes. That is the difference between seeing an
+    angle change on the next poll and seeing it as it happens, which matters
+    when you are spamming F3+C to line a throw up.
+
+    waywall's lua has no sockets and exec() gives no handle, so the stream is
+    held by a shell script: curl streams, the loop keeps only the newest event,
+    and it lands in the cache file by rename so a read never catches a half
+    written line. The file never grows.
+
+    flock is the single-instance guard. Re-running the script while one is
+    alive exits immediately, and the lock is released when the holder dies, so
+    "start it again" is both the way to start it and the way to restart it
+    after ninb or waywall went away.
+]]
+local function stream_path(query)
+    return M.runtime_dir() .. "/toolwall-ninb-" .. query .. ".sh"
+end
+
+function M.stream(query, port)
+    local path = stream_path(query)
+    local out = cache_path(query)
+
+    local fh = io.open(path, "w")
+    if not fh then
+        return false
+    end
+
+    fh:write(([[
+#!/bin/sh
+exec flock -n '%s.lock' /bin/sh -c '
+    curl -sS -N "%s" | while IFS= read -r line; do
+        case "$line" in
+            "data: "*) printf "%%s\\n" "${line#data: }" > "%s.part" && mv "%s.part" "%s" ;;
+        esac
+    done
+'
+]]):format(out, url_for(query .. "/events", port), out, out, out))
+    fh:close()
+
+    waywall.exec("sh " .. path)
+    return true
+end
+
+--[[
+    throw away whatever a previous session left behind, so a stale readout is
+    never mistaken for a live one.
+]]
+function M.forget(query)
+    os.remove(cache_path(query))
 end
 
 --[[

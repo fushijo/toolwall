@@ -20,6 +20,16 @@ launch.proc_cmdline = function(pid)
     return waywall.processes[pid]
 end
 
+-- The readout writes cache and stream scripts into XDG_RUNTIME_DIR. Point them
+-- somewhere disposable so running tests cannot disturb a live session.
+local ninb_api = require("toolwall.ninb_api")
+local TEST_RUNTIME = os.tmpname()
+os.remove(TEST_RUNTIME)
+os.execute("mkdir -p '" .. TEST_RUNTIME .. "'")
+ninb_api.runtime_dir = function()
+    return TEST_RUNTIME
+end
+
 local passed, failed = 0, 0
 
 local function check(name, fn)
@@ -524,7 +534,8 @@ local NINB_RESPONSE = [==[
       { "chunkX": 22, "chunkZ": 133, "certainty": 0.149, "overworldDistance": 2132.0 } ],
     "eyeThrows": [
       { "xInOverworld": -214.71, "zInOverworld": 196.78,
-        "angle": -16.49, "error": 0.0002 } ] }
+        "angle": -16.49, "angleWithoutCorrection": -16.4944,
+        "correctionIncrements": 2, "error": 0.0002 } ] }
 ]==]
 
 local function ninb_data()
@@ -649,7 +660,118 @@ check("eye throws keep the precision ninb reports them with", function()
         background = false,
     })
 
-    assert_eq(joined(text), "-214.71|196.78|-16.49|0.0002", "one throw, four columns")
+    assert_eq(joined(text), "-214.71|196.78|-16.49+2|0.0002", "one throw, four columns")
+end)
+
+check("a nudged throw shows what was measured and how far it moved", function()
+    -- ninb does not rewrite the angle when you nudge it, it counts the
+    -- increments, and that count is what you need to decide whether to nudge
+    -- again. "-16.49+2" is the measurement plus two nudges up.
+    local cfg = {
+        layout = "ninbot", show_location = false, show_certainty = false,
+        show_nether = false, throw_rows = 1, show_throw_header = false,
+        background = false,
+    }
+    local text = drawn(cfg)
+    assert_eq(text[3].body, "-16.49+2", "measured angle and increments")
+
+    cfg.show_correction = false
+    text = drawn(cfg)
+    assert_eq(text[3].body, "-16.49", "corrected angle when nudges are off")
+end)
+
+check("separators take up room instead of overlapping the rows", function()
+    local cfg = {
+        layout = "ninbot", show_location = true, show_certainty = false,
+        show_nether = false, show_distance = false, throw_rows = 1,
+        show_throw_header = false, background = true, padding = 0,
+        size = 2, line_gap = 2, separator_width = 3, x = 0, y = 0,
+    }
+
+    local plain, plain_rects = drawn(cfg)
+    cfg.separators = true
+    local ruled, ruled_rects = drawn(cfg)
+
+    assert_eq(#ruled_rects, #plain_rects + 1, "one rule between the two sections")
+
+    -- the rule is 3px tall with a 2px gap under it, so everything below it
+    -- moves down by 5 and the panel grows by the same
+    local function last_y(list)
+        return list[#list].options.y
+    end
+    assert_eq(last_y(ruled) - last_y(plain), 5, "rows below the rule move down")
+
+    local function panel(list)
+        for _, r in ipairs(list) do
+            if r.dst.h > 6 then return r end
+        end
+    end
+    assert_eq(panel(ruled_rects).dst.h - panel(plain_rects).dst.h, 5, "the panel grows to fit it")
+end)
+
+check("an unchanged readout is not redrawn", function()
+    -- text objects cannot be mutated, so a redraw closes and recreates every
+    -- object. At a 50ms tick that has to not happen unless something moved.
+    waywall.reset()
+    waywall.finish_startup()
+
+    package.loaded["toolwall.ninb_overlay"] = nil
+    local overlay = require("toolwall.ninb_overlay")
+
+    local panel = overlay.new({ layout = "ninbot", background = false })
+    local data = ninb_data()
+
+    panel:draw(data, 1000)
+    local first = waywall.live_count()
+    assert_eq(first > 0, true, "something was drawn")
+
+    panel:draw(data, 1050)
+    assert_eq(waywall.live_count(), first, "same readout, same objects")
+
+    data.predictions[1].chunkX = 15
+    panel:draw(data, 1100)
+    assert_eq(waywall.live_count(), first, "a changed readout is rebuilt, not stacked")
+end)
+
+check("the readout starts on its own when it is enabled", function()
+    -- with ninb's own window hidden the readout is the only thing showing the
+    -- stronghold, so it cannot wait for a keypress
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "ninb": { "jar": "~/ninb.jar", "overlay": { "enabled": true } } }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    assert_eq(toolwall.rt.ninb_overlay, nil, "not running before load")
+
+    -- finish_startup fires the load event, which is what starts it. the loop
+    -- only ends when a sleep fails, which is what teardown looks like.
+    waywall.sleep_budget = 2
+    waywall.finish_startup()
+
+    local sleeps = 0
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "sleep" then sleeps = sleeps + 1 end
+    end
+    assert_eq(sleeps, 3, "the loop ran until its sleeps ran out")
+
+    os.remove(path)
+end)
+
+check("the readout stays off when it is not enabled", function()
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ] }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.sleep_budget = 2
+    waywall.finish_startup()
+
+    assert_eq(toolwall.rt.ninb_overlay, nil, "nothing started")
+    os.remove(path)
 end)
 
 print(("\n%d passed, %d failed"):format(passed, failed))
