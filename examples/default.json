@@ -218,7 +218,8 @@
   ],
   "ninb": {
     "jar": "",
-    "command": "java -jar {jar}"
+    "command": "java -jar {jar}",
+    "autostart": true
   },
   "keybinds": [
     {
@@ -308,7 +309,8 @@
     "appearance": {
       "opacity": 0.9,
       "dark": true,
-      "font_size": 18.0
+      "font_size": 18.0,
+      "font_path": ""
     }
   }
 }

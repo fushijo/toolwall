@@ -61,6 +61,16 @@ pub fn show(
              editor. Any window can also be moved with Shift + drag.",
         );
 
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut doc.ninb.autostart, "Open Ninjabrain Bot on startup");
+        });
+        ui.weak(
+            "waywall anchors whichever floating window opens first, and an anchored \
+             window cannot be shift-dragged. Starting ninb first means it takes the \
+             anchor and the editor stays movable.",
+        );
+        ui.add_space(4.0);
+
         anchor_editor(ui, doc);
 
         ui.add_space(4.0);
@@ -116,7 +126,11 @@ pub fn show(
                 ui.end_row();
 
                 ui.label("Font size");
-                ui.add(egui::Slider::new(&mut look.font_size, 10.0..=24.0).fixed_decimals(0));
+                ui.add(egui::Slider::new(&mut look.font_size, 10.0..=32.0).fixed_decimals(0));
+                ui.end_row();
+
+                ui.label("Font").on_hover_text("a .ttf or .otf. blank uses the built-in one.");
+                path_field(ui, &mut look.font_path, browser, PickTarget::Font, "ttf");
                 ui.end_row();
             });
     });

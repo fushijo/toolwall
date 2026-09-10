@@ -43,15 +43,20 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                             optional_text(ui, &mut mode.label);
                             ui.end_row();
 
-                            ui.label("Width");
+                            ui.label("Width").on_hover_text("0 stretches to the window");
                             ui.add(
-                                egui::DragValue::new(&mut mode.resolution.width).range(0..=16384),
+                                egui::Slider::new(&mut mode.resolution.width, 0..=3840)
+                                    .clamping(egui::SliderClamping::Never),
                             );
                             ui.end_row();
 
-                            ui.label("Height");
+                            ui.label("Height").on_hover_text(
+                                "0 stretches to the window. tall modes go well past the \
+                                 slider; type the number in.",
+                            );
                             ui.add(
-                                egui::DragValue::new(&mut mode.resolution.height).range(0..=16384),
+                                egui::Slider::new(&mut mode.resolution.height, 0..=2160)
+                                    .clamping(egui::SliderClamping::Never),
                             );
                             ui.end_row();
 
@@ -63,7 +68,9 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                                 }
                                 if let Some(sens) = &mut mode.sensitivity {
                                     ui.add(
-                                        egui::DragValue::new(sens).speed(0.01).range(0.0001..=1000.0),
+                                        egui::Slider::new(sens, 0.01..=20.0)
+                                            .logarithmic(true)
+                                            .clamping(egui::SliderClamping::Never),
                                     );
                                 }
                             });

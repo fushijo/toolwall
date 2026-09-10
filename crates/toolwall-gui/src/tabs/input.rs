@@ -40,12 +40,11 @@ pub fn show(
                      Minecraft very low and multiplies it back up here, so values \
                      well above 10 are normal.",
                 );
+                // log scale: god-sens setups sit near 13, normal ones near 1
                 ui.add(
-                    egui::DragValue::new(&mut doc.input.sensitivity)
-                        .speed(0.01)
-                        // waywall requires only a positive number; a cap here
-                        // silently rewrites a god-sens multiplier.
-                        .range(0.0001..=1000.0),
+                    egui::Slider::new(&mut doc.input.sensitivity, 0.01..=20.0)
+                        .logarithmic(true)
+                        .clamping(egui::SliderClamping::Never),
                 );
                 ui.end_row();
 

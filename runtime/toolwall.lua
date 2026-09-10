@@ -24,6 +24,7 @@ local commands = require("toolwall.commands")
 local hud = require("toolwall.hud")
 local keybinds = require("toolwall.keybinds")
 local modes = require("toolwall.modes")
+local launch = require("toolwall.launch")
 local scene = require("toolwall.scene")
 local state = require("toolwall.state")
 local util = require("toolwall.util")
@@ -175,6 +176,19 @@ local function on_load()
     end
 
     rt.hud:refresh()
+
+    -- start ninb first so it takes waywall's one anchor slot. the anchored
+    -- window cannot be shift-dragged, so if the editor gets there first it
+    -- ends up pinned and immovable.
+    local ninb = rt.doc.ninb or {}
+    local jar = ninb.jar
+    if util.bool(ninb.autostart, false) and jar and jar ~= util.NULL and jar ~= "" then
+        local template = ninb.command
+        if not template or template == util.NULL or template == "" then
+            template = "java -jar {jar}"
+        end
+        launch.once(waywall, "ninb", util.expand_command((template:gsub("{jar}", util.expand(jar)))))
+    end
 
     if next(rt.doc.input and rt.doc.input.remaps_menu or {}) then
         apply_state_remaps(rt.doc)

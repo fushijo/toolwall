@@ -348,6 +348,12 @@ pub struct Ninb {
     /// Path to the Ninjabrain Bot jar. Empty means "not set up".
     #[serde(default)]
     pub jar: String,
+    /// start ninb on launch so it claims waywall's single anchor slot.
+    /// whichever floating window opens first gets anchored, and an anchored
+    /// window cannot be shift-dragged, so letting the editor win that race
+    /// leaves the editor stuck wherever the anchor puts it.
+    #[serde(default)]
+    pub autostart: bool,
     /// Command used to launch it. `{jar}` is replaced with the path above.
     #[serde(default = "ninb_command")]
     pub command: String,
@@ -355,7 +361,7 @@ pub struct Ninb {
 
 impl Default for Ninb {
     fn default() -> Self {
-        Self { jar: String::new(), command: ninb_command() }
+        Self { jar: String::new(), autostart: false, command: ninb_command() }
     }
 }
 
@@ -469,11 +475,14 @@ pub struct Appearance {
     pub dark: bool,
     #[serde(default = "default_font_size")]
     pub font_size: f32,
+    /// ttf/otf to use instead of the built-in face. empty keeps the default.
+    #[serde(default)]
+    pub font_path: String,
 }
 
 impl Default for Appearance {
     fn default() -> Self {
-        Self { opacity: 0.92, dark: true, font_size: 18.0 }
+        Self { opacity: 0.92, dark: true, font_size: 18.0, font_path: String::new() }
     }
 }
 

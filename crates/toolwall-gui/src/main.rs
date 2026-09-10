@@ -67,6 +67,7 @@ fn main() -> Result<()> {
                 advanced: false,
                 saved,
                 pending_since: None,
+                font_loaded: String::new(),
             }))
         }),
     )
@@ -102,6 +103,8 @@ struct App {
     /// widget having to report one.
     saved: String,
     pending_since: Option<Instant>,
+    /// font path currently loaded, so it is only re-read when it changes
+    font_loaded: String,
 }
 
 impl App {
@@ -136,6 +139,12 @@ impl App {
     fn apply_appearance(&mut self, ctx: &egui::Context) {
         let look = &self.doc.gui.appearance;
 
+        // reload the face only when the path changes, not every frame
+        if look.font_path != self.font_loaded {
+            self.font_loaded = look.font_path.clone();
+            Self::load_font(ctx, &self.font_loaded);
+        }
+
         let mut visuals = if look.dark {
             egui::Visuals::dark()
         } else {
@@ -166,6 +175,29 @@ impl App {
         if (ctx.zoom_factor() - zoom).abs() > 0.01 {
             ctx.set_zoom_factor(zoom);
         }
+    }
+
+    /// swap in a font from disk, falling back to the built-in one.
+    fn load_font(ctx: &egui::Context, path: &str) {
+        let mut fonts = egui::FontDefinitions::default();
+
+        if !path.is_empty() {
+            match std::fs::read(widgets::expand_tilde(path)) {
+                Ok(bytes) => {
+                    fonts.font_data.insert(
+                        "custom".into(),
+                        egui::FontData::from_owned(bytes).into(),
+                    );
+                    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+                        fonts.families.entry(family).or_default().insert(0, "custom".into());
+                    }
+                }
+                // a bad path should not leave the editor unreadable
+                Err(_) => {}
+            }
+        }
+
+        ctx.set_fonts(fonts);
     }
 
     /// Apply edits shortly after they stop, so a change is visible in the
@@ -244,6 +276,7 @@ impl eframe::App for App {
                 }
                 PickTarget::Background => self.doc.theme.background_png = path,
                 PickTarget::NinbJar => self.doc.ninb.jar = path,
+                PickTarget::Font => self.doc.gui.appearance.font_path = path,
             }
         }
 

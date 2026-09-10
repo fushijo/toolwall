@@ -154,6 +154,7 @@ pub enum PickTarget {
     Image(usize),
     Background,
     NinbJar,
+    Font,
 }
 
 #[derive(Default)]
