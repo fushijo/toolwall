@@ -43,7 +43,13 @@ done
 
 if [ ! -d build ]; then
     echo "configuring build"
-    meson setup build
+    if ! meson setup build; then
+        echo >&2
+        echo "waywall builds as C23, which needs meson 1.4 or newer." >&2
+        echo "Yours is $(meson --version 2>/dev/null || echo 'not installed')." >&2
+        echo "  pipx install meson    (or) pip install --user --upgrade meson" >&2
+        exit 1
+    fi
 fi
 
 echo "building"
