@@ -170,9 +170,13 @@ fn every_tab_renders() {
     });
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
-        tabs::input::show(ui, doc, &found, true, &mut None, &mut FileBrowser::default());
+        tabs::input::show(ui, doc, &found, true, &mut None);
     });
     render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true, &mut FileBrowser::default()));
+    render(&mut doc, |ui, doc| {
+        let found = problems(doc);
+        tabs::ninb::show(ui, doc, &found, true, &mut FileBrowser::default());
+    });
 }
 
 #[test]
@@ -191,9 +195,13 @@ fn tabs_render_an_empty_document() {
     });
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
-        tabs::input::show(ui, doc, &found, true, &mut None, &mut FileBrowser::default());
+        tabs::input::show(ui, doc, &found, true, &mut None);
     });
     render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true, &mut FileBrowser::default()));
+    render(&mut doc, |ui, doc| {
+        let found = problems(doc);
+        tabs::ninb::show(ui, doc, &found, true, &mut FileBrowser::default());
+    });
 }
 
 /// waywall configures floating windows with `xdg_toplevel.configure(0, 0)`,

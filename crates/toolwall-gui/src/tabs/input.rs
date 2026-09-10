@@ -2,10 +2,10 @@
 
 use std::collections::BTreeMap;
 
-use toolwall_core::{Document, Problem, Scope};
+use toolwall_core::{Document, Problem};
 
 use crate::keys;
-use crate::widgets::{path_field, problems_for, FileBrowser, PickTarget};
+
 
 /// Which half of which rebind row is waiting for a keypress.
 #[derive(PartialEq, Eq, Clone)]
@@ -24,10 +24,9 @@ pub enum RemapTable {
 pub fn show(
     ui: &mut egui::Ui,
     doc: &mut Document,
-    problems: &[Problem],
+    _problems: &[Problem],
     advanced: bool,
     capture: &mut Option<RemapCapture>,
-    browser: &mut FileBrowser,
 ) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Mouse");
@@ -65,26 +64,6 @@ pub fn show(
              Leave empty to use one set everywhere.",
         );
         remap_table(ui, RemapTable::Menu, &mut doc.input.remaps_menu, capture);
-
-        ui.separator();
-        ui.heading("Ninjabrain Bot");
-        problems_for(ui, problems, &Scope::Ninb);
-
-        egui::Grid::new("ninb-setup")
-            .num_columns(2)
-            .spacing([12.0, 6.0])
-            .show(ui, |ui| {
-                ui.label("Jar file");
-                path_field(ui, &mut doc.ninb.jar, browser, PickTarget::NinbJar, "jar");
-                ui.end_row();
-
-                if advanced {
-                    ui.label("Launch command")
-                        .on_hover_text("{jar} is replaced with the path above");
-                    ui.text_edit_singleline(&mut doc.ninb.command);
-                    ui.end_row();
-                }
-            });
 
         if advanced {
             ui.separator();

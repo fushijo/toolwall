@@ -30,6 +30,7 @@ LUA
 echo "Installing overlays -> $CONFIG_DIR/resources"
 mkdir -p "$CONFIG_DIR/resources"
 cp -n "$SRC/resources/measuring_overlay.png" "$CONFIG_DIR/resources/" 2>/dev/null || true
+cp -n "$SRC/resources/panel.png" "$CONFIG_DIR/resources/" 2>/dev/null || true
 
 if [ ! -f "$CONFIG_DIR/toolwall.json" ]; then
     echo "Installing starter config -> $CONFIG_DIR/toolwall.json"

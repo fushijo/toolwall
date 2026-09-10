@@ -365,34 +365,75 @@ pub struct Ninb {
     pub overlay: NinbOverlay,
 }
 
-/// ninb's stronghold prediction, drawn as scene text.
+/// ninb's readout, drawn as scene text.
 ///
-/// a floating window is subject to show_floating, which is global, so ninb's
-/// own window appears and vanishes with the editor. scene text is not a
-/// window, so it stays put.
+/// waywall's text primitive takes only x, y, colour, size and depth. there is
+/// no rectangle, no border and no font choice, so the panel behind the text is
+/// a solid png recoloured with a colour key, and the face is whatever waywall
+/// bundles. that is the ceiling for anything drawn into the scene.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NinbOverlay {
     #[serde(default)]
     pub enabled: bool,
-    #[serde(default)]
+
+    #[serde(default = "eight")]
     pub x: i32,
-    #[serde(default)]
+    #[serde(default = "forty")]
     pub y: i32,
     #[serde(default = "two")]
     pub size: u32,
+    /// vertical gap between rows, in pixels
+    #[serde(default = "row_gap")]
+    pub row_spacing: u32,
+
+    /// how many predictions to list, best first
+    #[serde(default = "one_u32")]
+    pub shown_predictions: u32,
+    /// how many eye throws to list under them
+    #[serde(default)]
+    pub throw_rows: u32,
+    /// "chunk" or "block"
+    #[serde(default = "coords_chunk")]
+    pub coords: String,
+
     #[serde(default = "white")]
     pub color: String,
-    /// placeholders come from the best prediction: chunkX, chunkZ, certainty,
-    /// overworldDistance, throws
+    #[serde(default = "grey")]
+    pub header_color: String,
+    /// certainty is coloured by how good it is
+    #[serde(default = "green")]
+    pub certainty_high_color: String,
+    #[serde(default = "amber")]
+    pub certainty_mid_color: String,
+    #[serde(default = "red")]
+    pub certainty_low_color: String,
+    #[serde(default = "high_cut")]
+    pub certainty_high_above: f64,
+    #[serde(default = "mid_cut")]
+    pub certainty_mid_above: f64,
+
+    /// panel behind the text, faked with a recoloured solid png
+    #[serde(default)]
+    pub background: bool,
+    #[serde(default = "panel_bg")]
+    pub background_color: String,
+    #[serde(default = "pad")]
+    pub padding: u32,
+    #[serde(default)]
+    pub border_width: u32,
+    #[serde(default = "grey")]
+    pub border_color: String,
+
     #[serde(default = "ninb_template")]
     pub template: String,
-    /// how often to re-fetch, in milliseconds
     #[serde(default = "ninb_poll")]
     pub poll_ms: u32,
-    /// shown while ninb has no prediction yet. without this the overlay draws
-    /// nothing before the first throw and looks broken.
+    /// shown while ninb has no prediction yet, so the overlay is never blank
     #[serde(default = "ninb_idle")]
     pub idle_text: String,
+    /// drop the readout when it has not changed for this long. 0 keeps it.
+    #[serde(default)]
+    pub hide_after_ms: u32,
 }
 
 impl Default for NinbOverlay {
@@ -402,10 +443,26 @@ impl Default for NinbOverlay {
             x: 8,
             y: 40,
             size: 2,
+            row_spacing: row_gap(),
+            shown_predictions: 1,
+            throw_rows: 0,
+            coords: coords_chunk(),
             color: white(),
+            header_color: grey(),
+            certainty_high_color: green(),
+            certainty_mid_color: amber(),
+            certainty_low_color: red(),
+            certainty_high_above: high_cut(),
+            certainty_mid_above: mid_cut(),
+            background: false,
+            background_color: panel_bg(),
+            padding: pad(),
+            border_width: 0,
+            border_color: grey(),
             template: ninb_template(),
             poll_ms: ninb_poll(),
             idle_text: ninb_idle(),
+            hide_after_ms: 0,
         }
     }
 }
@@ -557,6 +614,19 @@ fn ninb_command() -> String { "java -jar {jar}".into() }
 fn ninb_port() -> u16 { 52533 }
 fn ninb_poll() -> u32 { 500 }
 fn ninb_idle() -> String { "ninb: no throws".into() }
+fn eight() -> i32 { 8 }
+fn forty() -> i32 { 40 }
+fn one_u32() -> u32 { 1 }
+fn row_gap() -> u32 { 18 }
+fn pad() -> u32 { 6 }
+fn coords_chunk() -> String { "chunk".into() }
+fn grey() -> String { "#aaaaaaff".into() }
+fn green() -> String { "#55ff55ff".into() }
+fn amber() -> String { "#ffaa00ff".into() }
+fn red() -> String { "#ff5555ff".into() }
+fn panel_bg() -> String { "#000000b0".into() }
+fn high_cut() -> f64 { 80.0 }
+fn mid_cut() -> f64 { 50.0 }
 fn ninb_template() -> String { "{chunkX}, {chunkZ}  {certainty}".into() }
 fn two() -> u32 { 2 }
 fn white() -> String { "#ffffffff".into() }

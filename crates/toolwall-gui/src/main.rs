@@ -84,6 +84,7 @@ enum Tab {
     Images,
     Keybinds,
     Theme,
+    Ninb,
     Input,
 }
 
@@ -287,6 +288,7 @@ impl eframe::App for App {
                 ui.selectable_value(&mut self.tab, Tab::Images, "Images");
                 ui.selectable_value(&mut self.tab, Tab::Keybinds, "Keybinds");
                 ui.selectable_value(&mut self.tab, Tab::Theme, "Theme");
+                ui.selectable_value(&mut self.tab, Tab::Ninb, "Ninjabrain");
                 ui.selectable_value(&mut self.tab, Tab::Input, "Input");
 
                 // Right-aligned close. The editor floats over the game, so
@@ -364,13 +366,19 @@ impl eframe::App for App {
                 Tab::Theme => {
                     tabs::theme::show(ui, &mut self.doc, self.advanced, &mut self.browser)
                 }
+                Tab::Ninb => tabs::ninb::show(
+                    ui,
+                    &mut self.doc,
+                    &problems,
+                    self.advanced,
+                    &mut self.browser,
+                ),
                 Tab::Input => tabs::input::show(
                     ui,
                     &mut self.doc,
                     &problems,
                     self.advanced,
                     &mut self.remap_capture,
-                    &mut self.browser,
                 ),
             }
         });

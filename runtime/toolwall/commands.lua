@@ -14,6 +14,7 @@
 local waywall = require("waywall")
 local launch = require("toolwall.launch")
 local ninb_api = require("toolwall.ninb_api")
+local ninb_overlay = require("toolwall.ninb_overlay")
 local util = require("toolwall.util")
 
 local M = {}
@@ -242,47 +243,31 @@ function M.bind(rt)
     M.register("ninb.overlay", function(st)
         if st.ninb_overlay then
             st.ninb_overlay = false
-            if st.ninb_text then
-                st.ninb_text:close()
-                st.ninb_text = nil
+            if st.ninb_panel then
+                st.ninb_panel:clear()
+                st.ninb_panel = nil
             end
             util.warn("ninb overlay off")
             return
         end
 
         local ninb = st.doc.ninb or {}
-        local overlay = ninb.overlay or {}
+        local cfg = ninb.overlay or {}
         local port = ninb.port or ninb_api.DEFAULT_PORT
-        local poll = overlay.poll_ms or 500
-        local template = overlay.template or "{chunkX}, {chunkZ}  {certainty}"
+        local poll = math.max(100, math.floor(cfg.poll_ms or 500))
 
         st.ninb_overlay = true
+        st.ninb_panel = ninb_overlay.new(cfg)
         util.warn(("ninb overlay on, polling :%d every %dms"):format(port, poll))
 
         while st.ninb_overlay do
             ninb_api.fetch("stronghold", port)
 
-            -- idle text keeps the overlay visible before the first throw, so
-            -- you can see it is alive and where it sits
-            local fields = ninb_api.stronghold_fields(ninb_api.read("stronghold"))
-            local line = fields and ninb_api.render(template, fields)
-                or (overlay.idle_text or "ninb: no throws")
-
-            -- text has no setter, so redrawing means replacing the object
-            if st.ninb_text then
-                st.ninb_text:close()
-                st.ninb_text = nil
-            end
-
-            if line ~= "" then
-                local ok, obj = pcall(waywall.text, line, {
-                    x = overlay.x or 8,
-                    y = overlay.y or 40,
-                    color = overlay.color or "#ffffffff",
-                    size = overlay.size or 2,
-                    depth = 10,
-                })
-                if ok then st.ninb_text = obj end
+            local ok = pcall(function()
+                st.ninb_panel:draw(ninb_api.read("stronghold"), ninb_api.now())
+            end)
+            if not ok then
+                util.warn("ninb overlay: draw failed")
             end
 
             local slept = pcall(waywall.sleep, poll)
@@ -290,6 +275,11 @@ function M.bind(rt)
                 util.warn("ninb overlay: sleep failed, stopping")
                 st.ninb_overlay = false
             end
+        end
+
+        if st.ninb_panel then
+            st.ninb_panel:clear()
+            st.ninb_panel = nil
         end
     end)
 

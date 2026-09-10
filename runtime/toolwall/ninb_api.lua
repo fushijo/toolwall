@@ -34,6 +34,12 @@ local function cache_path(name)
     return dir .. "/toolwall-ninb-" .. name .. ".json"
 end
 
+function M.now()
+    local ok, value = pcall(waywall.current_time)
+    if ok and value then return value end
+    return os.time() * 1000
+end
+
 --[[
     kick off a fetch. returns immediately; the answer lands in the cache file
     whenever curl gets round to it.
@@ -70,10 +76,56 @@ local function round(n, places)
 end
 
 --[[
-    the first prediction, flattened into the fields a text template can use.
+    format a number the way the community writes coordinates: no trailing .0,
+    one decimal otherwise.
+]]
+function M.number(value)
+    if type(value) ~= "number" then return tostring(value or "") end
+    if value == math.floor(value) then return tostring(math.floor(value)) end
+    return tostring(round(value, 1))
+end
 
-    ninb returns predictions sorted best first, so [1] is the one you want on
-    screen. an empty list means no throws yet, which is not an error.
+--[[
+    flatten one prediction into template fields.
+
+    chunk_coords picks between ninb's chunk numbers and block coordinates,
+    which is the "block or chunk" toggle every tool offers.
+]]
+function M.prediction_fields(best, data, chunk_coords)
+    if type(best) ~= "table" then return nil end
+
+    local fields = {}
+    for key, value in pairs(best) do
+        if type(value) == "number" then
+            fields[key] = M.number(value)
+        elseif type(value) ~= "table" and value ~= util.NULL then
+            fields[key] = tostring(value)
+        end
+    end
+
+    if type(best.certainty) == "number" then
+        fields.certainty = M.number(round(best.certainty * 100, 1)) .. "%"
+    end
+
+    -- ninb reports chunk coordinates; block is the chunk centre
+    local cx, cz = best.chunkX, best.chunkZ
+    if type(cx) == "number" and type(cz) == "number" then
+        if chunk_coords == false then
+            fields.x = M.number(cx * 16 + 4)
+            fields.z = M.number(cz * 16 + 4)
+        else
+            fields.x = M.number(cx)
+            fields.z = M.number(cz)
+        end
+    end
+
+    fields.throws = tostring(#((type(data) == "table" and data.eyeThrows) or {}))
+    return fields
+end
+
+--[[
+    the best prediction. ninb sorts them, so [1] is the one you want. an empty
+    list means no throws yet, which is not an error.
 ]]
 function M.stronghold_fields(data)
     if type(data) ~= "table" then return nil end
@@ -83,25 +135,7 @@ function M.stronghold_fields(data)
         return nil
     end
 
-    local best = predictions[1]
-    if type(best) ~= "table" then return nil end
-
-    local fields = {}
-    for key, value in pairs(best) do
-        if type(value) == "number" then
-            fields[key] = tostring(round(value, 1))
-        elseif type(value) ~= "table" and value ~= util.NULL then
-            fields[key] = tostring(value)
-        end
-    end
-
-    -- certainty reads as a percentage everywhere else in the community
-    if type(best.certainty) == "number" then
-        fields.certainty = tostring(round(best.certainty * 100, 1)) .. "%"
-    end
-
-    fields.throws = tostring(#(data.eyeThrows or {}))
-    return fields
+    return M.prediction_fields(predictions[1], data, true)
 end
 
 --[[
