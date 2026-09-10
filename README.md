@@ -217,6 +217,16 @@ not right.
 
 ### Two things that will otherwise waste your time
 
+**`cargo install` puts binaries somewhere your shell may not look.** They land
+in `~/.cargo/bin`, which distro packages of cargo do not add to `PATH`, and
+which `~/.profile` does not cover either on a Debian-derived system: an
+interactive terminal reads `~/.bashrc`, and that is a different file. If
+`toolwall` comes back as not found, that is why.
+
+```sh
+echo 'PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+```
+
 **`gui.command` needs a full path.** waywall `exec()`s it using the
 compositor's own `PATH`, which comes from however waywall was launched, so it
 usually does not include `~/.cargo/bin` the way an interactive shell does. A

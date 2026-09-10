@@ -49,6 +49,13 @@ echo "  patches/apply.sh ~/waywall"
 echo "Stock waywall has no way to fill a rectangle. See patches/README.md."
 
 echo
+if ! command -v toolwall >/dev/null 2>&1; then
+    echo "Note: cargo installs into ~/.cargo/bin, which is not on your PATH."
+    echo "An interactive shell reads ~/.bashrc, not ~/.profile, so add it there:"
+    echo "  echo 'PATH=\"\$HOME/.cargo/bin:\$PATH\"' >> ~/.bashrc"
+    echo
+fi
+
 echo "waywall exec()s the GUI with its own PATH, which usually does not"
 echo "include ~/.cargo/bin. gui.command is set to ~/.cargo/bin/toolwall-gui"
 echo "for that reason - keep it absolute or ~-prefixed."
