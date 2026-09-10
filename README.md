@@ -30,6 +30,13 @@ The whole integration relies on two facts about waywall:
 That is enough to apply config edits live with no changes to waywall's C
 source.
 
+There is one exception, and it is opt-in. `patches/` holds two small additions
+to waywall itself, for the Ninjabrain Bot readout: a filled rectangle, and an
+outline on scene text. Neither can be done from Lua, because waywall has no
+fill primitive and no outline parameter. toolwall checks for them at runtime
+and drops the background and outline if they are missing, so an unpatched
+waywall still works. See [Patching waywall](#patching-waywall).
+
 ## How it works
 
 ```
@@ -129,6 +136,36 @@ return toolwall.setup()
 
 waywall adds its config directory to `package.path`, which is what makes
 `require("toolwall")` resolve.
+
+### Patching waywall
+
+Optional. Only the Ninjabrain Bot readout uses it.
+
+```sh
+patches/apply.sh ~/waywall
+```
+
+That applies the patches to your waywall checkout, rebuilds it, and asks for
+your password once to install. If you do not have a checkout, clone one first:
+
+```sh
+git clone https://github.com/tesselslate/waywall ~/waywall
+```
+
+The patches add two things:
+
+| | what it does | why it cannot be done in Lua |
+|---|---|---|
+| `waywall.rect` | fills an area with a solid colour | `image` draws a PNG as-is, and colour keys are mirror-only upstream, so there is no way to fill anything |
+| `outline` on `waywall.text` | draws each glyph eight times behind itself | `text` takes x, y, colour, size and depth, and nothing else |
+
+Both are additive. A config that does not ask for them renders exactly as it
+did before. Written against waywall `150026e`; `git apply` refuses rather than
+making a mess if the code has moved. Full detail in
+[`patches/README.md`](patches/README.md).
+
+Skip this and the readout still works, just flat on the game with no panel
+behind it.
 
 ### Two things that will otherwise waste your time
 
@@ -251,6 +288,12 @@ These come from waywall, not from toolwall:
   recreating. Negative depth is not a substitute, since it draws behind
   Minecraft, which only hides things while Minecraft covers that region.
 - **Shaders compile at startup only**, so they cannot be edited live.
+- **Scene text has one font and one colour.** The face is the bundled Terminus
+  at 8x16, scaled by a whole number, with no way to pick another. toolwall
+  works with the grid rather than against it: a column is a character count,
+  which is what lets the Ninjabrain readout line up its labels and values.
+  Multiple colours on one line means multiple text objects.
+- **No fill primitive and no text outline** without the patches in `patches/`.
 - **Ninjabrain Bot calibration does not work correctly inside waywall.** Use
   boat eye, or calibrate outside.
 
@@ -262,9 +305,11 @@ toolwall is a separate program that talks to waywall through configuration
 files. It does not link against or derive from waywall's source, so waywall's
 GPL-3.0-only licence does not extend to it.
 
-If you patch or vendor waywall's C source into this repository that changes,
-and the derivative work has to be GPL-3.0-only. Keep upstream patches in a
-separate repository or as PRs against waywall itself.
+`patches/` is the exception. Those are diffs against waywall's C source, so
+they are derived from it and are GPL-3.0-only. They are not compiled into or
+linked against anything here: they are applied to your own waywall checkout,
+which you then build yourself. Nothing under `patches/` ships in the toolwall
+binaries.
 
 ## Credits
 
