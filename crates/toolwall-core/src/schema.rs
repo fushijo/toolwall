@@ -367,14 +367,18 @@ pub struct Ninb {
 
 /// ninb's readout, drawn as scene text.
 ///
-/// waywall's text primitive takes only x, y, colour, size and depth. there is
-/// no rectangle, no border and no font choice, so the panel behind the text is
-/// a solid png recoloured with a colour key, and the face is whatever waywall
-/// bundles. that is the ceiling for anything drawn into the scene.
+/// waywall's face is a fixed 8x16 terminus bitmap scaled by an integer, so a
+/// column is a character count and everything lines up. the panel behind the
+/// text needs `waywall.rect` from patches/; without it there is no fill
+/// primitive at all and the background is skipped.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NinbOverlay {
     #[serde(default)]
     pub enabled: bool,
+
+    /// "ninbot" for the labelled readout, "compact" for templated lines
+    #[serde(default = "layout_ninbot")]
+    pub layout: String,
 
     #[serde(default = "eight")]
     pub x: i32,
@@ -382,23 +386,54 @@ pub struct NinbOverlay {
     pub y: i32,
     #[serde(default = "two")]
     pub size: u32,
-    /// vertical gap between rows, in pixels
-    #[serde(default = "row_gap")]
-    pub row_spacing: u32,
+    /// extra pixels between rows. the glyph height is already accounted for.
+    #[serde(default = "line_gap")]
+    pub line_gap: u32,
 
+    /// "chunk", "block" or "nether"
+    #[serde(default = "coords_block")]
+    pub coords: String,
+
+    // ninbot layout: one row each
+    #[serde(default = "yes")]
+    pub show_location: bool,
+    #[serde(default = "yes")]
+    pub show_certainty: bool,
+    /// a run reaches the stronghold through the nether far more often than on
+    /// foot, so this is on by default
+    #[serde(default = "yes")]
+    pub show_nether: bool,
+    #[serde(default = "yes")]
+    pub show_distance: bool,
+    #[serde(default)]
+    pub show_angle: bool,
+    /// ninb's own hints, eg "go left 1 block for ~95% after the next throw"
+    #[serde(default)]
+    pub show_info: bool,
+    /// characters before an information message wraps
+    #[serde(default = "wrap_width")]
+    pub wrap_width: u32,
+
+    /// how many eye throws to list underneath
+    #[serde(default)]
+    pub throw_rows: u32,
+    #[serde(default = "yes")]
+    pub show_throw_header: bool,
+
+    // compact layout
     /// how many predictions to list, best first
     #[serde(default = "one_u32")]
     pub shown_predictions: u32,
-    /// how many eye throws to list under them
-    #[serde(default)]
-    pub throw_rows: u32,
-    /// "chunk" or "block"
-    #[serde(default = "coords_chunk")]
-    pub coords: String,
+    #[serde(default = "ninb_template")]
+    pub template: String,
 
     #[serde(default = "white")]
     pub color: String,
+    /// the "Location:" and "Certainty:" column
     #[serde(default = "grey")]
+    pub label_color: String,
+    /// table headers, hints and the idle line
+    #[serde(default = "steel")]
     pub header_color: String,
     /// certainty is coloured by how good it is
     #[serde(default = "green")]
@@ -412,8 +447,14 @@ pub struct NinbOverlay {
     #[serde(default = "mid_cut")]
     pub certainty_mid_above: f64,
 
-    /// panel behind the text, faked with a recoloured solid png
+    /// outline width in pixels behind every glyph. 0 is off.
     #[serde(default)]
+    pub outline: u32,
+    #[serde(default = "black")]
+    pub outline_color: String,
+
+    /// panel behind the text. needs waywall.rect from patches/.
+    #[serde(default = "yes")]
     pub background: bool,
     #[serde(default = "panel_bg")]
     pub background_color: String,
@@ -421,11 +462,9 @@ pub struct NinbOverlay {
     pub padding: u32,
     #[serde(default)]
     pub border_width: u32,
-    #[serde(default = "grey")]
+    #[serde(default = "steel")]
     pub border_color: String,
 
-    #[serde(default = "ninb_template")]
-    pub template: String,
     #[serde(default = "ninb_poll")]
     pub poll_ms: u32,
     /// shown while ninb has no prediction yet, so the overlay is never blank
@@ -440,29 +479,85 @@ impl Default for NinbOverlay {
     fn default() -> Self {
         Self {
             enabled: false,
+            layout: layout_ninbot(),
             x: 8,
             y: 40,
             size: 2,
-            row_spacing: row_gap(),
-            shown_predictions: 1,
+            line_gap: line_gap(),
+            coords: coords_block(),
+            show_location: true,
+            show_certainty: true,
+            show_nether: true,
+            show_distance: true,
+            show_angle: false,
+            show_info: false,
+            wrap_width: wrap_width(),
             throw_rows: 0,
-            coords: coords_chunk(),
+            show_throw_header: true,
+            shown_predictions: 1,
+            template: ninb_template(),
             color: white(),
-            header_color: grey(),
+            label_color: grey(),
+            header_color: steel(),
             certainty_high_color: green(),
             certainty_mid_color: amber(),
             certainty_low_color: red(),
             certainty_high_above: high_cut(),
             certainty_mid_above: mid_cut(),
-            background: false,
+            outline: 0,
+            outline_color: black(),
+            background: true,
             background_color: panel_bg(),
             padding: pad(),
             border_width: 0,
-            border_color: grey(),
-            template: ninb_template(),
+            border_color: steel(),
             poll_ms: ninb_poll(),
             idle_text: ninb_idle(),
             hide_after_ms: 0,
+        }
+    }
+}
+
+/// the two shapes the readout comes in, as (id, label, description).
+pub const NINB_PRESETS: &[(&str, &str, &str)] = &[
+    ("ninbot", "Ninjabrain Bot", "the labelled readout, panel and all"),
+    ("compact", "Compact", "one line per prediction, no panel"),
+];
+
+impl NinbOverlay {
+    /// apply a preset, keeping position, colours and refresh as they are.
+    pub fn apply_preset(&mut self, id: &str) {
+        match id {
+            "compact" => {
+                self.layout = "compact".into();
+                self.coords = "block".into();
+                self.shown_predictions = 3;
+                self.template = "{x}, {z}  {certainty}".into();
+                self.throw_rows = 0;
+                self.show_info = false;
+                self.background = false;
+                self.outline = 1;
+                self.size = 2;
+                self.line_gap = 2;
+            }
+            _ => {
+                self.layout = "ninbot".into();
+                self.coords = "block".into();
+                self.show_location = true;
+                self.show_certainty = true;
+                self.show_nether = true;
+                self.show_distance = true;
+                self.show_angle = true;
+                self.show_info = true;
+                self.throw_rows = 3;
+                self.show_throw_header = true;
+                self.background = true;
+                self.padding = 8;
+                self.border_width = 1;
+                self.outline = 0;
+                self.size = 2;
+                self.line_gap = 2;
+            }
         }
     }
 }
@@ -613,21 +708,24 @@ fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }
 fn ninb_command() -> String { "java -jar {jar}".into() }
 fn ninb_port() -> u16 { 52533 }
 fn ninb_poll() -> u32 { 500 }
-fn ninb_idle() -> String { "ninb: no throws".into() }
+fn ninb_idle() -> String { "no eye throws yet".into() }
 fn eight() -> i32 { 8 }
 fn forty() -> i32 { 40 }
 fn one_u32() -> u32 { 1 }
-fn row_gap() -> u32 { 18 }
-fn pad() -> u32 { 6 }
-fn coords_chunk() -> String { "chunk".into() }
+fn line_gap() -> u32 { 2 }
+fn wrap_width() -> u32 { 44 }
+fn pad() -> u32 { 8 }
+fn coords_block() -> String { "block".into() }
+fn layout_ninbot() -> String { "ninbot".into() }
 fn grey() -> String { "#aaaaaaff".into() }
 fn green() -> String { "#55ff55ff".into() }
 fn amber() -> String { "#ffaa00ff".into() }
 fn red() -> String { "#ff5555ff".into() }
-fn panel_bg() -> String { "#000000b0".into() }
+fn panel_bg() -> String { "#12161ce6".into() }
+fn steel() -> String { "#7f8ea3ff".into() }
 fn high_cut() -> f64 { 80.0 }
 fn mid_cut() -> f64 { 50.0 }
-fn ninb_template() -> String { "{chunkX}, {chunkZ}  {certainty}".into() }
+fn ninb_template() -> String { "{x}, {z}  {certainty}".into() }
 fn two() -> u32 { 2 }
 fn white() -> String { "#ffffffff".into() }
 fn default_opacity() -> f32 { 0.92 }

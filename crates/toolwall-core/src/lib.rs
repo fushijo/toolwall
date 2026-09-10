@@ -7,5 +7,5 @@
 pub mod schema;
 pub mod store;
 
-pub use schema::{Document, SCHEMA_VERSION};
+pub use schema::{Document, NINB_PRESETS, SCHEMA_VERSION};
 pub use store::{Problem, Scope, Store, problems, validate};
