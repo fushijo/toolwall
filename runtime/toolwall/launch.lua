@@ -167,11 +167,23 @@ function M.once(waywall, id, command)
         return true
     end
 
+    --[[
+        the script checks for an existing copy before starting one.
+
+        the pidfile can go missing (cleared by hand, tmpfs wiped) and then a
+        keypress sees "not running" and starts a rival. the shell can ask the
+        process table directly, which lua cannot, so the guard lives here.
+
+        the pattern is the command's most distinctive token, and pgrep -f
+        matches full command lines. this script's own line is "sh <path>", so
+        it cannot match itself.
+    ]]
     fh:write(([[
 #!/bin/sh
+if pgrep -f '%s' >/dev/null 2>&1; then exit 0; fi
 echo $$ > '%s'
 exec %s
-]]):format(M.pid_path(id), command))
+]]):format(signature(command), M.pid_path(id), command))
     fh:close()
 
     -- waywall.exec() splits on spaces, so both tokens must be space-free.
