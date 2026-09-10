@@ -55,20 +55,9 @@ pub fn show(
 
         ui.separator();
         ui.heading("Ninjabrain Bot position");
-        ui.weak(
-            "waywall has one anchor slot and gives it to whichever floating window \
-             opened first, so this positions Ninjabrain Bot when it opens before the \
-             editor. Any window can also be moved with Shift + drag.",
-        );
-
         ui.horizontal(|ui| {
             ui.checkbox(&mut doc.ninb.autostart, "Open Ninjabrain Bot on startup");
         });
-        ui.weak(
-            "waywall anchors whichever floating window opens first, and an anchored \
-             window cannot be shift-dragged. Starting ninb first means it takes the \
-             anchor and the editor stays movable.",
-        );
         ui.add_space(4.0);
 
         anchor_editor(ui, doc);
