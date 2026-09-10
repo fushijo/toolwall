@@ -72,7 +72,18 @@ pub fn show(
                     egui::Slider::new(&mut doc.theme.ninb_opacity, 0.1..=1.0).fixed_decimals(2),
                 );
                 ui.end_row();
+
+                ui.label("Hide its window").on_hover_text(
+                    "Keeps ninb running for the API but never shows it, so opening this \
+                     editor no longer reveals it too. Needs the waywall patch.",
+                );
+                ui.checkbox(&mut doc.theme.ninb_hidden, "");
+                ui.end_row();
             });
+
+        if doc.theme.ninb_hidden {
+            ui.weak("Its window stays hidden, so read it from the Ninjabrain tab's readout.");
+        }
 
         if advanced {
         ui.separator();

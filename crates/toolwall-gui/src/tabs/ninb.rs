@@ -182,6 +182,13 @@ pub fn show(
                         ui.label("Throw table header");
                         ui.checkbox(&mut o.show_throw_header, "");
                         ui.end_row();
+
+                        ui.label("Show nudges").on_hover_text(
+                            "A throw you nudged reads as \"120.02+2\": what you measured, \
+                             and how many increments you moved it",
+                        );
+                        ui.checkbox(&mut o.show_correction, "");
+                        ui.end_row();
                     }
                 });
         }
@@ -248,6 +255,20 @@ pub fn show(
                     ui.end_row();
                 }
 
+                ui.label("Separators").on_hover_text("Rules between the sections");
+                ui.checkbox(&mut o.separators, "");
+                ui.end_row();
+
+                if o.separators {
+                    ui.label("Separator colour");
+                    color_field(ui, &mut o.separator_color);
+                    ui.end_row();
+
+                    ui.label("Separator width");
+                    ui.add(egui::Slider::new(&mut o.separator_width, 1..=6));
+                    ui.end_row();
+                }
+
                 ui.label("Background");
                 ui.checkbox(&mut o.background, "");
                 ui.end_row();
@@ -281,8 +302,16 @@ pub fn show(
                 .num_columns(2)
                 .spacing([12.0, 6.0])
                 .show(ui, |ui| {
-                    ui.label("Poll every");
-                    ui.add(egui::Slider::new(&mut o.poll_ms, 100..=2000).suffix(" ms"));
+                    ui.label("Live").on_hover_text(
+                        "Hold ninb's event stream open so changes arrive as they happen, \
+                         instead of asking again every tick",
+                    );
+                    ui.checkbox(&mut o.live, "");
+                    ui.end_row();
+
+                    ui.label(if o.live { "Redraw check" } else { "Poll every" })
+                        .on_hover_text("Nothing is redrawn unless the readout changed");
+                    ui.add(egui::Slider::new(&mut o.poll_ms, 16..=2000).suffix(" ms"));
                     ui.end_row();
 
                     ui.label("Hide when stale").on_hover_text("0 keeps it on screen");

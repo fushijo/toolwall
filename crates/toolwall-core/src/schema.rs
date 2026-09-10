@@ -165,6 +165,10 @@ pub struct Theme {
     pub ninb_anchor: Option<NinbAnchor>,
     #[serde(default = "one_f64")]
     pub ninb_opacity: f64,
+    /// keep ninb's own window hidden, so only the scene readout shows. needs
+    /// the waywall patch from patches/; ignored without it.
+    #[serde(default)]
+    pub ninb_hidden: bool,
 }
 
 impl Default for Theme {
@@ -177,6 +181,7 @@ impl Default for Theme {
             cursor_size: 0,
             ninb_anchor: None,
             ninb_opacity: 1.0,
+            ninb_hidden: false,
         }
     }
 }
@@ -453,6 +458,18 @@ pub struct NinbOverlay {
     #[serde(default = "black")]
     pub outline_color: String,
 
+    /// rules between the readout, the hints and the throw table
+    #[serde(default)]
+    pub separators: bool,
+    #[serde(default = "rule")]
+    pub separator_color: String,
+    #[serde(default = "one_u32")]
+    pub separator_width: u32,
+
+    /// show a nudged throw as "120.02+2" rather than the corrected angle
+    #[serde(default = "yes")]
+    pub show_correction: bool,
+
     /// panel behind the text. needs waywall.rect from patches/.
     #[serde(default = "yes")]
     pub background: bool,
@@ -465,6 +482,10 @@ pub struct NinbOverlay {
     #[serde(default = "steel")]
     pub border_color: String,
 
+    /// hold ninb's event stream open instead of asking every poll. the
+    /// difference between seeing an angle change next tick and seeing it now.
+    #[serde(default = "yes")]
+    pub live: bool,
     #[serde(default = "ninb_poll")]
     pub poll_ms: u32,
     /// shown while ninb has no prediction yet, so the overlay is never blank
@@ -511,7 +532,12 @@ impl Default for NinbOverlay {
             padding: pad(),
             border_width: 0,
             border_color: steel(),
+            live: true,
             poll_ms: ninb_poll(),
+            separators: false,
+            separator_color: rule(),
+            separator_width: 1,
+            show_correction: true,
             idle_text: ninb_idle(),
             hide_after_ms: 0,
         }
@@ -537,6 +563,7 @@ impl NinbOverlay {
                 self.show_info = false;
                 self.background = false;
                 self.outline = 1;
+                self.separators = false;
                 self.size = 2;
                 self.line_gap = 2;
             }
@@ -555,6 +582,7 @@ impl NinbOverlay {
                 self.padding = 8;
                 self.border_width = 1;
                 self.outline = 0;
+                self.separators = true;
                 self.size = 2;
                 self.line_gap = 2;
             }
@@ -707,7 +735,8 @@ fn launch_delay() -> u32 { 400 }
 fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }
 fn ninb_command() -> String { "java -jar {jar}".into() }
 fn ninb_port() -> u16 { 52533 }
-fn ninb_poll() -> u32 { 500 }
+fn ninb_poll() -> u32 { 50 }
+fn rule() -> String { "#7f8ea380".into() }
 fn ninb_idle() -> String { "no eye throws yet".into() }
 fn eight() -> i32 { 8 }
 fn forty() -> i32 { 40 }

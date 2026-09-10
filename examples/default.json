@@ -30,7 +30,8 @@
       "x": -40,
       "y": -30
     },
-    "ninb_opacity": 1.0
+    "ninb_opacity": 1.0,
+    "ninb_hidden": false
   },
   "window": {
     "fullscreen_width": 0,
@@ -254,9 +255,14 @@
       "padding": 8,
       "border_width": 1,
       "border_color": "#7f8ea3ff",
-      "poll_ms": 500,
+      "poll_ms": 50,
       "idle_text": "no eye throws yet",
-      "hide_after_ms": 0
+      "hide_after_ms": 0,
+      "live": true,
+      "separators": true,
+      "separator_color": "#7f8ea380",
+      "separator_width": 1,
+      "show_correction": true
     }
   },
   "keybinds": [
