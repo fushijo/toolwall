@@ -1,0 +1,145 @@
+diff --git a/include/config/config.h b/include/config/config.h
+index c7dde6a..946575b 100644
+--- a/include/config/config.h
++++ b/include/config/config.h
+@@ -61,6 +61,11 @@ struct config {
+             int32_t offset_x, offset_y;
+ 
+             double opacity;
++
++            // Keep the anchored window hidden even while floating windows are shown. For
++            // configs that read Ninjabrain Bot through its HTTP API and draw the readout
++            // themselves, where the window itself is only in the way.
++            bool hidden;
+         } ninb;
+     } theme;
+ 
+diff --git a/waywall/config/config.c b/waywall/config/config.c
+index b807274..4468cda 100644
+--- a/waywall/config/config.c
++++ b/waywall/config/config.c
+@@ -763,6 +763,10 @@ process_config_theme(struct config *cfg) {
+         return 1;
+     }
+ 
++    if (get_bool(cfg, "ninb_hidden", &cfg->theme.ninb.hidden, "theme.ninb_hidden", false) != 0) {
++        return 1;
++    }
++
+     return 0;
+ }
+ 
+diff --git a/waywall/wrap.c b/waywall/wrap.c
+index 32ea33f..3371afb 100644
+--- a/waywall/wrap.c
++++ b/waywall/wrap.c
+@@ -21,6 +21,7 @@
+ #include "xdg-shell-client-protocol.h"
+ #include <linux/input-event-codes.h>
+ #include <signal.h>
++#include <string.h>
+ #include <stdint.h>
+ #include <stdlib.h>
+ #include <sys/inotify.h>
+@@ -34,6 +35,33 @@
+ 
+ static void on_anchored_resize(struct wl_listener *listener, void *data);
+ 
++/*
++ * Is this Ninjabrain Bot?
++ *
++ * The anchor is not an answer to that question. It belongs to whichever
++ * floating window opened first, which is Ninjabrain Bot only by habit: close it
++ * and the next window to open inherits the slot, so anything keyed off the
++ * anchor ends up applying to the wrong window.
++ */
++static bool
++view_is_ninb(struct server_view *view) {
++    char *title = server_view_get_title(view);
++    if (!title) {
++        return false;
++    }
++
++    bool match = strstr(title, "Ninjabrain") != nullptr;
++    free(title);
++
++    return match;
++}
++
++static bool
++should_hide(struct wrap *wrap, struct server_view *view) {
++    return wrap->cfg->theme.ninb.hidden && view_is_ninb(view);
++}
++
++
+ struct floating_view {
+     struct wl_list link; // wrap.floating.views
+ 
+@@ -41,6 +69,23 @@ struct floating_view {
+     int32_t x, y;
+ };
+ 
++/*
++ * Apply floating window visibility, honouring theme.ninb_hidden.
++ *
++ * An X11 window does not always have a title by the time it is mapped, so this
++ * runs again whenever the anchored window changes rather than only once.
++ */
++static void
++floating_update_visible(struct wrap *wrap) {
++    struct floating_view *fview;
++
++    wl_list_for_each (fview, &wrap->floating.views, link) {
++        server_view_set_visible(fview->view,
++                                wrap->floating.visible && !should_hide(wrap, fview->view));
++        server_view_commit(fview->view);
++    }
++}
++
+ static void
+ set_anchored(struct wrap *wrap, struct floating_view *fview) {
+     ww_assert(!wrap->floating.anchored);
+@@ -83,11 +128,7 @@ floating_set_visible(struct wrap *wrap, bool visible) {
+ 
+     wrap->floating.visible = visible;
+ 
+-    struct floating_view *fview;
+-    wl_list_for_each (fview, &wrap->floating.views, link) {
+-        server_view_set_visible(fview->view, visible);
+-        server_view_commit(fview->view);
+-    }
++    floating_update_visible(wrap);
+ 
+     if (!visible) {
+         // Stop any active grab if floating windows are being hidden.
+@@ -208,7 +249,7 @@ floating_view_create(struct wrap *wrap, struct server_view *view) {
+     wl_list_insert(&wrap->floating.views, &fview->link);
+ 
+     if (wrap->floating.visible) {
+-        server_view_set_visible(view, true);
++        server_view_set_visible(view, !should_hide(wrap, view));
+     }
+ 
+     if (!SHOULD_ANCHOR(wrap) || wl_list_length(&wrap->floating.views) > 1) {
+@@ -277,6 +318,10 @@ on_anchored_resize(struct wl_listener *listener, void *data) {
+     struct wrap *wrap = wl_container_of(wrap_floating, wrap, floating);
+ 
+     floating_update_anchored(wrap);
++
++    // An X11 window's title can arrive after it is mapped, so a window that had
++    // no title to match on yet gets another chance here.
++    floating_update_visible(wrap);
+ }
+ 
+ static void
+@@ -676,6 +721,10 @@ wrap_set_config(struct wrap *wrap, struct config *cfg) {
+         floating_update_anchored(wrap);
+     }
+ 
++    // theme.ninb_hidden can be flipped by a reload, so re-apply visibility rather than waiting
++    // for the next show_floating call.
++    floating_update_visible(wrap);
++
+     return 0;
+ }
+ 

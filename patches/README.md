@@ -24,7 +24,7 @@ itself. Text over Minecraft is unreadable in half the biomes without it.
 Both are additive: nothing in stock waywall behaves differently, and a config
 that does not ask for them produces byte-identical output.
 
-## 0002: keep the anchored window hidden
+## 0002: hide Ninjabrain Bot's window
 
 **`theme.ninb_hidden = true`**
 
@@ -33,13 +33,21 @@ window, so opening any editor also reveals Ninjabrain Bot. That is fine when
 ninb's window is what you read. It is not fine when you read its HTTP API and
 draw the readout yourself, because then the window is only ever in the way.
 
-This keeps the anchored window (the one ninb takes, being first to open) hidden
-regardless of the global flag. It is re-applied on config reload, so the option
-can be turned on and off live.
+This keeps ninb's window hidden regardless of the global flag, matched on its
+title. The anchor deliberately is not used for that: it belongs to whichever
+floating window opened first, which is ninb only by habit, so close ninb and
+the next window to open inherits the slot. Keying the hide off the anchor hides
+whatever landed there, which in practice means hiding the editor.
 
-The anchor is still claimed, which matters: whichever window holds the anchor
-cannot be shift-dragged, and toolwall relies on ninb holding it so that the
-editor stays draggable.
+An X11 window's title can arrive after it is mapped, so visibility is applied
+again on resize and on config reload rather than only when the window appears.
+A window whose title never matches stays visible, which is the safe way round
+to be wrong.
+
+The anchor is still claimed as it was: whichever window holds it cannot be
+shift-dragged, and toolwall relies on ninb holding it so the editor stays
+draggable. Closing ninb hands that slot to the editor, and the editor then
+cannot be dragged until ninb takes it back.
 
 ## Applying them
 

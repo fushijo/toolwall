@@ -159,7 +159,7 @@ The patches add three things:
 |---|---|---|
 | `waywall.rect` | fills an area with a solid colour | `image` draws a PNG as-is, and colour keys are mirror-only upstream, so there is no way to fill anything |
 | `outline` on `waywall.text` | draws each glyph eight times behind itself | `text` takes x, y, colour, size and depth, and nothing else |
-| `theme.ninb_hidden` | keeps the anchored window hidden | `show_floating` is one flag for every floating window, so revealing the editor reveals Ninjabrain Bot too |
+| `theme.ninb_hidden` | hides Ninjabrain Bot's window | `show_floating` is one flag for every floating window, so revealing the editor reveals Ninjabrain Bot too |
 
 Building waywall from scratch needs meson 1.4 or newer, since it is C23. An
 existing `build/` directory is reused.
@@ -343,7 +343,11 @@ These come from waywall, not from toolwall:
   Multiple colours on one line means multiple text objects.
 - **No fill primitive and no text outline** without the patches in `patches/`.
 - **`show_floating` has no per-window form.** `theme.ninb_hidden` in `patches/`
-  is the narrow fix: it keeps only the anchored window hidden.
+  is the narrow fix: it hides Ninjabrain Bot's window and nothing else.
+- **The anchor slot goes to whichever floating window opens first.** That is
+  Ninjabrain Bot only by habit. Close it and the editor inherits the slot, and
+  an anchored window cannot be shift-dragged, so the editor stops moving until
+  ninb takes the slot back.
 - **Ninjabrain Bot calibration does not work correctly inside waywall.** Use
   boat eye, or calibrate outside.
 
