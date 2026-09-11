@@ -1,20 +1,38 @@
 --[[
-    toolwall.ninb_api, read Ninjabrain Bot's HTTP API from inside waywall.
+    toolwall.ninb_api, reading Ninjabrain Bot's HTTP API from inside waywall.
 
-    waywall's lua has no sockets, so this borrows the trick from gore's
-    ww_requests: shell out to curl writing into a cache file, then read that
-    file back on a later pass. exec does not block and gives us no handle, so a
-    read always returns the *previous* fetch. at overlay refresh rates that is
-    a frame of lag and nobody notices.
+    WHY NOT JUST USE NINB'S WINDOW
 
-    why bother when NBTrackr already draws this: a floating window is subject
-    to show_floating, which is global, so ninb's readout appears and vanishes
-    with the editor. text drawn into the scene is not a window at all, so it
-    sits over the game on its own terms.
+    A floating window is subject to show_floating, which is global, so ninb's
+    readout appears and vanishes along with the editor. NBTrackr has the same
+    problem for the same reason. Text drawn into the scene is not a window at
+    all, so it sits over the game on its own terms, and that is what this feeds.
 
-    ninb 1.5.2 serves /api/v1 with stronghold, boat, blind, divine,
-    allAdvancements, information-messages, version and ping. the api is off by
-    default and has to be enabled in ninb's settings.
+    HOW IT READS
+
+    waywall's Lua has no sockets and exec() returns no handle, so nothing here
+    can wait for an answer. Everything therefore goes through a file that some
+    other process writes:
+
+      stream  a shell script holds ninb's event stream open and keeps the
+              newest event in that file. ninb pushes on every change, so the
+              readout sees a change as it happens.
+
+      fetch   one curl per call, fire and forget. Because there is no handle,
+              a read afterwards returns the *previous* fetch, which is a poll
+              of lag. It covers ninb's boot, and it is the whole fallback when
+              streaming cannot work here.
+
+    The two write different files on purpose. Sharing one would make "the
+    stream is working" and "a fetch happened once" the same observation, and
+    the caller has to be able to tell them apart to know whether it still
+    needs to fetch.
+
+    Routes are hyphenated, information-messages rather than informationMessages;
+    the camel case spelling is the JSON field and asking for it is a 400. ninb
+    1.5.2 serves /api/v1 with stronghold, boat, blind, divine, allAdvancements,
+    information-messages, version and ping, and the API is off until it is
+    turned on in ninb's own settings.
 ]]
 
 local waywall = require("waywall")
