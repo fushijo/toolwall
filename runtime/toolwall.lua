@@ -193,33 +193,13 @@ local function on_load()
 end
 
 --[[
-    Entry point. Returns the table waywall expects from init.lua.
+    Wire up everything that reacts to waywall rather than to a keypress.
 
-    opts:
-      path , override the config path (default $XDG_CONFIG_HOME/waywall/toolwall.json)
+    Each listener runs in its own coroutine, which is what lets the two that
+    wait, ninb's start and the readout's loop, wait without holding up the
+    others or the rest of setup.
 ]]
-function M.setup(opts)
-    opts = opts or {}
-
-    local doc, err = config.load(opts.path)
-    if not doc then
-        -- A bad write from the GUI must never brick a running session.
-        local fallback, fallback_err = config.load_last_good(opts.path)
-        if not fallback then
-            error(("toolwall: %s (and no last-known-good: %s)")
-                :format(err, fallback_err or "none"))
-        end
-        doc = fallback
-        rt.degraded = err
-    else
-        config.mark_good(opts.path)
-    end
-
-    rt.doc = doc
-
-    local cfg = build_waywall_config(doc)
-    cfg.actions = keybinds.build(doc, rt)
-
+local function register_listeners(doc)
     waywall.listen("load", on_load)
 
     waywall.listen("resolution", function()
@@ -291,6 +271,36 @@ function M.setup(opts)
             commands.run_ninb_overlay(rt)
         end)
     end
+end
+
+--[[
+    Entry point. Returns the table waywall expects from init.lua.
+
+    opts:
+      path , override the config path (default $XDG_CONFIG_HOME/waywall/toolwall.json)
+]]
+function M.setup(opts)
+    opts = opts or {}
+
+    local doc, err = config.load(opts.path)
+    if not doc then
+        -- A bad write from the GUI must never brick a running session.
+        local fallback, fallback_err = config.load_last_good(opts.path)
+        if not fallback then
+            error(("toolwall: %s (and no last-known-good: %s)")
+                :format(err, fallback_err or "none"))
+        end
+        doc = fallback
+        rt.degraded = err
+    else
+        config.mark_good(opts.path)
+    end
+
+    rt.doc = doc
+
+    local cfg = build_waywall_config(doc)
+    cfg.actions = keybinds.build(doc, rt)
+    register_listeners(doc)
 
     return cfg
 end
