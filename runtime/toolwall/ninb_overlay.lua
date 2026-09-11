@@ -1,30 +1,27 @@
 --[[
-    toolwall.ninb_overlay, draw ninb's readout into the scene.
+    toolwall.ninb_overlay, Ninjabrain Bot's readout drawn into the scene.
 
     WHY THIS EXISTS
 
-    Ninjabrain Bot's own window is a floating window, and waywall's
-    show_floating() is global. So ninb appears and vanishes together with every
-    other floating window, including this project's editor. Text drawn into the
-    scene is not a window, so it stays put.
+    ninb's own window is a floating window, and waywall's show_floating() is
+    global, so ninb appears and vanishes together with every other floating
+    window, this project's editor included. Text drawn into the scene is not a
+    window, so it stays where it is put.
 
-    LAYOUT
+    WHAT THE FACE GIVES US
 
-    waywall's face is Terminus at a fixed 8x16 per character, scaled by an
-    integer multiplier. Fixed width means a column is just a character count,
-    so labels and values line up exactly and the panel behind them can be
-    measured rather than guessed.
+    waywall draws Terminus at a fixed 8x16 per character, scaled by a whole
+    number. Fixed width means a column is a character count, which is what lets
+    labels line up against values and lets the panel be measured rather than
+    guessed. A text object carries one colour, so a row is a list of cells,
+    each with its own colour and starting column: that is where the grey
+    labels, the coloured certainty and the throw table's columns come from.
 
-    A row is a list of cells, each with its own colour and starting column.
-    That is what gives grey labels next to coloured values, and the eye throw
-    table its columns, out of a text primitive that only takes one colour.
+    WHAT NEEDS THE PATCH
 
-    PANEL
-
-    waywall.rect() is the toolwall patch (see patches/ in the repo). Without it
-    there is no way to fill an area: images cannot be colour keyed upstream, so
-    a PNG can only ever be drawn as itself. The background is skipped rather
-    than faked when the patch is missing.
+    Filled areas, which is the panel, the border and the separators, need
+    waywall.rect from patches/. Stock waywall has no fill primitive at all, so
+    without it those are skipped and the text alone is drawn.
 ]]
 
 local waywall = require("waywall")
@@ -37,22 +34,147 @@ local M = {}
 local Overlay = {}
 Overlay.__index = Overlay
 
--- waywall's bundled terminus face, before the size multiplier
+-- waywall's bundled face, before the size multiplier
 local CHAR_W = 8
 local CHAR_H = 16
 
--- eye throw table, as character columns
+-- the eye throw table, as character columns. the angle column is the widest
+-- because a nudged throw carries its increment count, as "120.02+2".
 local THROW_COLS = { 1, 10, 19, 30 }
+
+-- drawing order within the readout. anything below zero would go behind
+-- Minecraft, so these only have to be distinct and in this order.
+local DEPTH_BORDER = 7
+local DEPTH_PANEL = 8
+local DEPTH_RULE = 9
+local DEPTH_TEXT = 10
+
+--[[
+    Fallbacks for a config written by hand.
+
+    These mirror NinbOverlay::default() in crates/toolwall-core/src/schema.rs,
+    which is the source of truth. The editor writes every field, so a config it
+    produced never reaches these; they exist so a partial config still draws
+    something sensible. Keeping them in one table is the point: they used to be
+    written out at each of forty-odd call sites, and three of them had drifted
+    away from the schema without anyone noticing.
+]]
+local DEFAULTS = {
+    layout = "ninbot",
+
+    x = 8,
+    y = 40,
+    size = 2,
+    line_gap = 2,
+    padding = 8,
+
+    coords = "block",
+    idle_text = "no eye throws yet",
+
+    show_location = true,
+    show_certainty = true,
+    show_nether = true,
+    show_distance = true,
+    show_angle = false,
+    show_info = false,
+    wrap_width = 44,
+
+    throw_rows = 0,
+    show_throw_header = true,
+    show_correction = true,
+
+    shown_predictions = 1,
+    template = "{x}, {z}  {certainty}",
+
+    color = "#ffffffff",
+    label_color = "#aaaaaaff",
+    header_color = "#7f8ea3ff",
+    certainty_high_color = "#55ff55ff",
+    certainty_mid_color = "#ffaa00ff",
+    certainty_low_color = "#ff5555ff",
+    certainty_high_above = 80,
+    certainty_mid_above = 50,
+
+    outline = 0,
+    outline_color = "#000000ff",
+
+    background = true,
+    background_color = "#12161ce6",
+    border_width = 0,
+    border_color = "#7f8ea3ff",
+
+    separators = false,
+    separator_color = "#7f8ea380",
+    separator_width = 1,
+
+    hide_after_ms = 0,
+}
+
+-- pixel counts and row counts, which have to be whole numbers. the certainty
+-- thresholds are deliberately not here: 82.5% is a reasonable cut.
+local WHOLE = {
+    x = true, y = true, size = true, line_gap = true, padding = true,
+    wrap_width = true, throw_rows = true, shown_predictions = true,
+    outline = true, border_width = true, separator_width = true,
+    hide_after_ms = true,
+}
+
+-- below these the layout stops making sense: a zero size draws nothing, a zero
+-- wrap width loops forever.
+local MINIMUM = {
+    size = 1,
+    separator_width = 1,
+    wrap_width = 16,
+    shown_predictions = 1,
+}
+
+--[[
+    Fill in what the config left out, once, so that drawing can read plain
+    fields. Types follow the fallback: a boolean default coerces through
+    util.bool, a number through tonumber, anything else to a string.
+]]
+local function resolve(cfg)
+    cfg = type(cfg) == "table" and cfg or {}
+
+    local out = {}
+    for key, fallback in pairs(DEFAULTS) do
+        local value = cfg[key]
+
+        if value == nil or value == util.NULL then
+            value = fallback
+        elseif type(fallback) == "boolean" then
+            value = util.bool(value, fallback)
+        elseif type(fallback) == "number" then
+            value = tonumber(value) or fallback
+        else
+            value = tostring(value)
+        end
+
+        if WHOLE[key] then
+            value = math.floor(value)
+        end
+        if MINIMUM[key] and value < MINIMUM[key] then
+            value = MINIMUM[key]
+        end
+
+        out[key] = value
+    end
+
+    return out
+end
 
 function M.new(cfg)
     return setmetatable({
-        cfg = cfg or {},
+        cfg = resolve(cfg),
         objects = {},
-        last_line = nil,
-        last_change = 0,
-        -- what is on screen right now, so an unchanged readout costs nothing
-        signature = nil,
-        shown = false,
+
+        -- the last readout seen, and when it last differed, for hide_after_ms
+        latest = nil,
+        changed_at = 0,
+
+        -- the readout currently on screen, so an unchanged one costs nothing
+        drawn = nil,
+
         warned = false,
     }, Overlay)
 end
@@ -61,15 +183,9 @@ function Overlay:clear()
     for _, obj in ipairs(self.objects) do
         pcall(function() obj:close() end)
     end
-    self.objects = {}
-    self.shown = false
-    self.signature = nil
-end
 
-local function opt(cfg, key, fallback)
-    local value = cfg[key]
-    if value == nil or value == util.NULL then return fallback end
-    return value
+    self.objects = {}
+    self.drawn = nil
 end
 
 local function cell(text, colour, col)
@@ -80,33 +196,30 @@ end
 local SEPARATOR = { separator = true }
 
 function Overlay:_separator(rows)
-    if util.bool(opt(self.cfg, "separators", false), false) and #rows > 0 then
+    if self.cfg.separators and #rows > 0 then
         table.insert(rows, SEPARATOR)
     end
 end
 
---[[
-    colour a certainty by how good it is, the way every other tool does.
-]]
+-- colour a certainty by how good it is, the way every other tool does
 function Overlay:_certainty_colour(fields)
     local cfg = self.cfg
-    local pct = tonumber(fields.certaintyValue)
-    if not pct then
-        pct = tonumber(tostring(fields.certainty or ""):match("[%d%.]+"))
-    end
-    if not pct then return opt(cfg, "color", "#ffffffff") end
 
-    if pct >= opt(cfg, "certainty_high_above", 80) then
-        return opt(cfg, "certainty_high_color", "#55ff55ff")
-    elseif pct >= opt(cfg, "certainty_mid_above", 50) then
-        return opt(cfg, "certainty_mid_color", "#ffaa00ff")
+    local pct = tonumber(fields.certaintyValue)
+        or tonumber(tostring(fields.certainty or ""):match("[%d%.]+"))
+
+    if not pct then
+        return cfg.color
+    elseif pct >= cfg.certainty_high_above then
+        return cfg.certainty_high_color
+    elseif pct >= cfg.certainty_mid_above then
+        return cfg.certainty_mid_color
     end
-    return opt(cfg, "certainty_low_color", "#ff5555ff")
+
+    return cfg.certainty_low_color
 end
 
---[[
-    break a long message onto several lines at word boundaries.
-]]
+-- break a long message onto several lines at word boundaries
 local function wrap(text, width)
     local lines, line = {}, ""
 
@@ -121,22 +234,25 @@ local function wrap(text, width)
         end
     end
 
-    if line ~= "" then table.insert(lines, line) end
+    if line ~= "" then
+        table.insert(lines, line)
+    end
+
     return lines
 end
 
 --[[
-    one throw's angle, with its correction shown the way ninb shows it.
+    One throw's angle, with its correction shown the way ninb shows it.
 
-    nudging a throw with ninb's hotkeys does not rewrite the angle you measured,
-    it records how many increments you moved it by. "120.02+2" is the measured
-    angle and two nudges up, which is the number you need when you are deciding
-    whether to nudge again.
+    Nudging a throw with ninb's hotkeys does not rewrite the angle you
+    measured, it counts the increments you moved it by. "120.02+2" is the
+    measurement and two nudges up, which is what you need to decide whether to
+    nudge again.
 ]]
 function Overlay:_angle_cell(throw)
     local base = throw.angleWithoutCorrection
-    if type(base) ~= "number" or
-        not util.bool(opt(self.cfg, "show_correction", true), true) then
+
+    if type(base) ~= "number" or not self.cfg.show_correction then
         return api.fixed(throw.angle, 2)
     end
 
@@ -149,105 +265,99 @@ function Overlay:_angle_cell(throw)
 end
 
 --[[
-    the ninb window, rebuilt: a label column and a value column, then the
-    information messages, then the eye throws.
+    ninb's window rebuilt: a label column beside a value column, then its
+    hints, then the eye throws.
 ]]
 function Overlay:_ninbot_rows(fields, data, messages)
     local cfg = self.cfg
     local rows = {}
 
-    local label_colour = opt(cfg, "label_color", "#aaaaaaff")
-    local value_colour = opt(cfg, "color", "#ffffffff")
-    local coords = opt(cfg, "coords", "block")
-
-    local pairs_out = {}
+    -- gathered first, so that one label column can be sized for all of them
+    local labelled = {}
     local function add(label, text, colour)
         if text and text ~= "" then
-            table.insert(pairs_out, { label = label, text = text, colour = colour })
+            table.insert(labelled, { label = label, text = text, colour = colour })
         end
     end
 
-    if util.bool(opt(cfg, "show_location", true), true) then
-        local where = ("(%s, %s)"):format(fields.x or "?", fields.z or "?")
-        if fields.distance and util.bool(opt(cfg, "show_distance", true), true) then
-            where = where .. (", %s blocks away"):format(fields.distance)
+    local function place(x, z, distance)
+        local where = ("(%s, %s)"):format(x or "?", z or "?")
+        if distance and cfg.show_distance then
+            where = where .. (", %s blocks away"):format(distance)
         end
-        add(coords == "chunk" and "Chunk:" or "Location:", where, value_colour)
+        return where
     end
 
-    if util.bool(opt(cfg, "show_certainty", true), true) then
+    if cfg.show_location then
+        add(cfg.coords == "chunk" and "Chunk:" or "Location:",
+            place(fields.x, fields.z, fields.distance), cfg.color)
+    end
+
+    if cfg.show_certainty then
         add("Certainty:", fields.certainty, self:_certainty_colour(fields))
     end
 
     -- the row the overworld-only tools leave out. a run reaches the stronghold
-    -- through the nether far more often than by walking.
-    if util.bool(opt(cfg, "show_nether", true), true) and fields.netherX then
-        local where = ("(%s, %s)"):format(fields.netherX, fields.netherZ)
-        if fields.netherDistance and util.bool(opt(cfg, "show_distance", true), true) then
-            where = where .. (", %s blocks away"):format(fields.netherDistance)
-        end
-        add("Nether coords:", where, value_colour)
+    -- through the nether far more often than on foot.
+    if cfg.show_nether and fields.netherX then
+        add("Nether coords:",
+            place(fields.netherX, fields.netherZ, fields.netherDistance), cfg.color)
     end
 
-    if util.bool(opt(cfg, "show_angle", false), false) then
-        -- ninb shows where you are looking, then how far to turn
+    if cfg.show_angle then
+        -- where you are looking, then how far to turn
         local text = fields.playerAngle or fields.angle
         if text and fields.angleDelta then
             text = ("%s (-> %s)"):format(text, fields.angleDelta)
         end
-        add("Current angle:", text, value_colour)
+        add("Current angle:", text, cfg.color)
     end
 
-    -- one label column wide enough for all of them, so the values line up
     local label_width = 0
-    for _, entry in ipairs(pairs_out) do
+    for _, entry in ipairs(labelled) do
         label_width = math.max(label_width, #entry.label)
     end
 
-    for _, entry in ipairs(pairs_out) do
+    for _, entry in ipairs(labelled) do
         table.insert(rows, {
-            cell(entry.label, label_colour, 0),
+            cell(entry.label, cfg.label_color, 0),
             cell(entry.text, entry.colour, label_width + 1),
         })
     end
 
-    if util.bool(opt(cfg, "show_info", false), false) and #(messages or {}) > 0 then
+    messages = messages or {}
+    if cfg.show_info and #messages > 0 then
         self:_separator(rows)
 
-        local width = math.max(16, math.floor(opt(cfg, "wrap_width", 44)))
-        for _, message in ipairs(messages or {}) do
-            for _, line in ipairs(wrap(message, width)) do
-                table.insert(rows, { cell(line, opt(cfg, "header_color", "#8899aaff"), 0) })
+        for _, message in ipairs(messages) do
+            for _, line in ipairs(wrap(message, cfg.wrap_width)) do
+                table.insert(rows, { cell(line, cfg.header_color, 0) })
             end
         end
     end
 
-    local throw_rows = math.floor(opt(cfg, "throw_rows", 0))
     local throws = type(data) == "table" and data.eyeThrows or nil
-
-    if throw_rows > 0 and type(throws) == "table" and #throws > 0 then
-        local header_colour = opt(cfg, "header_color", "#8899aaff")
+    if cfg.throw_rows > 0 and type(throws) == "table" and #throws > 0 then
         self:_separator(rows)
 
-        if util.bool(opt(cfg, "show_throw_header", true), true) then
+        if cfg.show_throw_header then
             table.insert(rows, {
-                cell("x", header_colour, THROW_COLS[1]),
-                cell("z", header_colour, THROW_COLS[2]),
-                cell("angle", header_colour, THROW_COLS[3]),
-                cell("error", header_colour, THROW_COLS[4]),
+                cell("x", cfg.header_color, THROW_COLS[1]),
+                cell("z", cfg.header_color, THROW_COLS[2]),
+                cell("angle", cfg.header_color, THROW_COLS[3]),
+                cell("error", cfg.header_color, THROW_COLS[4]),
             })
         end
 
         -- newest last, which is the order ninb lists them in
-        local first = math.max(1, #throws - throw_rows + 1)
-        for i = first, #throws do
-            local t = throws[i]
-            if type(t) == "table" then
+        for i = math.max(1, #throws - cfg.throw_rows + 1), #throws do
+            local throw = throws[i]
+            if type(throw) == "table" then
                 table.insert(rows, {
-                    cell(api.fixed(t.xInOverworld, 2), value_colour, THROW_COLS[1]),
-                    cell(api.fixed(t.zInOverworld, 2), value_colour, THROW_COLS[2]),
-                    cell(self:_angle_cell(t), value_colour, THROW_COLS[3]),
-                    cell(api.fixed(t.error, 4), header_colour, THROW_COLS[4]),
+                    cell(api.fixed(throw.xInOverworld, 2), cfg.color, THROW_COLS[1]),
+                    cell(api.fixed(throw.zInOverworld, 2), cfg.color, THROW_COLS[2]),
+                    cell(self:_angle_cell(throw), cfg.color, THROW_COLS[3]),
+                    cell(api.fixed(throw.error, 4), cfg.header_color, THROW_COLS[4]),
                 })
             end
         end
@@ -256,27 +366,20 @@ function Overlay:_ninbot_rows(fields, data, messages)
     return rows
 end
 
---[[
-    one templated line per prediction, for people who want the numbers and
-    nothing else.
-]]
+-- one templated line per prediction, for people who want the numbers and
+-- nothing else
 function Overlay:_compact_rows(data)
     local cfg = self.cfg
     local rows = {}
 
-    local predictions = type(data) == "table" and data.predictions or nil
-    if type(predictions) ~= "table" then return rows end
+    local predictions = type(data) == "table" and data.predictions or {}
 
-    local count = math.max(1, math.floor(opt(cfg, "shown_predictions", 1)))
-    local template = opt(cfg, "template", "{x}, {z}  {certainty}")
-    local coords = opt(cfg, "coords", "block")
-
-    for i = 1, math.min(count, #predictions) do
-        local fields = api.prediction_fields(predictions[i], data, coords)
+    for i = 1, math.min(cfg.shown_predictions, #predictions) do
+        local fields = api.prediction_fields(predictions[i], data, cfg.coords)
         if fields then
             fields.n = tostring(i)
             table.insert(rows, {
-                cell(api.render(template, fields), self:_certainty_colour(fields), 0),
+                cell(api.render(cfg.template, fields), self:_certainty_colour(fields), 0),
             })
         end
     end
@@ -285,38 +388,34 @@ function Overlay:_compact_rows(data)
 end
 
 --[[
-    build the rows to draw. empty means nothing to show, which is not the same
-    as an error.
+    The rows to draw. Empty means there is nothing to show, which is not the
+    same as an error: before the first throw there is no prediction to report.
 ]]
 function Overlay:rows(data, messages)
     local cfg = self.cfg
-
     local predictions = type(data) == "table" and data.predictions or nil
-    local has_prediction = type(predictions) == "table" and #predictions > 0
 
-    if has_prediction then
-        if opt(cfg, "layout", "ninbot") == "compact" then
+    if type(predictions) == "table" and #predictions > 0 then
+        if cfg.layout == "compact" then
             return self:_compact_rows(data)
         end
 
-        local fields = api.prediction_fields(predictions[1], data,
-            opt(cfg, "coords", "block"))
+        local fields = api.prediction_fields(predictions[1], data, cfg.coords)
         if fields then
             return self:_ninbot_rows(fields, data, messages)
         end
     end
 
-    local idle = opt(cfg, "idle_text", "")
-    if idle ~= "" then
-        return { { cell(idle, opt(cfg, "header_color", "#8899aaff"), 0) } }
+    if cfg.idle_text ~= "" then
+        return { { cell(cfg.idle_text, cfg.header_color, 0) } }
     end
 
     return {}
 end
 
 --[[
-    a filled rectangle. needs the toolwall patch; without it there is no fill
-    primitive at all and the panel is simply skipped.
+    A filled rectangle. Needs the toolwall patch; stock waywall has no fill
+    primitive at all, so without it the area is simply left empty.
 ]]
 function Overlay:_rect(rect, colour, depth)
     if type(waywall.rect) ~= "function" then
@@ -327,29 +426,27 @@ function Overlay:_rect(rect, colour, depth)
         return
     end
 
-    local ok, obj = pcall(waywall.rect, {
-        dst = rect,
-        color = colour,
-        depth = depth,
-    })
+    local ok, obj = pcall(waywall.rect, { dst = rect, color = colour, depth = depth })
     if ok and obj then
         table.insert(self.objects, obj)
     end
 end
 
-function Overlay:_text(line, x, y, colour, size, depth)
-    if line == nil or line == "" then return end
+function Overlay:_text(line, x, y, colour)
+    if line == nil or line == "" then
+        return
+    end
 
-    local cfg = self.cfg
     local ok, obj = pcall(waywall.text, line, {
         x = x,
         y = y,
         color = colour,
-        size = size,
-        depth = depth,
+        size = self.cfg.size,
+        depth = DEPTH_TEXT,
+
         -- ignored by an unpatched waywall, which is the graceful outcome
-        outline = math.floor(opt(cfg, "outline", 0)),
-        outline_color = opt(cfg, "outline_color", "#000000ff"),
+        outline = self.cfg.outline,
+        outline_color = self.cfg.outline_color,
     })
     if ok and obj then
         table.insert(self.objects, obj)
@@ -357,28 +454,25 @@ function Overlay:_text(line, x, y, colour, size, depth)
 end
 
 --[[
-    where every row sits, and how big the whole thing is.
+    Where every row sits, and how big the whole thing ends up.
 
-    separators take part in layout so the panel grows to hold them, and so the
-    rows after one are pushed down by exactly the rule's own height.
+    Separators take part in this so that the panel grows to hold them and the
+    rows below one are pushed down by exactly the rule's height.
 ]]
 function Overlay:_layout(rows)
     local cfg = self.cfg
 
-    local size = math.max(1, math.floor(opt(cfg, "size", 2)))
-    local gap = math.floor(opt(cfg, "line_gap", 2))
-    local pitch = CHAR_H * size + gap
-    local rule = math.max(1, math.floor(opt(cfg, "separator_width", 1)))
-    local rule_pitch = rule + gap
+    local pitch = CHAR_H * cfg.size + cfg.line_gap
+    local rule_pitch = cfg.separator_width + cfg.line_gap
 
-    local out, y, widest = {}, 0, 0
+    local placed, y, widest = {}, 0, 0
 
     for _, row in ipairs(rows) do
         if row.separator then
-            table.insert(out, { separator = true, y = y })
+            table.insert(placed, { separator = true, y = y })
             y = y + rule_pitch
         else
-            table.insert(out, { cells = row, y = y })
+            table.insert(placed, { cells = row, y = y })
             for _, c in ipairs(row) do
                 widest = math.max(widest, c.col + #c.text)
             end
@@ -386,103 +480,99 @@ function Overlay:_layout(rows)
         end
     end
 
-    -- every row advanced by its own trailing gap; the last one has nothing
-    -- underneath it to be separated from
-    local height = math.max(0, y - gap)
+    return {
+        rows = placed,
+        width = widest * CHAR_W * cfg.size,
+        -- every row advanced by its own trailing gap, and the last one has
+        -- nothing underneath it to be separated from
+        height = math.max(0, y - cfg.line_gap),
+    }
+end
 
-    return out, widest * CHAR_W * size, height, size, rule
+-- what is on screen, as a string, so that an identical readout can be skipped
+local function signature(rows)
+    local parts = {}
+
+    for _, row in ipairs(rows) do
+        if row.separator then
+            table.insert(parts, "-")
+        else
+            for _, c in ipairs(row) do
+                table.insert(parts, c.text .. "\t" .. c.colour)
+            end
+        end
+        table.insert(parts, "\n")
+    end
+
+    return table.concat(parts, "\t")
 end
 
 --[[
-    redraw. text objects cannot be mutated, so any change means closing and
-    recreating everything, which is why nothing is touched when the readout
-    reads the same as last time. That is what makes a fast poll cheap.
+    Redraw.
+
+    Text objects cannot be mutated, so any change at all means closing and
+    recreating every one of them. That is why an unchanged readout is left
+    alone, and it is what makes a fifty millisecond tick cheap.
 ]]
 function Overlay:draw(data, now, messages)
     local cfg = self.cfg
-
     local rows = self:rows(data, messages)
+
     if #rows == 0 then
-        if self.shown then
-            self:clear()
-            self.shown = false
-        end
-        return
+        return self:clear()
     end
 
-    local joined = ""
-    for _, row in ipairs(rows) do
-        if row.separator then
-            joined = joined .. "-\n"
-        else
-            for _, c in ipairs(row) do joined = joined .. c.text .. "\t" .. c.colour .. "\t" end
-            joined = joined .. "\n"
-        end
+    local current = signature(rows)
+
+    if current ~= self.latest then
+        self.latest = current
+        self.changed_at = now or 0
     end
 
-    -- stale handling: drop the readout when nothing has changed for a while
-    if joined ~= self.last_line then
-        self.last_line = joined
-        self.last_change = now or 0
+    -- drop the readout once it has sat unchanged for long enough
+    if cfg.hide_after_ms > 0 and now and (now - self.changed_at) > cfg.hide_after_ms then
+        return self:clear()
     end
 
-    local hide_after = math.floor(opt(cfg, "hide_after_ms", 0))
-    if hide_after > 0 and now and (now - self.last_change) > hide_after then
-        if self.shown then
-            self:clear()
-            self.shown = false
-        end
-        return
-    end
-
-    -- nothing on screen would change, so leave the scene objects alone
-    if self.shown and joined == self.signature then
+    if current == self.drawn then
         return
     end
 
     self:clear()
 
-    local x = math.floor(opt(cfg, "x", 8))
-    local y = math.floor(opt(cfg, "y", 40))
-    local pad = math.floor(opt(cfg, "padding", 6))
+    local x, y, pad = cfg.x, cfg.y, cfg.padding
+    local layout = self:_layout(rows)
 
-    local placed, text_w, text_h, size, rule = self:_layout(rows)
+    -- a rule spans the panel when there is one, and the text otherwise
+    local rule_x = cfg.background and x - pad or x
+    local rule_w = cfg.background and layout.width + pad * 2 or layout.width
 
-    local panel = util.bool(opt(cfg, "background", false), false)
-    local rule_x = panel and (x - pad) or x
-    local rule_w = panel and (text_w + pad * 2) or text_w
+    if cfg.background then
+        local w, h = layout.width + pad * 2, layout.height + pad * 2
 
-    if panel then
-        local w, h = text_w + pad * 2, text_h + pad * 2
-
-        local border = math.floor(opt(cfg, "border_width", 0))
-        if border > 0 then
-            self:_rect({
-                x = x - pad - border,
-                y = y - pad - border,
-                w = w + border * 2,
-                h = h + border * 2,
-            }, opt(cfg, "border_color", "#8899aaff"), 7)
+        if cfg.border_width > 0 then
+            local edge = cfg.border_width
+            self:_rect({ x = x - pad - edge, y = y - pad - edge,
+                         w = w + edge * 2, h = h + edge * 2 },
+                cfg.border_color, DEPTH_BORDER)
         end
 
         self:_rect({ x = x - pad, y = y - pad, w = w, h = h },
-            opt(cfg, "background_color", "#000000b0"), 8)
+            cfg.background_color, DEPTH_PANEL)
     end
 
-    for _, row in ipairs(placed) do
+    for _, row in ipairs(layout.rows) do
         if row.separator then
-            self:_rect({ x = rule_x, y = y + row.y, w = rule_w, h = rule },
-                opt(cfg, "separator_color", "#8899aa80"), 9)
+            self:_rect({ x = rule_x, y = y + row.y, w = rule_w, h = cfg.separator_width },
+                cfg.separator_color, DEPTH_RULE)
         else
             for _, c in ipairs(row.cells) do
-                self:_text(c.text, x + c.col * CHAR_W * size, y + row.y,
-                    c.colour, size, 10)
+                self:_text(c.text, x + c.col * CHAR_W * cfg.size, y + row.y, c.colour)
             end
         end
     end
 
-    self.signature = joined
-    self.shown = true
+    self.drawn = current
 end
 
 return M
