@@ -50,6 +50,14 @@ pub fn show(
                 ui.checkbox(&mut doc.ninb.autostart, "");
                 ui.end_row();
 
+                ui.label("Wait before starting").on_hover_text(
+                    "waywall's X server comes up after the config does, and ninb reads \
+                     the keymap once when it starts. Too early and its hotkeys land on \
+                     the wrong keys.",
+                );
+                ui.add(egui::Slider::new(&mut doc.ninb.start_delay_ms, 0..=15000).suffix(" ms"));
+                ui.end_row();
+
                 if advanced {
                     ui.label("Launch command")
                         .on_hover_text("{jar} is replaced with the path above");

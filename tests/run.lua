@@ -808,6 +808,36 @@ check("the readout keeps trying to stream instead of giving up on it", function(
     os.remove(path)
 end)
 
+check("ninb waits for waywall's x server before starting", function()
+    -- ninb reads the x11 keymap once at startup, and waywall's x server comes
+    -- up after the config runs. starting it immediately leaves it eight places
+    -- out on every key.
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "ninb": { "jar": "~/ninb.jar", "autostart": true, "start_delay_ms": 3000 } }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    waywall.sleep_budget = 40
+    waywall.finish_startup()
+
+    local slept_first, launched = nil, nil
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "sleep" and not slept_first then
+            slept_first = entry.args[1]
+        elseif entry.name == "exec" and tostring(entry.args[1]):match("%.sh$") then
+            launched = launched or slept_first
+        end
+    end
+
+    assert_eq(slept_first, 3000, "it waits the configured delay")
+    assert_eq(launched, 3000, "and only launches after waiting")
+
+    os.remove(path)
+end)
+
 print(("\n%d passed, %d failed"):format(passed, failed))
 
 os.exit(failed == 0 and 0 or 1)

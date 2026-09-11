@@ -365,6 +365,14 @@ pub struct Ninb {
     /// port ninb's http api listens on. off by default in ninb's settings.
     #[serde(default = "ninb_port")]
     pub port: u16,
+    /// how long to wait before starting ninb.
+    ///
+    /// waywall's X server comes up after the config runs, and ninb reads the
+    /// X11 keymap once at startup. start it too early and it falls back to raw
+    /// kernel keycodes, which are eight places out from the X ones, so its
+    /// hotkeys land on the wrong keys.
+    #[serde(default = "ninb_delay")]
+    pub start_delay_ms: u32,
     /// draw ninb's readout into the scene instead of reading its window
     #[serde(default)]
     pub overlay: NinbOverlay,
@@ -597,6 +605,7 @@ impl Default for Ninb {
             autostart: false,
             command: ninb_command(),
             port: ninb_port(),
+            start_delay_ms: ninb_delay(),
             overlay: NinbOverlay::default(),
         }
     }
@@ -736,6 +745,7 @@ fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }
 fn ninb_command() -> String { "java -jar {jar}".into() }
 fn ninb_port() -> u16 { 52533 }
 fn ninb_poll() -> u32 { 50 }
+fn ninb_delay() -> u32 { 3000 }
 fn rule() -> String { "#7f8ea380".into() }
 fn ninb_idle() -> String { "no eye throws yet".into() }
 fn eight() -> i32 { 8 }

@@ -181,18 +181,7 @@ local function on_load()
 
     rt.hud:refresh()
 
-    -- start ninb first so it takes waywall's one anchor slot. the anchored
-    -- window cannot be shift-dragged, so if the editor gets there first it
-    -- ends up pinned and immovable.
-    local ninb = rt.doc.ninb or {}
-    local jar = ninb.jar
-    if util.bool(ninb.autostart, false) and jar and jar ~= util.NULL and jar ~= "" then
-        local template = ninb.command
-        if not template or template == util.NULL or template == "" then
-            template = "java -jar {jar}"
-        end
-        launch.once(waywall, "ninb", util.expand_command((template:gsub("{jar}", util.expand(jar)))))
-    end
+    -- ninb is started from its own listener, below, so that it can wait.
 
     if next(rt.doc.input and rt.doc.input.remaps_menu or {}) then
         apply_state_remaps(rt.doc)
@@ -258,6 +247,42 @@ function M.setup(opts)
     if doc.hud and doc.hud.follow_state then
         waywall.listen("state", function()
             if rt.hud then rt.hud:refresh() end
+        end)
+    end
+
+    --[[
+        Start Ninjabrain Bot, a little after everything else.
+
+        THE PROBLEM
+
+        ninb reads the X11 keymap once, when it starts, to build the table it
+        translates key presses through. waywall brings its X server up *after*
+        the config has run, so starting ninb from the config means starting it
+        before there is an X server to read a keymap from. What it ends up with
+        is the raw kernel keycodes, which are the X ones minus 8, so every key
+        it sees is eight places out: right arrow reads as the numpad slash,
+        left arrow as compose, and its hotkeys quietly stop working.
+
+        It also wants to be first so it takes waywall's one anchor slot. Those
+        two pull in opposite directions, and correctness wins: a late anchor
+        sorts itself out, a wrong keymap does not.
+
+        Its own listener, because the wait must not hold anything else up.
+    ]]
+    local ninb = doc.ninb or {}
+    local jar = ninb.jar
+
+    if util.bool(ninb.autostart, false) and jar and jar ~= util.NULL and jar ~= "" then
+        waywall.listen("load", function()
+            pcall(waywall.sleep, math.max(0, math.floor(ninb.start_delay_ms or 3000)))
+
+            local template = ninb.command
+            if not template or template == util.NULL or template == "" then
+                template = "java -jar {jar}"
+            end
+
+            launch.once(waywall, "ninb",
+                util.expand_command((template:gsub("{jar}", util.expand(jar)))))
         end)
     end
 
