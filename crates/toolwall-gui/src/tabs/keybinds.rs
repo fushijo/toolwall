@@ -62,6 +62,8 @@ pub fn show(
     }
 
     egui::ScrollArea::vertical().show(ui, |ui| {
+        suspend_switch(ui, doc);
+
         let mut remove = None;
 
         for (index, bind) in doc.keybinds.iter_mut().enumerate() {
@@ -387,4 +389,39 @@ fn set_arg(args: &mut Option<Value>, key: &str, value: Value) {
             *args = Some(Value::Object(map));
         }
     }
+}
+
+/// Turn every keybind off except the one that opens this editor.
+///
+/// For when toolwall's keys are in the way, of the game or of another tool.
+/// It is meant to be turned off again, so it says so plainly and the top bar
+/// keeps saying so from whichever tab you wander to.
+fn suspend_switch(ui: &mut egui::Ui, doc: &mut Document) {
+    ui.checkbox(&mut doc.suspend_keybinds, "Suspend all keybinds");
+
+    if doc.suspend_keybinds {
+        let escape = doc
+            .keybinds
+            .iter()
+            .find(|b| b.command == Command::GuiToggle)
+            .map(|b| b.input.clone());
+
+        match escape {
+            Some(input) => {
+                ui.colored_label(
+                    egui::Color32::from_rgb(255, 170, 80),
+                    format!("Only {input} still does anything. Everything else reaches the game."),
+                );
+            }
+            None => {
+                ui.colored_label(
+                    egui::Color32::from_rgb(255, 120, 120),
+                    "Nothing here opens this editor, so closing it strands you. \
+                     Bind a key to gui.toggle, or run: toolwall set suspend_keybinds false",
+                );
+            }
+        }
+    }
+
+    ui.separator();
 }

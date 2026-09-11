@@ -863,6 +863,47 @@ check("starting the readout twice leaves the first one alone", function()
     os.remove(cached)
 end)
 
+check("suspending keybinds leaves only the one that opens the editor", function()
+    local path = write_config([[
+      { "version": 1,
+        "suspend_keybinds": true,
+        "modes": [ { "id": "thin", "resolution": {"width":340,"height":1080} } ],
+        "keybinds": [
+          { "input": "B", "command": "mode.set", "args": { "mode": "thin" } },
+          { "input": "bracketleft", "command": "gui.toggle" } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+
+    assert_eq(cfg.actions["B"], nil, "an ordinary bind does not fire")
+    assert_eq(type(cfg.actions["bracketleft"]), "function", "the editor is still reachable")
+
+    -- an unbound key has to reach minecraft, not be swallowed
+    assert_eq(toolwall.rt.modes.current, nil, "and the mode it would have set is untouched")
+
+    os.remove(path)
+end)
+
+check("keybinds all work again once it is switched off", function()
+    local path = write_config([[
+      { "version": 1,
+        "suspend_keybinds": false,
+        "modes": [ { "id": "thin", "resolution": {"width":340,"height":1080} } ],
+        "keybinds": [
+          { "input": "B", "command": "mode.set", "args": { "mode": "thin" } } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["B"]()
+    assert_eq(toolwall.rt.modes.current, "thin", "the bind fires")
+
+    os.remove(path)
+end)
+
 print(("\n%d passed, %d failed"):format(passed, failed))
 
 os.exit(failed == 0 and 0 or 1)

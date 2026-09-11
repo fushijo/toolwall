@@ -342,6 +342,7 @@
       "f3_safe": true
     }
   ],
+  "suspend_keybinds": false,
   "hud": {
     "idle_label": "base",
     "follow_state": false

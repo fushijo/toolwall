@@ -241,6 +241,11 @@
         "$ref": "#/$defs/keybind"
       }
     },
+    "suspend_keybinds": {
+      "type": "boolean",
+      "default": false,
+      "description": "Stop every keybind except the one that opens the editor. Meant to be switched off again; `toolwall set suspend_keybinds false` undoes it."
+    },
     "hud": {
       "type": "object",
       "additionalProperties": false,

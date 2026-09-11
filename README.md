@@ -259,6 +259,20 @@ watch it move. `Esc` closes the editor.
 Minecraft has to release the cursor before you can click a floating window.
 Opening the editor presses Escape into the game to make that happen.
 
+## Suspending the keybinds
+
+When toolwall's keys are in the way, of something in the game or of another
+tool's global hotkeys, the Keybinds tab has a switch that stops all of them.
+All except the one that opens the editor, which stays bound because it is the
+way back. Everything else reaches Minecraft untouched.
+
+It is meant to be temporary, so the editor keeps saying so from whichever tab
+you are on. If you do strand yourself, with no key bound to `gui.toggle`:
+
+```sh
+toolwall set suspend_keybinds false
+```
+
 ## Measuring window
 
 The boat-eye measuring view is a mirror magnifying a slice of the game, with

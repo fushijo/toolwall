@@ -55,6 +55,15 @@ pub struct Document {
     #[serde(default)]
     pub keybinds: Vec<Keybind>,
 
+    /// Stop every keybind except the one that opens the editor.
+    ///
+    /// For when toolwall's keys are in the way of something you are doing in
+    /// the game, or of another tool's. Meant to be switched off again: the
+    /// editor says so while it is on, and `toolwall set suspend_keybinds
+    /// false` undoes it from a terminal if the editor cannot be reached.
+    #[serde(default)]
+    pub suspend_keybinds: bool,
+
     #[serde(default)]
     pub hud: Hud,
 
@@ -80,6 +89,7 @@ impl Default for Document {
             text: Vec::new(),
             ninb: Ninb::default(),
             keybinds: Vec::new(),
+            suspend_keybinds: false,
             hud: Hud::default(),
             gui: Gui::default(),
         }

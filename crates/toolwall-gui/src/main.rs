@@ -344,6 +344,22 @@ impl eframe::App for App {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
 
+                    // A global mode that is easy to forget you left on, so
+                    // it is said from every tab rather than only its own.
+                    if self.doc.suspend_keybinds {
+                        ui.separator();
+                        if ui
+                            .button(
+                                egui::RichText::new("keybinds suspended")
+                                    .color(egui::Color32::from_rgb(255, 170, 80)),
+                            )
+                            .on_hover_text("Click to turn them back on")
+                            .clicked()
+                        {
+                            self.doc.suspend_keybinds = false;
+                        }
+                    }
+
                     // Everything most people need is in Basic; Advanced adds
                     // ids, layering and the things that break a setup.
                     ui.separator();

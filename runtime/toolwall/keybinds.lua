@@ -15,11 +15,22 @@ local util = require("toolwall.util")
 local M = {}
 
 --[[
+    The one command that survives a suspension, because it is the way back.
+
+    Suspending every key including this one would leave no way to unsuspend
+    from inside the game, and the editor is where the switch lives.
+]]
+local ESCAPE_COMMAND = "gui.toggle"
+
+--[[
     doc: parsed config document
     rt:  the runtime state table (populated on "load")
 ]]
 function M.build(doc, rt)
     local actions = {}
+
+    local suspended = util.bool(doc.suspend_keybinds, false)
+    local escape = nil
 
     for _, bind in ipairs(doc.keybinds or {}) do
         local input = bind.input
@@ -27,13 +38,19 @@ function M.build(doc, rt)
         local args = bind.args or {}
         local f3_safe = util.bool(bind.f3_safe, true)
 
-        if type(input) ~= "string" or input == "" then
+        if suspended and command ~= ESCAPE_COMMAND then
+            -- left unbound, so the key reaches Minecraft untouched
+        elseif type(input) ~= "string" or input == "" then
             util.warn("keybind is missing an input")
         elseif type(command) ~= "string" or command == "" then
             util.warn(("keybind %q is missing a command"):format(input))
         elseif actions[input] then
             util.warn(("duplicate keybind for %q, ignoring"):format(input))
         else
+            if command == ESCAPE_COMMAND then
+                escape = input
+            end
+
             actions[input] = function()
                 -- The scene does not exist until the load event has fired.
                 if not rt.modes then
@@ -74,6 +91,15 @@ function M.build(doc, rt)
                     return false
                 end
             end
+        end
+    end
+
+    if suspended then
+        if escape then
+            util.warn(("keybinds suspended, %s still opens the editor"):format(escape))
+        else
+            util.warn("keybinds suspended, and nothing here opens the editor. " ..
+                "run: toolwall set suspend_keybinds false")
         end
     end
 
