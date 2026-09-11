@@ -5,8 +5,15 @@ use toolwall_core::schema::{Image, Rect};
 use toolwall_core::{Document, Problem, Scope};
 
 use crate::widgets::{
-    depth_editor, optional_text, path_field, problems_for, rect_editor, shader_picker,
-    FileBrowser, PickTarget,
+    depth_editor,
+    optional_text,
+    path_field,
+    problems_for,
+    rect_editor,
+    settings_grid,
+    shader_picker,
+    FileBrowser,
+    PickTarget,
 };
 
 pub fn show(
@@ -29,49 +36,46 @@ pub fn show(
                 .show(ui, |ui| {
                     problems_for(ui, problems, &Scope::Image(image.id.clone()));
 
-                    egui::Grid::new(("image-grid", index))
-                        .num_columns(2)
-                        .spacing([12.0, 6.0])
-                        .show(ui, |ui| {
-                            if advanced {
-                                ui.label("ID");
-                                ui.text_edit_singleline(&mut image.id);
-                                ui.end_row();
-                            }
+                    settings_grid(ui, ("image-grid", index), |ui| {
+                        if advanced {
+                            ui.label("ID");
+                            ui.text_edit_singleline(&mut image.id);
+                            ui.end_row();
+                        }
 
-                            ui.label("Name");
-                            optional_text(ui, &mut image.label);
+                        ui.label("Name");
+                        optional_text(ui, &mut image.label);
+                        ui.end_row();
+
+                        ui.label("Image file");
+                        path_field(
+                            ui,
+                            &mut image.path,
+                            browser,
+                            PickTarget::Image(index),
+                            "png",
+                        );
+                        ui.end_row();
+
+                        ui.label("Draw at");
+                        rect_editor(ui, "dst", &mut image.dst);
+                        ui.end_row();
+
+                        if advanced {
+                            ui.label("Layer");
+                            depth_editor(ui, &mut image.depth);
                             ui.end_row();
 
-                            ui.label("Image file");
-                            path_field(
+                            ui.label("Shader");
+                            shader_picker(
                                 ui,
-                                &mut image.path,
-                                browser,
-                                PickTarget::Image(index),
-                                "png",
+                                &format!("image-shader-{index}"),
+                                &mut image.shader,
+                                &shaders,
                             );
                             ui.end_row();
-
-                            ui.label("Draw at");
-                            rect_editor(ui, "dst", &mut image.dst);
-                            ui.end_row();
-
-                            if advanced {
-                                ui.label("Layer");
-                                depth_editor(ui, &mut image.depth);
-                                ui.end_row();
-
-                                ui.label("Shader");
-                                shader_picker(
-                                    ui,
-                                    &format!("image-shader-{index}"),
-                                    &mut image.shader,
-                                    &shaders,
-                                );
-                                ui.end_row();
-                            }
-                        });
+                        }
+                    });
 
                     if advanced && ui.button("Remove image").clicked() {
                         remove = Some(index);

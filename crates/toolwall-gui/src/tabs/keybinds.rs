@@ -10,7 +10,7 @@ use toolwall_core::schema::{Command, Keybind};
 use toolwall_core::{Document, Problem, Scope};
 
 use crate::keys;
-use crate::widgets::{optional_text, problems_for};
+use crate::widgets::{optional_text, problems_for, settings_grid};
 
 const COMMANDS: &[(Command, &str)] = &[
     (Command::ModeSet, "mode.set"),
@@ -75,56 +75,53 @@ pub fn show(
                 .show(ui, |ui| {
                     problems_for(ui, problems, &Scope::Keybind(bind.input.clone()));
 
-                    egui::Grid::new(("keybind-grid", index))
-                        .num_columns(2)
-                        .spacing([12.0, 6.0])
-                        .show(ui, |ui| {
-                            ui.label("Key");
-                            ui.horizontal(|ui| {
-                                ui.text_edit_singleline(&mut bind.input);
+                    settings_grid(ui, ("keybind-grid", index), |ui| {
+                        ui.label("Key");
+                        ui.horizontal(|ui| {
+                            ui.text_edit_singleline(&mut bind.input);
 
-                                let capturing_this = *capturing == Some(index);
-                                let button = if capturing_this {
-                                    "press a key…"
-                                } else {
-                                    "Capture"
-                                };
-                                if ui.selectable_label(capturing_this, button).clicked() {
-                                    *capturing = if capturing_this { None } else { Some(index) };
+                            let capturing_this = *capturing == Some(index);
+                            let button = if capturing_this {
+                                "press a key…"
+                            } else {
+                                "Capture"
+                            };
+                            if ui.selectable_label(capturing_this, button).clicked() {
+                                *capturing = if capturing_this { None } else { Some(index) };
+                            }
+                        });
+                        ui.end_row();
+
+                        ui.label("Name");
+                        optional_text(ui, &mut bind.label);
+                        ui.end_row();
+
+                        ui.label("Ignore while F3 is held").on_hover_text(
+                            "So F3 combos reach Minecraft. Shift, Ctrl and Alt \
+                             are already safe: waywall matches modifiers exactly.",
+                        );
+                        ui.checkbox(&mut bind.f3_safe, "");
+                        ui.end_row();
+
+                        ui.label("Does");
+                        egui::ComboBox::from_id_salt(("command", index))
+                            .selected_text(command_name(bind.command))
+                            .show_ui(ui, |ui| {
+                                for (command, name) in COMMANDS {
+                                    if ui
+                                        .selectable_label(bind.command == *command, *name)
+                                        .clicked()
+                                        && bind.command != *command
+                                    {
+                                        bind.command = *command;
+                                        bind.args = None;
+                                    }
                                 }
                             });
-                            ui.end_row();
+                        ui.end_row();
 
-                            ui.label("Name");
-                            optional_text(ui, &mut bind.label);
-                            ui.end_row();
-
-                            ui.label("Ignore while F3 is held").on_hover_text(
-                                "So F3 combos reach Minecraft. Shift, Ctrl and Alt \
-                                 are already safe: waywall matches modifiers exactly.",
-                            );
-                            ui.checkbox(&mut bind.f3_safe, "");
-                            ui.end_row();
-
-                            ui.label("Does");
-                            egui::ComboBox::from_id_salt(("command", index))
-                                .selected_text(command_name(bind.command))
-                                .show_ui(ui, |ui| {
-                                    for (command, name) in COMMANDS {
-                                        if ui
-                                            .selectable_label(bind.command == *command, *name)
-                                            .clicked()
-                                            && bind.command != *command
-                                        {
-                                            bind.command = *command;
-                                            bind.args = None;
-                                        }
-                                    }
-                                });
-                            ui.end_row();
-
-                            args_editor(ui, index, bind, &mode_ids, &overlay_ids, allow_exec);
-                        });
+                        args_editor(ui, index, bind, &mode_ids, &overlay_ids, allow_exec);
+                    });
 
                     if advanced && ui.button("Remove keybind").clicked() {
                         remove = Some(index);

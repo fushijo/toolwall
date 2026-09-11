@@ -3,7 +3,14 @@
 use toolwall_core::schema::{ColorKey, Mirror, Rect};
 use toolwall_core::{Document, Problem, Scope};
 
-use crate::widgets::{depth_editor, optional_text, problems_for, rect_editor, shader_picker};
+use crate::widgets::{
+    depth_editor,
+    optional_text,
+    problems_for,
+    rect_editor,
+    settings_grid,
+    shader_picker,
+};
 
 pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advanced: bool) {
     let shaders: Vec<String> = doc.shaders.keys().cloned().collect();
@@ -19,53 +26,50 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                 .show(ui, |ui| {
                     problems_for(ui, problems, &Scope::Mirror(mirror.id.clone()));
 
-                    egui::Grid::new(("mirror-grid", index))
-                        .num_columns(2)
-                        .spacing([12.0, 6.0])
-                        .show(ui, |ui| {
-                            if advanced {
-                                ui.label("ID");
-                                ui.text_edit_singleline(&mut mirror.id);
-                                ui.end_row();
-                            }
+                    settings_grid(ui, ("mirror-grid", index), |ui| {
+                        if advanced {
+                            ui.label("ID");
+                            ui.text_edit_singleline(&mut mirror.id);
+                            ui.end_row();
+                        }
 
-                            ui.label("Name");
-                            optional_text(ui, &mut mirror.label);
+                        ui.label("Name");
+                        optional_text(ui, &mut mirror.label);
+                        ui.end_row();
+
+                        ui.label("Capture from")
+                            .on_hover_text("Region of the game to copy");
+                        rect_editor(ui, "src", &mut mirror.src);
+                        ui.end_row();
+
+                        ui.label("Draw at").on_hover_text("Where on screen to draw it");
+                        rect_editor(ui, "dst", &mut mirror.dst);
+                        ui.end_row();
+
+                        if advanced {
+                            ui.label("Layer").on_hover_text(
+                                "Higher draws in front. Leave unset unless \
+                                 two overlays are fighting over the same spot.",
+                            );
+                            depth_editor(ui, &mut mirror.depth);
                             ui.end_row();
 
-                            ui.label("Capture from")
-                                .on_hover_text("Region of the game to copy");
-                            rect_editor(ui, "src", &mut mirror.src);
+                            ui.label("Shader");
+                            shader_picker(
+                                ui,
+                                &format!("mirror-shader-{index}"),
+                                &mut mirror.shader,
+                                &shaders,
+                            );
                             ui.end_row();
 
-                            ui.label("Draw at").on_hover_text("Where on screen to draw it");
-                            rect_editor(ui, "dst", &mut mirror.dst);
+                            ui.label("Colour key").on_hover_text(
+                                "Replace one colour with another as it is drawn",
+                            );
+                            color_key_editor(ui, &mut mirror.color_key);
                             ui.end_row();
-
-                            if advanced {
-                                ui.label("Layer").on_hover_text(
-                                    "Higher draws in front. Leave unset unless \
-                                     two overlays are fighting over the same spot.",
-                                );
-                                depth_editor(ui, &mut mirror.depth);
-                                ui.end_row();
-
-                                ui.label("Shader");
-                                shader_picker(
-                                    ui,
-                                    &format!("mirror-shader-{index}"),
-                                    &mut mirror.shader,
-                                    &shaders,
-                                );
-                                ui.end_row();
-
-                                ui.label("Colour key").on_hover_text(
-                                    "Replace one colour with another as it is drawn",
-                                );
-                                color_key_editor(ui, &mut mirror.color_key);
-                                ui.end_row();
-                            }
-                        });
+                        }
+                    });
 
                     if advanced && ui.button("Remove mirror").clicked() {
                         remove = Some(index);

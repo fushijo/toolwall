@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use toolwall_core::{Document, Problem};
 
 use crate::keys;
+use crate::widgets::settings_grid;
 
 
 /// Which half of which rebind row is waiting for a keypress.
@@ -30,27 +31,24 @@ pub fn show(
 ) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Mouse");
-        egui::Grid::new("input-grid")
-            .num_columns(2)
-            .spacing([12.0, 6.0])
-            .show(ui, |ui| {
-                ui.label("Sensitivity").on_hover_text(
-                    "Multiplies Minecraft's own setting. A god-sens setup keeps \
-                     Minecraft very low and multiplies it back up here, so values \
-                     well above 10 are normal.",
-                );
-                // log scale: god-sens setups sit near 13, normal ones near 1
-                ui.add(
-                    egui::Slider::new(&mut doc.input.sensitivity, 0.01..=20.0)
-                        .logarithmic(true)
-                        .clamping(egui::SliderClamping::Never),
-                );
-                ui.end_row();
+        settings_grid(ui, "input-grid", |ui| {
+            ui.label("Sensitivity").on_hover_text(
+                "Multiplies Minecraft's own setting. A god-sens setup keeps \
+                 Minecraft very low and multiplies it back up here, so values \
+                 well above 10 are normal.",
+            );
+            // log scale: god-sens setups sit near 13, normal ones near 1
+            ui.add(
+                egui::Slider::new(&mut doc.input.sensitivity, 0.01..=20.0)
+                    .logarithmic(true)
+                    .clamping(egui::SliderClamping::Never),
+            );
+            ui.end_row();
 
-                ui.label("Lock cursor to the game");
-                ui.checkbox(&mut doc.input.confine_pointer, "");
-                ui.end_row();
-            });
+            ui.label("Lock cursor to the game");
+            ui.checkbox(&mut doc.input.confine_pointer, "");
+            ui.end_row();
+        });
 
         ui.separator();
         ui.heading("Key rebinds");
@@ -70,30 +68,27 @@ pub fn show(
             ui.heading("Keyboard layout");
             ui.weak("Leave blank to inherit. For search crafting in another language.");
 
-            egui::Grid::new("layout-grid")
-                .num_columns(2)
-                .spacing([12.0, 6.0])
-                .show(ui, |ui| {
-                    for (label, field) in [
-                        ("Layout", &mut doc.input.layout),
-                        ("Model", &mut doc.input.model),
-                        ("Rules", &mut doc.input.rules),
-                        ("Variant", &mut doc.input.variant),
-                        ("Options", &mut doc.input.options),
-                    ] {
-                        ui.label(label);
-                        ui.text_edit_singleline(field);
-                        ui.end_row();
-                    }
-
-                    ui.label("Repeat rate").on_hover_text("-1 inherits the system setting");
-                    ui.add(egui::DragValue::new(&mut doc.input.repeat_rate).range(-1..=255));
+            settings_grid(ui, "layout-grid", |ui| {
+                for (label, field) in [
+                    ("Layout", &mut doc.input.layout),
+                    ("Model", &mut doc.input.model),
+                    ("Rules", &mut doc.input.rules),
+                    ("Variant", &mut doc.input.variant),
+                    ("Options", &mut doc.input.options),
+                ] {
+                    ui.label(label);
+                    ui.text_edit_singleline(field);
                     ui.end_row();
+                }
 
-                    ui.label("Repeat delay").on_hover_text("-1 inherits the system setting");
-                    ui.add(egui::DragValue::new(&mut doc.input.repeat_delay).range(-1..=5000));
-                    ui.end_row();
-                });
+                ui.label("Repeat rate").on_hover_text("-1 inherits the system setting");
+                ui.add(egui::DragValue::new(&mut doc.input.repeat_rate).range(-1..=255));
+                ui.end_row();
+
+                ui.label("Repeat delay").on_hover_text("-1 inherits the system setting");
+                ui.add(egui::DragValue::new(&mut doc.input.repeat_delay).range(-1..=5000));
+                ui.end_row();
+            });
         }
     });
 }

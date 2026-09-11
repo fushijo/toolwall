@@ -5,6 +5,19 @@ use std::path::{Path, PathBuf};
 use toolwall_core::schema::Rect;
 use toolwall_core::{Problem, Scope};
 
+/// A two column settings grid: the name of a thing on the left, the control
+/// for it on the right.
+///
+/// Every tab is built out of these, and they have to match each other, so the
+/// spacing lives here rather than being written out again at each one.
+pub fn settings_grid<R>(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash,
+    body: impl FnOnce(&mut egui::Ui) -> R,
+) {
+    egui::Grid::new(id).num_columns(2).spacing([12.0, 6.0]).show(ui, body);
+}
+
 /// A number with -/+ buttons either side.
 ///
 /// Dragging a DragValue is fine with a mouse you can see; nudging a rectangle

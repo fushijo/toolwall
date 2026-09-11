@@ -7,7 +7,7 @@
 use toolwall_core::schema::{Mode, Resolution};
 use toolwall_core::{Document, Problem, Scope};
 
-use crate::widgets::{optional_text, problems_for};
+use crate::widgets::{optional_text, problems_for, settings_grid};
 
 pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advanced: bool) {
     // Collected up front: the attach lists need these while `doc.modes` is
@@ -27,64 +27,61 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                 .show(ui, |ui| {
                     problems_for(ui, problems, &Scope::Mode(mode.id.clone()));
 
-                    egui::Grid::new(format!("mode-{index}"))
-                        .num_columns(2)
-                        .spacing([12.0, 6.0])
-                        .show(ui, |ui| {
-                            if advanced {
-                                ui.label("ID").on_hover_text(
-                                    "Used by keybinds to refer to this mode",
-                                );
-                                ui.text_edit_singleline(&mut mode.id);
-                                ui.end_row();
+                    settings_grid(ui, format!("mode-{index}"), |ui| {
+                        if advanced {
+                            ui.label("ID").on_hover_text(
+                                "Used by keybinds to refer to this mode",
+                            );
+                            ui.text_edit_singleline(&mut mode.id);
+                            ui.end_row();
+                        }
+
+                        ui.label("Name");
+                        optional_text(ui, &mut mode.label);
+                        ui.end_row();
+
+                        ui.label("Width").on_hover_text("0 stretches to the window");
+                        ui.add(
+                            egui::Slider::new(&mut mode.resolution.width, 0..=3840)
+                                .clamping(egui::SliderClamping::Never),
+                        );
+                        ui.end_row();
+
+                        ui.label("Height").on_hover_text(
+                            "0 stretches to the window. tall modes go well past the \
+                             slider; type the number in.",
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut mode.resolution.height, 0..=2160)
+                                .clamping(egui::SliderClamping::Never),
+                        );
+                        ui.end_row();
+
+                        ui.label("Sensitivity");
+                        ui.horizontal(|ui| {
+                            let mut overridden = mode.sensitivity.is_some();
+                            if ui.checkbox(&mut overridden, "Override").changed() {
+                                mode.sensitivity = overridden.then_some(1.0);
                             }
-
-                            ui.label("Name");
-                            optional_text(ui, &mut mode.label);
-                            ui.end_row();
-
-                            ui.label("Width").on_hover_text("0 stretches to the window");
-                            ui.add(
-                                egui::Slider::new(&mut mode.resolution.width, 0..=3840)
-                                    .clamping(egui::SliderClamping::Never),
-                            );
-                            ui.end_row();
-
-                            ui.label("Height").on_hover_text(
-                                "0 stretches to the window. tall modes go well past the \
-                                 slider; type the number in.",
-                            );
-                            ui.add(
-                                egui::Slider::new(&mut mode.resolution.height, 0..=2160)
-                                    .clamping(egui::SliderClamping::Never),
-                            );
-                            ui.end_row();
-
-                            ui.label("Sensitivity");
-                            ui.horizontal(|ui| {
-                                let mut overridden = mode.sensitivity.is_some();
-                                if ui.checkbox(&mut overridden, "Override").changed() {
-                                    mode.sensitivity = overridden.then_some(1.0);
-                                }
-                                if let Some(sens) = &mut mode.sensitivity {
-                                    ui.add(
-                                        egui::Slider::new(sens, 0.01..=20.0)
-                                            .logarithmic(true)
-                                            .clamping(egui::SliderClamping::Never),
-                                    );
-                                }
-                            });
-                            ui.end_row();
-
-                            ui.label("Overlays").on_hover_text(
-                                "Shown automatically while this mode is active",
-                            );
-                            ui.vertical(|ui| {
-                                attach_list(ui, &mirror_ids, &mut mode.mirrors);
-                                attach_list(ui, &image_ids, &mut mode.images);
-                            });
-                            ui.end_row();
+                            if let Some(sens) = &mut mode.sensitivity {
+                                ui.add(
+                                    egui::Slider::new(sens, 0.01..=20.0)
+                                        .logarithmic(true)
+                                        .clamping(egui::SliderClamping::Never),
+                                );
+                            }
                         });
+                        ui.end_row();
+
+                        ui.label("Overlays").on_hover_text(
+                            "Shown automatically while this mode is active",
+                        );
+                        ui.vertical(|ui| {
+                            attach_list(ui, &mirror_ids, &mut mode.mirrors);
+                            attach_list(ui, &image_ids, &mut mode.images);
+                        });
+                        ui.end_row();
+                    });
 
                     if advanced && ui.button("Remove mode").clicked() {
                         remove = Some(index);
