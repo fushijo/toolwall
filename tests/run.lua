@@ -787,7 +787,7 @@ check("the readout keeps trying to stream instead of giving up on it", function(
     toolwall.setup({ path = path })
 
     -- long enough to pass the old three second give-up
-    waywall.sleep_budget = 400
+    waywall.sleep_budget = 4000
     waywall.finish_startup()
 
     local streams, fetches = 0, 0

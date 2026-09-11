@@ -66,19 +66,22 @@ function M.run_ninb_overlay(st)
         Streaming holds the connection open and ninb pushes on every change, so
         the readout keeps up with F3+C spam.
 
-        Starting the script again is a no-op while one is alive (flock), which
-        makes it both how the stream starts and how it recovers. That matters:
-        ninb takes seconds to boot, so the first attempt after a reload nearly
-        always fails, and anything that gave up on the first failure would end
-        up never streaming at all.
+        The script reconnects on its own, so this only has to notice that it
+        died altogether. Starting it again is a no-op while one is alive
+        (flock), which makes the same call both how it starts and how it
+        recovers. That matters: ninb takes seconds to boot, so the first
+        attempt after a reload nearly always fails, and anything that gave up
+        on the first failure would end up never streaming at all.
 
         One-shot fetches cover the gap until the stream lands its first answer,
         and stop once it has. If streaming is impossible here (no flock, no
         curl) the stream file never appears and the fetches simply carry on,
         which is the fallback.
     ]]
-    local RESTART_MS = 5000
-    local FETCH_MS = 250
+    -- a watchdog, not a retry: the script has its own retry loop, and every
+    -- exec from here is a fork the user does not need
+    local RESTART_MS = 30000
+    local FETCH_MS = 500
 
     local last_start, last_fetch = 0, 0
 

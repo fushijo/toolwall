@@ -30,7 +30,7 @@ index b807274..4468cda 100644
  }
  
 diff --git a/waywall/wrap.c b/waywall/wrap.c
-index 32ea33f..3371afb 100644
+index 32ea33f..da554ab 100644
 --- a/waywall/wrap.c
 +++ b/waywall/wrap.c
 @@ -21,6 +21,7 @@
@@ -41,7 +41,7 @@ index 32ea33f..3371afb 100644
  #include <stdint.h>
  #include <stdlib.h>
  #include <sys/inotify.h>
-@@ -34,6 +35,33 @@
+@@ -34,13 +35,64 @@
  
  static void on_anchored_resize(struct wl_listener *listener, void *data);
  
@@ -75,10 +75,17 @@ index 32ea33f..3371afb 100644
  struct floating_view {
      struct wl_list link; // wrap.floating.views
  
-@@ -41,6 +69,23 @@ struct floating_view {
++    struct wrap *wrap;
+     struct server_view *view;
      int32_t x, y;
++
++    struct wl_listener on_resize;
  };
  
++static void on_floating_resize(struct wl_listener *listener, void *data);
++static void floating_choose_anchor(struct wrap *wrap);
++static void floating_update_anchored(struct wrap *wrap);
++
 +/*
 + * Apply floating window visibility, honouring theme.ninb_hidden.
 + *
@@ -99,7 +106,64 @@ index 32ea33f..3371afb 100644
  static void
  set_anchored(struct wrap *wrap, struct floating_view *fview) {
      ww_assert(!wrap->floating.anchored);
-@@ -83,11 +128,7 @@ floating_set_visible(struct wrap *wrap, bool visible) {
+@@ -62,17 +114,50 @@ static void
+ floating_find_anchored(struct wrap *wrap) {
+     ww_assert(!wrap->floating.anchored);
+ 
+-    if (wl_list_empty(&wrap->floating.views)) {
+-        return;
+-    }
+-
+     // Floating views are inserted at the front of the list, so the view which was created earliest
+     // is at the end.
+     struct floating_view *fview;
+     wl_list_for_each_reverse (fview, &wrap->floating.views, link) {
+-        break;
++        if (view_is_ninb(fview->view)) {
++            set_anchored(wrap, fview);
++            return;
++        }
+     }
+-    set_anchored(wrap, fview);
++}
++
++/*
++ * Give the anchor to Ninjabrain Bot, and to nothing else.
++ *
++ * theme.ninb_anchor is a position for ninb, so handing the slot to whichever
++ * floating window opened first is only right while ninb is that window. Close
++ * it and an editor inherits the slot, and an anchored window cannot be
++ * shift-dragged, so it ends up pinned in a corner with no way to move it.
++ *
++ * An X11 window's title can arrive after it is mapped, so this runs again on
++ * every floating resize rather than only when a window appears. Until ninb has
++ * a title to match, nothing is anchored, which leaves it merely unpositioned
++ * rather than stuck.
++ */
++static void
++floating_choose_anchor(struct wrap *wrap) {
++    if (!SHOULD_ANCHOR(wrap)) {
++        if (wrap->floating.anchored) {
++            unset_anchored(wrap);
++        }
++        return;
++    }
++
++    if (wrap->floating.anchored) {
++        if (view_is_ninb(wrap->floating.anchored->view)) {
++            return;
++        }
++
++        // It took the slot before ninb could be recognised. Hand it back.
++        unset_anchored(wrap);
++    }
++
++    floating_find_anchored(wrap);
++    floating_update_anchored(wrap);
+ }
+ 
+ static void
+@@ -83,11 +168,7 @@ floating_set_visible(struct wrap *wrap, bool visible) {
  
      wrap->floating.visible = visible;
  
@@ -112,34 +176,97 @@ index 32ea33f..3371afb 100644
  
      if (!visible) {
          // Stop any active grab if floating windows are being hidden.
-@@ -208,7 +249,7 @@ floating_view_create(struct wrap *wrap, struct server_view *view) {
+@@ -204,25 +285,22 @@ floating_view_at(struct wrap *wrap, double x, double y) {
+ static void
+ floating_view_create(struct wrap *wrap, struct server_view *view) {
+     struct floating_view *fview = zalloc(1, sizeof(*fview));
++    fview->wrap = wrap;
+     fview->view = view;
      wl_list_insert(&wrap->floating.views, &fview->link);
  
++    fview->on_resize.notify = on_floating_resize;
++    wl_signal_add(&view->events.resize, &fview->on_resize);
++
      if (wrap->floating.visible) {
 -        server_view_set_visible(view, true);
 +        server_view_set_visible(view, !should_hide(wrap, view));
      }
  
-     if (!SHOULD_ANCHOR(wrap) || wl_list_length(&wrap->floating.views) > 1) {
-@@ -277,6 +318,10 @@ on_anchored_resize(struct wl_listener *listener, void *data) {
-     struct wrap *wrap = wl_container_of(wrap_floating, wrap, floating);
+-    if (!SHOULD_ANCHOR(wrap) || wl_list_length(&wrap->floating.views) > 1) {
+-        server_view_set_centered(view, false);
+-        server_view_set_pos(view, 0, 0);
+-        server_view_commit(view);
+-    } else {
+-        ww_assert(!wrap->floating.anchored);
++    server_view_set_centered(view, false);
++    server_view_set_pos(view, 0, 0);
++    server_view_commit(view);
  
-     floating_update_anchored(wrap);
-+
-+    // An X11 window's title can arrive after it is mapped, so a window that had
-+    // no title to match on yet gets another chance here.
-+    floating_update_visible(wrap);
+-        set_anchored(wrap, fview);
+-
+-        server_view_set_centered(view, false);
+-        floating_update_anchored(wrap);
+-    }
++    floating_choose_anchor(wrap);
  }
  
  static void
-@@ -676,6 +721,10 @@ wrap_set_config(struct wrap *wrap, struct config *cfg) {
-         floating_update_anchored(wrap);
+@@ -249,13 +327,13 @@ floating_view_destroy(struct wrap *wrap, struct server_view *view) {
+         }
+ 
+         wl_list_remove(&fview->link);
++        wl_list_remove(&fview->on_resize.link);
+         free(fview);
+ 
+         if (anchored) {
+             unset_anchored(wrap);
+-            floating_find_anchored(wrap);
+-            floating_update_anchored(wrap);
+         }
++        floating_choose_anchor(wrap);
+         return;
      }
  
+@@ -279,6 +357,18 @@ on_anchored_resize(struct wl_listener *listener, void *data) {
+     floating_update_anchored(wrap);
+ }
+ 
++/*
++ * Any floating window resized. A window that had no title when it appeared may
++ * have one now, so both the things that depend on recognising it are redone.
++ */
++static void
++on_floating_resize(struct wl_listener *listener, void *data) {
++    struct floating_view *fview = wl_container_of(listener, fview, on_resize);
++
++    floating_choose_anchor(fview->wrap);
++    floating_update_visible(fview->wrap);
++}
++
+ static void
+ on_close(struct wl_listener *listener, void *data) {
+     struct wrap *wrap = wl_container_of(listener, wrap, on_close);
+@@ -663,18 +753,11 @@ wrap_set_config(struct wrap *wrap, struct config *cfg) {
+     config_vm_set_wrap(cfg->vm, wrap);
+ 
+     wrap->cfg = cfg;
+-    if (wrap->cfg->theme.ninb.anchor == ANCHOR_NONE) {
+-        // If anchoring has been disabled, ensure there is no anchored view.
+-        if (wrap->floating.anchored) {
+-            unset_anchored(wrap);
+-        }
+-    } else {
+-        // If anchoring is enabled, find a view to anchor (if needed) and reposition it.
+-        if (!wrap->floating.anchored) {
+-            floating_find_anchored(wrap);
+-        }
+-        floating_update_anchored(wrap);
+-    }
++    floating_choose_anchor(wrap);
++
 +    // theme.ninb_hidden can be flipped by a reload, so re-apply visibility rather than waiting
 +    // for the next show_floating call.
 +    floating_update_visible(wrap);
-+
+ 
      return 0;
  }
- 

@@ -71,7 +71,7 @@ end
 ]]
 function M.fetch(query, port)
     -- exec splits on spaces, so every token here has to be space-free
-    waywall.exec(("curl -sS --max-time 2 %s -o %s"):format(
+    waywall.exec(("curl -s --max-time 2 %s -o %s"):format(
         url_for(query, port), cache_path(query, true)))
 end
 
@@ -106,13 +106,31 @@ function M.stream(query, port)
         return false
     end
 
+    --[[
+        waywall gives a child's stdout to /dev/null but lets its stderr through
+        to the console, so anything noisy here lands in the user's log. Nothing
+        in this script has a reader, so all of it is silenced.
+
+        The retry loop lives in the script on purpose. ninb takes seconds to
+        boot, and reconnecting from here costs one shell rather than an exec
+        out of lua every few seconds for the life of the session. The count is
+        a bound, not a schedule: waywall kills the process it spawned, but the
+        shell that was exec'd into is a grandchild and could outlive it, so
+        this has to run out on its own eventually.
+    ]]
     fh:write(([[
 #!/bin/sh
+exec 2>/dev/null
 exec flock -n '%s.lock' /bin/sh -c '
-    curl -sS -N "%s" | while IFS= read -r line; do
-        case "$line" in
-            "data: "*) printf "%%s\\n" "${line#data: }" > "%s.part" && mv "%s.part" "%s" ;;
-        esac
+    attempt=0
+    while [ $attempt -lt 200 ]; do
+        curl -s -N "%s" | while IFS= read -r line; do
+            case "$line" in
+                "data: "*) printf "%%s\n" "${line#data: }" > "%s.part" && mv "%s.part" "%s" ;;
+            esac
+        done
+        attempt=$((attempt + 1))
+        sleep 3
     done
 '
 ]]):format(out, url_for(query .. "/events", port), out, out, out))

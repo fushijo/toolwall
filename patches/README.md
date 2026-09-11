@@ -44,10 +44,15 @@ again on resize and on config reload rather than only when the window appears.
 A window whose title never matches stays visible, which is the safe way round
 to be wrong.
 
-The anchor is still claimed as it was: whichever window holds it cannot be
-shift-dragged, and toolwall relies on ninb holding it so the editor stays
-draggable. Closing ninb hands that slot to the editor, and the editor then
-cannot be dragged until ninb takes it back.
+It also gives the anchor to ninb and to nothing else. `theme.ninb_anchor` is a
+position for ninb, but upstream hands the slot to whichever floating window
+opened first, which is ninb only while ninb is that window. Close it and an
+editor inherits the slot, and an anchored window cannot be shift-dragged, so it
+ends up pinned in a corner with no way to move it.
+
+Until ninb has a title to match, nothing is anchored, which leaves it merely
+unpositioned rather than stuck. Anchoring is re-evaluated on every floating
+resize for the same reason the hiding is.
 
 ## Applying them
 
