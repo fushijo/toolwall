@@ -270,19 +270,12 @@ function M.setup(opts)
         Its own listener, because the wait must not hold anything else up.
     ]]
     local ninb = doc.ninb or {}
-    local jar = ninb.jar
+    local ninb_cmd = launch.ninb_command(ninb)
 
-    if util.bool(ninb.autostart, false) and jar and jar ~= util.NULL and jar ~= "" then
+    if util.bool(ninb.autostart, false) and ninb_cmd then
         waywall.listen("load", function()
             pcall(waywall.sleep, math.max(0, math.floor(ninb.start_delay_ms or 3000)))
-
-            local template = ninb.command
-            if not template or template == util.NULL or template == "" then
-                template = "java -jar {jar}"
-            end
-
-            launch.once(waywall, "ninb",
-                util.expand_command((template:gsub("{jar}", util.expand(jar)))))
+            launch.once(waywall, "ninb", ninb_cmd)
         end)
     end
 

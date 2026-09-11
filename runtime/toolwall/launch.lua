@@ -146,6 +146,28 @@ function M.running(id, command)
 end
 
 --[[
+    The command that starts Ninjabrain Bot, or nil when there is no jar.
+
+    Two callers want this, the autostart on load and the toggle keybind, and
+    they have to agree exactly: `once` recognises an already running copy by
+    the last token of the command, so any difference between them reads as a
+    different program and starts a second one.
+]]
+function M.ninb_command(ninb)
+    local jar = ninb and ninb.jar
+    if not jar or jar == util.NULL or jar == "" then
+        return nil
+    end
+
+    local template = ninb.command
+    if not template or template == util.NULL or template == "" then
+        template = "java -jar {jar}"
+    end
+
+    return util.expand_command((template:gsub("{jar}", util.expand(jar))))
+end
+
+--[[
     Launch `command` unless it is already running, recording its pid.
 
     Returns true if a new process was started.

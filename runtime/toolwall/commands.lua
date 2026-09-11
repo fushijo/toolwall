@@ -304,20 +304,12 @@ function M.bind(rt)
         floating window, the editor included. Per-window control is upstream.
     ]]
     M.register("ninb.toggle", function(st)
-        local ninb = st.doc.ninb or {}
-        local jar = ninb.jar
+        local cmd = launch.ninb_command(st.doc.ninb)
 
-        if not jar or jar == util.NULL or jar == "" then
+        if not cmd then
             util.warn("no Ninjabrain Bot jar configured")
             return false
         end
-
-        local template = ninb.command
-        if not template or template == util.NULL or template == "" then
-            template = "java -jar {jar}"
-        end
-
-        local cmd = util.expand_command((template:gsub("{jar}", util.expand(jar))))
 
         if launch.once(waywall, "ninb", cmd) then
             pcall(waywall.sleep, (st.doc.gui or {}).launch_delay_ms or 400)
