@@ -57,6 +57,7 @@ fn main() -> Result<()> {
         options,
         Box::new(|_cc| {
             Ok(Box::new(App {
+                seen_modified: store.modified(),
                 store,
                 doc,
                 load_error,
@@ -64,6 +65,7 @@ fn main() -> Result<()> {
                 tab: Tab::Modes,
                 browser: FileBrowser::default(),
                 capturing: None,
+                last_checked: Instant::now(),
                 ninb_keys: ninb_keys::NinbKeys::default(),
                 remap_capture: None,
                 advanced: false,
@@ -99,6 +101,9 @@ struct App {
     browser: FileBrowser,
     /// Index of the keybind currently swallowing the next keypress.
     capturing: Option<usize>,
+    /// when the config on disk was last written, to spot outside edits
+    seen_modified: Option<std::time::SystemTime>,
+    last_checked: Instant,
     ninb_keys: ninb_keys::NinbKeys,
     remap_capture: Option<RemapCapture>,
     advanced: bool,
@@ -206,6 +211,43 @@ impl App {
 
     /// Apply edits shortly after they stop, so a change is visible in the
     /// game without hunting for a Save button.
+    /// Notice the config being changed by something other than this editor.
+    ///
+    /// The editor writes the whole document, so whatever it holds in memory
+    /// wins the next time anything is edited. A change made from the CLI, or
+    /// by another copy of the editor, would be reverted without a trace: that
+    /// is how `theme.ninb_hidden` came back on after being turned off.
+    fn adopt_external_changes(&mut self, ctx: &egui::Context) {
+        const CHECK_EVERY: Duration = Duration::from_millis(1000);
+
+        if self.last_checked.elapsed() < CHECK_EVERY {
+            ctx.request_repaint_after(CHECK_EVERY - self.last_checked.elapsed());
+            return;
+        }
+        self.last_checked = Instant::now();
+
+        let Some(modified) = self.store.modified() else { return };
+        if Some(modified) == self.seen_modified {
+            return;
+        }
+        self.seen_modified = Some(modified);
+
+        // An edit still settling is about to be written anyway, and would be
+        // what changed the file. Only a surprise is worth acting on.
+        if self.pending_since.is_some() {
+            return;
+        }
+
+        if let Ok(doc) = self.store.load() {
+            let body = serde_json::to_string(&doc).unwrap_or_default();
+            if body != self.saved {
+                self.doc = doc;
+                self.saved = body;
+                self.status = Some((true, "Reloaded, it changed outside the editor".into()));
+            }
+        }
+    }
+
     fn apply_when_settled(&mut self, ctx: &egui::Context) {
         let current = serde_json::to_string(&self.doc).unwrap_or_default();
 
@@ -232,6 +274,7 @@ impl App {
         self.status = Some(match self.store.save(&self.doc) {
             Ok(()) => {
                 self.saved = current;
+                self.seen_modified = self.store.modified();
                 (true, "Applied".to_string())
             }
             Err(err) => (false, format!("{err:#}")),
@@ -387,6 +430,7 @@ impl eframe::App for App {
             }
         });
 
+        self.adopt_external_changes(ctx);
         self.apply_when_settled(ctx);
     }
 }

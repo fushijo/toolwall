@@ -68,6 +68,15 @@ impl Store {
         self.path.parent().unwrap_or_else(|| Path::new("."))
     }
 
+    /// When the config was last written, by anyone.
+    ///
+    /// The editor holds the whole document in memory and writes all of it, so
+    /// a change made outside it would be silently reverted by the next edit.
+    /// This is how it notices.
+    pub fn modified(&self) -> Option<std::time::SystemTime> {
+        fs::metadata(&self.path).ok()?.modified().ok()
+    }
+
     pub fn load(&self) -> Result<Document> {
         let raw = fs::read_to_string(&self.path)
             .with_context(|| format!("reading {}", self.path.display()))?;
