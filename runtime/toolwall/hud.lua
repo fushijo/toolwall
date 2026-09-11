@@ -128,11 +128,4 @@ function Hud:banner(message)
     end
 end
 
-function Hud:clear_banner()
-    if self.banner_obj then
-        self.banner_obj:close()
-        self.banner_obj = nil
-    end
-end
-
 return M

@@ -79,11 +79,4 @@ function M.shallow_copy(t)
     return out
 end
 
-function M.contains(list, value)
-    for _, v in ipairs(list or {}) do
-        if v == value then return true end
-    end
-    return false
-end
-
 return M

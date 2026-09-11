@@ -13,7 +13,7 @@
     sits over the game on its own terms.
 
     ninb 1.5.2 serves /api/v1 with stronghold, boat, blind, divine,
-    allAdvancements, informationMessages, version and ping. the api is off by
+    allAdvancements, information-messages, version and ping. the api is off by
     default and has to be enabled in ninb's settings.
 ]]
 

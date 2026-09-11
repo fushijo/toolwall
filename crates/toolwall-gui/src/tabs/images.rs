@@ -1,6 +1,5 @@
 //! Images: a PNG overlay drawn over the instance.
 
-use std::path::Path;
 
 use toolwall_core::schema::{Image, Rect};
 use toolwall_core::{Document, Problem, Scope};
