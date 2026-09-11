@@ -15,13 +15,18 @@
 //!
 //! Order matters. The trigger is written last, after the rename has landed.
 
+use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-use crate::schema::{Document, SCHEMA_VERSION};
+use crate::schema::{Command, Document, SCHEMA_VERSION};
+
+/// Leaderboard rules cap any dimension here, and waywall's own texture limit
+/// happens to be the same number.
+const MAX_RESOLUTION: u32 = 16384;
 
 pub const CONFIG_FILE: &str = "toolwall.json";
 pub const RELOAD_FILE: &str = "toolwall_reload.lua";
@@ -164,115 +169,126 @@ pub struct Problem {
     pub message: String,
 }
 
-/// Every structural problem in the document, not just the first.
+/// The ids a mode or a keybind is allowed to name.
 ///
-/// `validate` is this reduced to a pass/fail; the GUI uses the full list to
-/// annotate individual modes, mirrors, images and keybinds inline.
-pub fn problems(doc: &Document) -> Vec<Problem> {
-    let mut out = Vec::new();
+/// Mirrors and images share one namespace because a mode lists them together
+/// and a keybind toggles either, so a mirror and an image with the same id
+/// would be indistinguishable at the point of use.
+fn overlay_ids<'a>(doc: &'a Document, out: &mut Vec<Problem>) -> HashSet<&'a str> {
+    let mut ids = HashSet::new();
+    let mut seen = HashSet::new();
 
-    let mut push = |scope: Scope, message: String| out.push(Problem { scope, message });
-
-    if doc.version != SCHEMA_VERSION {
-        push(
-            Scope::Document,
-            format!("schema version {}, expected {}", doc.version, SCHEMA_VERSION),
+    let named = doc
+        .mirrors
+        .iter()
+        .map(|m| (Scope::Mirror(m.id.clone()), "mirror", m.id.as_str()))
+        .chain(
+            doc.images
+                .iter()
+                .map(|i| (Scope::Image(i.id.clone()), "image", i.id.as_str())),
         );
+
+    for (scope, kind, id) in named {
+        if id.trim().is_empty() {
+            out.push(Problem { scope: scope.clone(), message: "id must not be empty".into() });
+        }
+        if !seen.insert((kind, id)) {
+            out.push(Problem { scope, message: format!("duplicate {kind} id {id:?}") });
+        }
+        ids.insert(id);
     }
 
-    let mut ids = std::collections::HashSet::new();
-    let mut overlay_ids = std::collections::HashSet::new();
+    ids
+}
 
-    for mirror in &doc.mirrors {
-        if mirror.id.trim().is_empty() {
-            push(Scope::Mirror(mirror.id.clone()), "id must not be empty".into());
-        }
-        if !ids.insert(("mirror", mirror.id.as_str())) {
-            push(
-                Scope::Mirror(mirror.id.clone()),
-                format!("duplicate mirror id {:?}", mirror.id),
-            );
-        }
-        overlay_ids.insert(mirror.id.as_str());
-    }
+/// Modes: unique, within the leaderboard limit, and naming overlays that exist.
+fn mode_ids<'a>(doc: &'a Document, overlays: &HashSet<&str>, out: &mut Vec<Problem>)
+    -> HashSet<&'a str>
+{
+    let mut ids = HashSet::new();
 
-    for image in &doc.images {
-        if image.id.trim().is_empty() {
-            push(Scope::Image(image.id.clone()), "id must not be empty".into());
-        }
-        if !ids.insert(("image", image.id.as_str())) {
-            push(
-                Scope::Image(image.id.clone()),
-                format!("duplicate image id {:?}", image.id),
-            );
-        }
-        overlay_ids.insert(image.id.as_str());
-    }
-
-    let mut mode_ids = std::collections::HashSet::new();
     for mode in &doc.modes {
+        let scope = || Scope::Mode(mode.id.clone());
+
         if mode.id.trim().is_empty() {
-            push(Scope::Mode(mode.id.clone()), "id must not be empty".into());
+            out.push(Problem { scope: scope(), message: "id must not be empty".into() });
         }
-        if !mode_ids.insert(mode.id.as_str()) {
-            push(
-                Scope::Mode(mode.id.clone()),
-                format!("duplicate mode id {:?}", mode.id),
-            );
+        if !ids.insert(mode.id.as_str()) {
+            out.push(Problem {
+                scope: scope(),
+                message: format!("duplicate mode id {:?}", mode.id),
+            });
         }
 
         // Leaderboard rules: no dimension above 16384.
-        if mode.resolution.width > 16384 || mode.resolution.height > 16384 {
-            push(
-                Scope::Mode(mode.id.clone()),
-                format!(
-                    "exceeds the 16384px leaderboard limit ({}x{})",
+        if mode.resolution.width > MAX_RESOLUTION || mode.resolution.height > MAX_RESOLUTION {
+            out.push(Problem {
+                scope: scope(),
+                message: format!(
+                    "exceeds the {MAX_RESOLUTION}px leaderboard limit ({}x{})",
                     mode.resolution.width, mode.resolution.height
                 ),
-            );
+            });
         }
 
         for id in mode.mirrors.iter().chain(mode.images.iter()) {
-            if !overlay_ids.contains(id.as_str()) {
-                push(
-                    Scope::Mode(mode.id.clone()),
-                    format!("references unknown overlay {id:?}"),
-                );
+            if !overlays.contains(id.as_str()) {
+                out.push(Problem {
+                    scope: scope(),
+                    message: format!("references unknown overlay {id:?}"),
+                });
             }
         }
     }
 
+    ids
+}
+
+/// The document's own references, which name things defined elsewhere in it.
+fn document_references(
+    doc: &Document,
+    overlays: &HashSet<&str>,
+    modes: &HashSet<&str>,
+    out: &mut Vec<Problem>,
+) {
     if let Some(default) = &doc.default_mode {
-        if !mode_ids.contains(default.as_str()) {
-            push(
-                Scope::Document,
-                format!("default_mode {default:?} is not a defined mode"),
-            );
+        if !modes.contains(default.as_str()) {
+            out.push(Problem {
+                scope: Scope::Document,
+                message: format!("default_mode {default:?} is not a defined mode"),
+            });
         }
     }
 
     for id in &doc.base_overlays {
-        if !overlay_ids.contains(id.as_str()) {
-            push(
-                Scope::Document,
-                format!("base_overlays references unknown overlay {id:?}"),
-            );
+        if !overlays.contains(id.as_str()) {
+            out.push(Problem {
+                scope: Scope::Document,
+                message: format!("base_overlays references unknown overlay {id:?}"),
+            });
         }
     }
 
-    let ninb_ready = !doc.ninb.jar.trim().is_empty();
-    if !ninb_ready && doc.keybinds.iter().any(|b| b.command == crate::schema::Command::NinbToggle) {
-        push(
-            Scope::Ninb,
-            "a key opens Ninjabrain Bot, but no jar is set".into(),
-        );
+    if doc.ninb.jar.trim().is_empty()
+        && doc.keybinds.iter().any(|b| b.command == Command::NinbToggle)
+    {
+        out.push(Problem {
+            scope: Scope::Ninb,
+            message: "a key opens Ninjabrain Bot, but no jar is set".into(),
+        });
     }
+}
 
-    let mut inputs = std::collections::HashSet::new();
+/// Keybinds: unique, bound to something, and not pointing at a deleted overlay.
+fn keybinds(doc: &Document, overlays: &HashSet<&str>, out: &mut Vec<Problem>) {
+    let mut inputs = HashSet::new();
+
     for bind in &doc.keybinds {
-        // An overlay.toggle naming something that does not exist is a
-        // keybind that silently does nothing, which is worth catching.
-        if bind.command == crate::schema::Command::OverlayToggle {
+        let scope = || Scope::Keybind(bind.input.clone());
+
+        // An overlay.toggle naming something that does not exist is a keybind
+        // that silently does nothing, which is worth catching.
+        if bind.command == Command::OverlayToggle {
             let named = bind
                 .args
                 .as_ref()
@@ -280,27 +296,46 @@ pub fn problems(doc: &Document) -> Vec<Problem> {
                 .and_then(|v| v.as_str())
                 .unwrap_or_default();
 
-            if named.is_empty() || !overlay_ids.contains(named) {
-                push(
-                    Scope::Keybind(bind.input.clone()),
-                    "this key opens an overlay that no longer exists".into(),
-                );
+            if named.is_empty() || !overlays.contains(named) {
+                out.push(Problem {
+                    scope: scope(),
+                    message: "this key opens an overlay that no longer exists".into(),
+                });
             }
         }
 
         if bind.input.trim().is_empty() {
-            push(
-                Scope::Keybind(bind.input.clone()),
-                "keybind has no input string".into(),
-            );
+            out.push(Problem { scope: scope(), message: "keybind has no input string".into() });
         }
         if !inputs.insert(bind.input.as_str()) {
-            push(
-                Scope::Keybind(bind.input.clone()),
-                format!("duplicate keybind for {:?}", bind.input),
-            );
+            out.push(Problem {
+                scope: scope(),
+                message: format!("duplicate keybind for {:?}", bind.input),
+            });
         }
     }
+}
+
+/// Every structural problem in the document, not just the first.
+///
+/// `validate` is this reduced to a pass/fail; the GUI uses the full list to
+/// annotate individual modes, mirrors, images and keybinds inline.
+pub fn problems(doc: &Document) -> Vec<Problem> {
+    let mut out = Vec::new();
+
+    if doc.version != SCHEMA_VERSION {
+        out.push(Problem {
+            scope: Scope::Document,
+            message: format!("schema version {}, expected {}", doc.version, SCHEMA_VERSION),
+        });
+    }
+
+    // Ids first: everything below is a question about whether a name resolves.
+    let overlays = overlay_ids(doc, &mut out);
+    let modes = mode_ids(doc, &overlays, &mut out);
+
+    document_references(doc, &overlays, &modes, &mut out);
+    keybinds(doc, &overlays, &mut out);
 
     out
 }
