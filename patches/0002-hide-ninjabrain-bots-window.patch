@@ -14,6 +14,18 @@ index c7dde6a..946575b 100644
          } ninb;
      } theme;
  
+diff --git a/include/wrap.h b/include/wrap.h
+index efa80bd..10a72bd 100644
+--- a/include/wrap.h
++++ b/include/wrap.h
+@@ -34,7 +34,6 @@ struct wrap {
+         double grab_x, grab_y;
+ 
+         struct floating_view *anchored;
+-        struct wl_listener on_anchored_resize;
+     } floating;
+ 
+     struct {
 diff --git a/waywall/config/config.c b/waywall/config/config.c
 index b807274..4468cda 100644
 --- a/waywall/config/config.c
@@ -30,7 +42,7 @@ index b807274..4468cda 100644
  }
  
 diff --git a/waywall/wrap.c b/waywall/wrap.c
-index 32ea33f..da554ab 100644
+index 32ea33f..042ef2b 100644
 --- a/waywall/wrap.c
 +++ b/waywall/wrap.c
 @@ -21,6 +21,7 @@
@@ -41,10 +53,12 @@ index 32ea33f..da554ab 100644
  #include <stdint.h>
  #include <stdlib.h>
  #include <sys/inotify.h>
-@@ -34,13 +35,64 @@
+@@ -32,22 +33,70 @@
+ #define IS_ANCHORED(wrap, view) (wrap->floating.anchored == view)
+ #define SHOULD_ANCHOR(wrap) (wrap->cfg->theme.ninb.anchor != ANCHOR_NONE)
  
- static void on_anchored_resize(struct wl_listener *listener, void *data);
- 
+-static void on_anchored_resize(struct wl_listener *listener, void *data);
++
 +/*
 + * Is this Ninjabrain Bot?
 + *
@@ -71,7 +85,7 @@ index 32ea33f..da554ab 100644
 +    return wrap->cfg->theme.ninb.hidden && view_is_ninb(view);
 +}
 +
-+
+ 
  struct floating_view {
      struct wl_list link; // wrap.floating.views
  
@@ -106,7 +120,21 @@ index 32ea33f..da554ab 100644
  static void
  set_anchored(struct wrap *wrap, struct floating_view *fview) {
      ww_assert(!wrap->floating.anchored);
-@@ -62,17 +114,50 @@ static void
+ 
+     wrap->floating.anchored = fview;
+-    wrap->floating.on_anchored_resize.notify = on_anchored_resize;
+-    wl_signal_add(&fview->view->events.resize, &wrap->floating.on_anchored_resize);
+ }
+ 
+ static void
+@@ -55,24 +104,56 @@ unset_anchored(struct wrap *wrap) {
+     ww_assert(!!wrap->floating.anchored);
+ 
+     wrap->floating.anchored = nullptr;
+-    wl_list_remove(&wrap->floating.on_anchored_resize.link);
+ }
+ 
+ static void
  floating_find_anchored(struct wrap *wrap) {
      ww_assert(!wrap->floating.anchored);
  
@@ -123,8 +151,7 @@ index 32ea33f..da554ab 100644
 +            set_anchored(wrap, fview);
 +            return;
 +        }
-     }
--    set_anchored(wrap, fview);
++    }
 +}
 +
 +/*
@@ -147,7 +174,8 @@ index 32ea33f..da554ab 100644
 +            unset_anchored(wrap);
 +        }
 +        return;
-+    }
+     }
+-    set_anchored(wrap, fview);
 +
 +    if (wrap->floating.anchored) {
 +        if (view_is_ninb(wrap->floating.anchored->view)) {
@@ -163,7 +191,7 @@ index 32ea33f..da554ab 100644
  }
  
  static void
-@@ -83,11 +168,7 @@ floating_set_visible(struct wrap *wrap, bool visible) {
+@@ -83,11 +164,7 @@ floating_set_visible(struct wrap *wrap, bool visible) {
  
      wrap->floating.visible = visible;
  
@@ -176,7 +204,7 @@ index 32ea33f..da554ab 100644
  
      if (!visible) {
          // Stop any active grab if floating windows are being hidden.
-@@ -204,25 +285,22 @@ floating_view_at(struct wrap *wrap, double x, double y) {
+@@ -204,25 +281,22 @@ floating_view_at(struct wrap *wrap, double x, double y) {
  static void
  floating_view_create(struct wrap *wrap, struct server_view *view) {
      struct floating_view *fview = zalloc(1, sizeof(*fview));
@@ -198,12 +226,12 @@ index 32ea33f..da554ab 100644
 -        server_view_commit(view);
 -    } else {
 -        ww_assert(!wrap->floating.anchored);
+-
+-        set_anchored(wrap, fview);
 +    server_view_set_centered(view, false);
 +    server_view_set_pos(view, 0, 0);
 +    server_view_commit(view);
  
--        set_anchored(wrap, fview);
--
 -        server_view_set_centered(view, false);
 -        floating_update_anchored(wrap);
 -    }
@@ -211,7 +239,7 @@ index 32ea33f..da554ab 100644
  }
  
  static void
-@@ -249,13 +327,13 @@ floating_view_destroy(struct wrap *wrap, struct server_view *view) {
+@@ -249,13 +323,13 @@ floating_view_destroy(struct wrap *wrap, struct server_view *view) {
          }
  
          wl_list_remove(&fview->link);
@@ -227,26 +255,37 @@ index 32ea33f..da554ab 100644
          return;
      }
  
-@@ -279,6 +357,18 @@ on_anchored_resize(struct wl_listener *listener, void *data) {
-     floating_update_anchored(wrap);
+@@ -270,13 +344,24 @@ process_state_update(int wd, uint32_t mask, const char *name, void *data) {
+     config_vm_signal_event(wrap->cfg->vm, "state");
  }
  
 +/*
-+ * Any floating window resized. A window that had no title when it appeared may
-+ * have one now, so both the things that depend on recognising it are redone.
++ * Any floating window resized.
++ *
++ * A window that had no title when it appeared may have one now, so everything
++ * that depends on recognising it is redone here. Note what this must not do:
++ * choosing the anchor used to add and remove a listener on this very signal,
++ * which meant editing the list wl_signal_emit was walking, and the node it had
++ * already cached as next could be unlinked out from under it. Anchoring is
++ * just a pointer now, and the only listener on this signal is the one per
++ * view, added once when the view appears.
 + */
-+static void
+ static void
+-on_anchored_resize(struct wl_listener *listener, void *data) {
+-    struct wrap_floating *wrap_floating =
+-        wl_container_of(listener, wrap_floating, on_anchored_resize);
+-    struct wrap *wrap = wl_container_of(wrap_floating, wrap, floating);
 +on_floating_resize(struct wl_listener *listener, void *data) {
 +    struct floating_view *fview = wl_container_of(listener, fview, on_resize);
-+
+ 
+-    floating_update_anchored(wrap);
 +    floating_choose_anchor(fview->wrap);
++    floating_update_anchored(fview->wrap);
 +    floating_update_visible(fview->wrap);
-+}
-+
+ }
+ 
  static void
- on_close(struct wl_listener *listener, void *data) {
-     struct wrap *wrap = wl_container_of(listener, wrap, on_close);
-@@ -663,18 +753,11 @@ wrap_set_config(struct wrap *wrap, struct config *cfg) {
+@@ -663,18 +748,11 @@ wrap_set_config(struct wrap *wrap, struct config *cfg) {
      config_vm_set_wrap(cfg->vm, wrap);
  
      wrap->cfg = cfg;
