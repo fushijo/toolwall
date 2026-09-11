@@ -389,7 +389,7 @@ fn hotkeys(ui: &mut egui::Ui, doc: &mut Document, keys: &mut NinbKeys) {
 
     ui.add_space(4.0);
 
-    let mut rows: Vec<(usize, &'static str, String, bool)> = Vec::new();
+    let mut rows: Vec<(usize, &'static str, String, bool, Option<String>)> = Vec::new();
     if let Some(list) = &keys.hotkeys {
         for (index, (name, hotkey)) in list.iter().enumerate() {
             let label = ACTIONS
@@ -397,7 +397,14 @@ fn hotkeys(ui: &mut egui::Ui, doc: &mut Document, keys: &mut NinbKeys) {
                 .find(|(id, _)| id == name)
                 .map(|(_, label)| *label)
                 .unwrap_or("");
-            rows.push((index, label, hotkey.label(), grabbed(hotkey)));
+            let clash = hotkey.key().and_then(|key| {
+                doc.keybinds
+                    .iter()
+                    .find(|bind| ninb_keys::ninb_key_for_input(&bind.input) == Some(key))
+                    .map(|bind| bind.input.clone())
+            });
+
+            rows.push((index, label, hotkey.label(), grabbed(hotkey), clash));
         }
     }
 
@@ -407,7 +414,7 @@ fn hotkeys(ui: &mut egui::Ui, doc: &mut Document, keys: &mut NinbKeys) {
         .num_columns(2)
         .spacing([12.0, 6.0])
         .show(ui, |ui| {
-            for (index, label, current, taken) in &rows {
+            for (index, label, current, taken, clash) in &rows {
                 ui.label(*label);
                 ui.horizontal(|ui| {
                     let capturing = keys.capturing == Some(*index);
@@ -417,10 +424,23 @@ fn hotkeys(ui: &mut egui::Ui, doc: &mut Document, keys: &mut NinbKeys) {
                         capture_clicked = Some(*index);
                     }
 
-                    if *taken && !capturing {
+                    if capturing {
+                        return;
+                    }
+
+                    if *taken {
                         ui.colored_label(
                             egui::Color32::from_rgb(255, 170, 80),
                             "⚠ your desktop takes this key",
+                        );
+                    }
+
+                    // ninb watches the keyboard, so a key bound here as well
+                    // does both things on every press
+                    if let Some(bind) = clash {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(255, 120, 120),
+                            format!("⚠ toolwall also binds {}", bind),
                         );
                     }
                 });

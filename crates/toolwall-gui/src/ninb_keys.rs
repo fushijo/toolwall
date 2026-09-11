@@ -186,3 +186,75 @@ pub fn capture(ctx: &egui::Context) -> Option<Hotkey> {
         })
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ninb_key_for_input;
+
+    #[test]
+    fn a_toolwall_bind_maps_to_the_key_ninb_would_see() {
+        // this pair is what toggled the readout and minimised ninb at once
+        assert_eq!(ninb_key_for_input("grave"), Some("`"));
+        assert_eq!(ninb_key_for_input("bracketleft"), Some("["));
+        assert_eq!(ninb_key_for_input("F7"), Some("F7"));
+
+        // modifiers are a prefix; the key underneath is what ninb matches on,
+        // since it fires even when extra modifiers are held
+        assert_eq!(ninb_key_for_input("Shift-N"), Some("N"));
+        assert_eq!(ninb_key_for_input("Ctrl-Shift-Prior"), Some("Page Up"));
+
+        // nothing ninb can express
+        assert_eq!(ninb_key_for_input("XF86AudioPlay"), None);
+    }
+}
+
+/// The ninb key name a toolwall keybind ends up pressing, if any.
+///
+/// toolwall binds are waywall keysym names, ninb stores its own. They only
+/// matter together: ninb watches the keyboard globally, so a key bound in both
+/// fires both, and ninb matches even when extra modifiers are held. That is
+/// how one key ended up toggling the readout and minimising ninb at once.
+pub fn ninb_key_for_input(input: &str) -> Option<&'static str> {
+    // modifiers are a prefix, the key is the last part
+    let key = input.rsplit('-').next()?;
+
+    let name = match key {
+        "grave" => "`",
+        "bracketleft" => "[",
+        "bracketright" => "]",
+        "backslash" => "\\",
+        "semicolon" => ";",
+        "apostrophe" => "'",
+        "comma" => ",",
+        "period" => ".",
+        "slash" => "/",
+        "minus" => "-",
+        "equal" => "=",
+        "space" => "Space",
+        "Return" => "Enter",
+        "Escape" => "Escape",
+        "Tab" => "Tab",
+        "BackSpace" => "Backspace",
+        "Prior" => "Page Up",
+        "Next" => "Page Down",
+        "Home" => "Home",
+        "End" => "End",
+        "Insert" => "Insert",
+        "Delete" => "Delete",
+        "Up" => "Up",
+        "Down" => "Down",
+        "Left" => "Left",
+        "Right" => "Right",
+        "Caps_Lock" => "Caps Lock",
+        other => {
+            // letters, digits and function keys carry the same name in both
+            let upper = other.to_ascii_uppercase();
+            return toolwall_core::ninb_prefs::KEYS
+                .iter()
+                .find(|(name, _)| *name == upper)
+                .map(|(name, _)| *name);
+        }
+    };
+
+    Some(name)
+}
