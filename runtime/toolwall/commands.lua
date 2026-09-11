@@ -38,6 +38,12 @@ end
     of those run inside a waywall coroutine, which is what waywall.sleep needs.
 ]]
 function M.run_ninb_overlay(st)
+    -- before anything else: a second loop would fight the first over the same
+    -- scene objects, and the cache wipe below would blind the one running
+    if st.ninb_overlay then
+        return
+    end
+
     local ninb = st.doc.ninb or {}
     local cfg = ninb.overlay or {}
     local port = ninb.port or ninb_api.DEFAULT_PORT
@@ -55,10 +61,6 @@ function M.run_ninb_overlay(st)
         ninb_api.forget(query)
     end
 
-    if st.ninb_overlay then
-        return
-    end
-
     st.ninb_overlay = true
     st.ninb_panel = ninb_overlay.new(cfg)
 
@@ -66,24 +68,47 @@ function M.run_ninb_overlay(st)
         Streaming holds the connection open and ninb pushes on every change, so
         the readout keeps up with F3+C spam.
 
-        The script reconnects on its own, so this only has to notice that it
-        died altogether. Starting it again is a no-op while one is alive
-        (flock), which makes the same call both how it starts and how it
-        recovers. That matters: ninb takes seconds to boot, so the first
-        attempt after a reload nearly always fails, and anything that gave up
-        on the first failure would end up never streaming at all.
-
-        One-shot fetches cover the gap until the stream lands its first answer,
-        and stop once it has. If streaming is impossible here (no flock, no
-        curl) the stream file never appears and the fetches simply carry on,
-        which is the fallback.
+        The script reconnects on its own, so this only has to notice it died
+        altogether, which is why the interval is a watchdog rather than a
+        retry: every exec from here is a fork nobody needs. Starting it again
+        is a no-op while one is alive, flock sees to that, so the same call is
+        both how it starts and how it recovers. That matters because ninb takes
+        seconds to boot, so the first attempt after a reload nearly always
+        fails, and giving up on that would mean never streaming at all.
     ]]
-    -- a watchdog, not a retry: the script has its own retry loop, and every
-    -- exec from here is a fork the user does not need
     local RESTART_MS = 30000
     local FETCH_MS = 500
 
     local last_start, last_fetch = 0, 0
+
+    --[[
+        The freshest stronghold reading.
+
+        Reading the stream's file is free. Fetching costs a fork, so it only
+        happens while the stream has never answered: that covers ninb's boot,
+        and it is also the whole fallback when streaming cannot work here at
+        all, because then the stream file never appears and this never stops.
+    ]]
+    local function stronghold(now)
+        local streamed = live and ninb_api.read(ninb_api.STRONGHOLD) or nil
+        if streamed then
+            return streamed
+        end
+
+        if now - last_fetch >= FETCH_MS then
+            last_fetch = now
+            for _, query in ipairs(queries) do
+                ninb_api.fetch(query, port)
+            end
+        end
+
+        return ninb_api.read(ninb_api.STRONGHOLD, true)
+    end
+
+    local function messages()
+        return ninb_api.messages(
+            ninb_api.read(ninb_api.MESSAGES) or ninb_api.read(ninb_api.MESSAGES, true))
+    end
 
     util.warn(("ninb overlay on, %s :%d"):format(
         live and "streaming from" or "polling", port))
@@ -98,30 +123,13 @@ function M.run_ninb_overlay(st)
             end
         end
 
-        -- nil means the stream has never delivered anything, so keep asking
-        local data = live and ninb_api.read(ninb_api.STRONGHOLD) or nil
-
-        if not data then
-            if now - last_fetch >= FETCH_MS then
-                last_fetch = now
-                for _, query in ipairs(queries) do
-                    ninb_api.fetch(query, port)
-                end
-            end
-            data = ninb_api.read(ninb_api.STRONGHOLD, true)
-        end
-
-        local ok = pcall(function()
-            st.ninb_panel:draw(data, now, ninb_api.messages(
-                ninb_api.read(ninb_api.MESSAGES) or
-                ninb_api.read(ninb_api.MESSAGES, true)))
-        end)
-        if not ok then
+        -- called through pcall directly rather than through a closure, which
+        -- would be a new one on every tick
+        if not pcall(st.ninb_panel.draw, st.ninb_panel, stronghold(now), now, messages()) then
             util.warn("ninb overlay: draw failed")
         end
 
-        local slept = pcall(waywall.sleep, tick)
-        if not slept then
+        if not pcall(waywall.sleep, tick) then
             util.warn("ninb overlay: sleep failed, stopping")
             st.ninb_overlay = false
         end

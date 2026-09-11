@@ -393,11 +393,11 @@ pub struct NinbOverlay {
     #[serde(default = "layout_ninbot")]
     pub layout: String,
 
-    #[serde(default = "eight")]
+    #[serde(default = "readout_x")]
     pub x: i32,
-    #[serde(default = "forty")]
+    #[serde(default = "readout_y")]
     pub y: i32,
-    #[serde(default = "two")]
+    #[serde(default = "readout_size")]
     pub size: u32,
     /// extra pixels between rows. the glyph height is already accounted for.
     #[serde(default = "line_gap")]
@@ -748,8 +748,8 @@ fn ninb_poll() -> u32 { 50 }
 fn ninb_delay() -> u32 { 3000 }
 fn rule() -> String { "#7f8ea380".into() }
 fn ninb_idle() -> String { "no eye throws yet".into() }
-fn eight() -> i32 { 8 }
-fn forty() -> i32 { 40 }
+fn readout_x() -> i32 { 8 }
+fn readout_y() -> i32 { 40 }
 fn one_u32() -> u32 { 1 }
 fn line_gap() -> u32 { 2 }
 fn wrap_width() -> u32 { 44 }
@@ -765,7 +765,7 @@ fn steel() -> String { "#7f8ea3ff".into() }
 fn high_cut() -> f64 { 80.0 }
 fn mid_cut() -> f64 { 50.0 }
 fn ninb_template() -> String { "{x}, {z}  {certainty}".into() }
-fn two() -> u32 { 2 }
+fn readout_size() -> u32 { 2 }
 fn white() -> String { "#ffffffff".into() }
 fn default_opacity() -> f32 { 0.92 }
 fn default_font_size() -> f32 { 18.0 }

@@ -838,6 +838,31 @@ check("ninb waits for waywall's x server before starting", function()
     os.remove(path)
 end)
 
+check("starting the readout twice leaves the first one alone", function()
+    -- the second call used to wipe the cache files before noticing that one
+    -- was already running, which blinded the loop that was
+    local api = require("toolwall.ninb_api")
+    local commands = require("toolwall.commands")
+
+    local cached = TEST_RUNTIME .. "/toolwall-ninb-stronghold-poll.json"
+    local fh = io.open(cached, "w")
+    fh:write('{"predictions":[]}')
+    fh:close()
+
+    -- a loop already running, holding its own panel
+    local running = {
+        doc = { ninb = { overlay = {} } },
+        ninb_overlay = true,
+        ninb_panel = "first",
+    }
+    commands.run_ninb_overlay(running)
+
+    assert_eq(running.ninb_panel, "first", "the running readout is untouched")
+    assert_eq(api.read(api.STRONGHOLD, true) ~= nil, true, "and its cache survives")
+
+    os.remove(cached)
+end)
+
 print(("\n%d passed, %d failed"):format(passed, failed))
 
 os.exit(failed == 0 and 0 or 1)
