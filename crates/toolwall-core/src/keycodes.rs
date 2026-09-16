@@ -240,7 +240,7 @@ const FROM_LITERAL: &[(&str, &str)] = &[
 /// Handles the three ways a remap half goes bad in practice: an X11 keysym
 /// where a keycode belongs, a literal punctuation character, and a keybind
 /// string with modifiers still attached (`Ctrl-N`), which a remap can never
-/// express — the modifier is dropped and the base key returned, because
+/// express - the modifier is dropped and the base key returned, because
 /// remapping the base key is the closest thing waywall can actually do.
 ///
 /// Returns `None` when the name is already valid or is not salvageable.
