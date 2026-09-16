@@ -36,6 +36,65 @@ modifiers, `"*-Shift-T"` requires Shift and ignores the rest.
 
 Caps Lock and Num Lock are ignored unless named explicitly.
 
+## Rebind names are not keybind names
+
+`input.remaps`, `input.remaps_menu` and the `remaps.set` arguments use a
+different vocabulary from every other input string on this page, and mixing
+them up is the single most expensive mistake in a toolwall config.
+
+| | vocabulary | examples |
+| --- | --- | --- |
+| Keybinds (`keybinds[].input`) | X11 keysyms, modifiers split on `-` | `Escape`, `bracketleft`, `Ctrl-Shift-N`, `*-F3` |
+| Rebinds (`input.remaps`) | Linux input-event-code names, matched whole | `ESC`, `LEFTBRACE`, `N`, `F3` |
+
+waywall matches a rebind half against `util_keycodes` and then
+`button_mappings`, case-insensitively, with no splitting. So a `-` is never a
+separator there and `Ctrl-N` is not a name at all. The two vocabularies agree
+on letters, digits and function keys and disagree on everything else, which is
+what makes this so easy to get wrong: the first rebinds anyone tries work, and
+the first punctuation key does not.
+
+**It does not fail on its own.** `config_parse_remap` returning non-zero aborts
+the entire config load, so one bad rebind name costs every mode, mirror and
+keybind in the document. The symptom is "toolwall stopped working".
+
+Three things now stand between you and that:
+
+- The editor writes these names for you. Press **Set**, press the key.
+- `toolwall validate` rejects a name waywall would not take, and suggests the
+  right one where there is an obvious match.
+- The runtime drops an unparseable rebind with a warning rather than handing it
+  to waywall, so a hand-edited or shared config degrades to "that one rebind is
+  missing" instead of "nothing loads".
+
+The full list of accepted names is `schema/keycodes.txt`, extracted from
+waywall's own source by `tools/keycodes.sh`.
+
+### Rebinding a modifier on its own
+
+`LEFTALT`, `RIGHTSHIFT`, `LEFTCTRL`, `RIGHTMETA`, `CAPSLOCK` and the rest are
+ordinary remap sources and targets. waywall matches a remap against the raw
+keycode in `try_remap_key`, before any modifier handling, so a modifier is no
+different from `A` as far as rebinding goes:
+
+```json
+"remaps": { "LEFTALT": "F3", "RIGHTSHIFT": "mb4" }
+```
+
+**Pressing one cannot fill the field, though.** winit merges left and right
+into a single flag before egui sees it, and egui has no key value for a
+modifier in the first place, so a bare Left Alt press produces no event for the
+editor to read. That is a limit of the editor's toolkit, not of waywall.
+
+So the editor offers them by name instead: the **▾** button beside each field
+opens waywall's full list, searchable and grouped, with the modifiers first.
+Typing the name into the field directly works too.
+
+One thing to know: a keybind on the same key wins. `on_keyboard_key` runs
+actions before `try_remap_key` and returns early when one consumes the press,
+so binding `*-Alt_L` as a keybind and rebinding `LEFTALT` at the same time
+means the keybind is what happens.
+
 ## Text templates
 
 | Placeholder | Value |

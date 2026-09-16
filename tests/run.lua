@@ -904,6 +904,156 @@ check("keybinds all work again once it is switched off", function()
     os.remove(path)
 end)
 
+check("a rebind waywall cannot parse is dropped, not passed on", function()
+    -- One unparseable name aborts waywall's whole config load, so the rest of
+    -- the document has to survive it. "Escape" is the keysym; the keycode is
+    -- "ESC", and reaching for the wrong one is the usual way this happens.
+    local path = write_config([[
+      { "version": 1,
+        "input": { "remaps": { "MB4": "HOME", "P": "Escape", "Fnord": "F3" } } }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+
+    assert_eq(cfg.input.remaps["MB4"], "HOME", "the valid rebind survives")
+    assert_eq(cfg.input.remaps["P"], nil, "the keysym target is dropped")
+    assert_eq(cfg.input.remaps["Fnord"], nil, "the unknown source is dropped")
+
+    os.remove(path)
+end)
+
+check("the generated keycode table still matches waywall's", function()
+    -- keycodes.lua and schema/keycodes.txt are both written by
+    -- tools/keycodes.sh. Hand-editing either one silently desynchronises the
+    -- runtime from what toolwall-core validates against.
+    local keycodes = require("toolwall.keycodes")
+
+    local fh = assert(io.open("schema/keycodes.txt"), "schema/keycodes.txt missing")
+    local section, from_txt = nil, { keys = {}, buttons = {} }
+
+    for line in fh:lines() do
+        line = line:match("^%s*(.-)%s*$")
+        if line == "[keys]" then
+            section = "keys"
+        elseif line == "[buttons]" then
+            section = "buttons"
+        elseif line ~= "" and not line:match("^#") and section then
+            table.insert(from_txt[section], line)
+        end
+    end
+    fh:close()
+
+    for _, which in ipairs({ "keys", "buttons" }) do
+        assert_eq(#keycodes[which], #from_txt[which], which .. " count")
+        for i, name in ipairs(from_txt[which]) do
+            assert_eq(keycodes[which][i], name, which .. "[" .. i .. "]")
+        end
+    end
+end)
+
+check("the menu rebind set swaps in when the cursor appears", function()
+    local path = write_config([[
+      { "version": 1,
+        "input": {
+          "remaps": { "MB4": "HOME" },
+          "remaps_menu": { "MB4": "ESC" }
+        } }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    local function last_set_remaps()
+        local found = nil
+        for _, entry in ipairs(waywall.log) do
+            if entry.name == "set_remaps" then found = entry.args[1] end
+        end
+        return found
+    end
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.fire("state")
+    assert_eq(last_set_remaps()["MB4"], "HOME", "playing uses the base set")
+
+    waywall.state_value = { screen = "inworld", inworld = "menu" }
+    waywall.fire("state")
+    assert_eq(last_set_remaps()["MB4"], "ESC", "a menu swaps to the other set")
+
+    os.remove(path)
+end)
+
+--[[
+    ==== IMPORTER ====
+
+    The importer runs as its own script, because it has to replace the whole
+    `waywall` module before a config loads and this process has already got
+    the mock installed. Shelling out keeps the two sandboxes apart.
+]]
+
+local function import(fixture)
+    local out = os.tmpname()
+    local cmd = ("luajit tools/import.lua tests/fixtures/%s %s 2>&1")
+        :format(fixture, out)
+
+    local pipe = assert(io.popen(cmd))
+    local log = pipe:read("*a")
+    pipe:close()
+
+    local fh = io.open(out)
+    local body = fh and fh:read("*a") or nil
+    if fh then fh:close() end
+    os.remove(out)
+
+    return body and require("toolwall.json").decode(body) or nil, log
+end
+
+check("a hand-written config comes across as modes and keybinds", function()
+    local doc, log = import("handwritten")
+    assert(doc, "no document written: " .. tostring(log))
+
+    assert_eq(#doc.modes, 2, "mode count")
+    assert_eq(doc.input.sensitivity, 2.5, "sensitivity")
+    assert_eq(doc.input.repeat_rate, 20, "repeat rate")
+    assert_eq(doc.window.fullscreen_width, 1920, "fullscreen width")
+
+    -- Named by shape, since the config never says "tall" anywhere.
+    local by_id = {}
+    for _, mode in ipairs(doc.modes) do by_id[mode.id] = mode end
+
+    assert_eq(by_id.tall and by_id.tall.resolution.height, 16384, "tall height")
+    assert_eq(by_id.wide and by_id.wide.resolution.width, 1920, "wide width")
+    assert_eq(#by_id.tall.mirrors, 1, "the tall mirror came with it")
+end)
+
+check("keybinds are classified by what they do, not what they are called", function()
+    local doc = import("handwritten")
+
+    local by_input = {}
+    for _, bind in ipairs(doc.keybinds or {}) do by_input[bind.input] = bind end
+
+    assert_eq(by_input["Shift-T"].command, "mode.set", "toggle_res becomes a mode")
+    assert_eq(by_input["Shift-T"].args.mode, "tall", "and finds the right one")
+    assert_eq(by_input["Shift-F"].command, "fullscreen.toggle", "fullscreen")
+    assert_eq(by_input["Shift-N"].command, "ninb.toggle", "ninb, found by its jar")
+    assert_eq(doc.ninb and doc.ninb.jar, "/opt/ninb/Ninjabrain-Bot-1.5.2.jar", "jar path")
+
+    -- The one it cannot express is left out rather than approximated.
+    assert_eq(by_input["Shift-Z"], nil, "an unmappable keybind is not invented")
+end)
+
+check("a rebind waywall would refuse never reaches the imported config", function()
+    local doc, log = import("handwritten")
+
+    assert_eq(doc.input.remaps["MB4"], "HOME", "the good one survives")
+    assert_eq(doc.input.remaps["P"], nil, "the keysym is dropped")
+    assert_eq(doc.input.remaps["X"], nil, "the half-filled one is dropped")
+
+    -- Dropping silently would be worse than not importing at all.
+    assert(log:match('"P"'), "the dropped rebind is reported")
+    assert(log:match('"X"'), "the half-filled rebind is reported")
+end)
+
 print(("\n%d passed, %d failed"):format(passed, failed))
 
 os.exit(failed == 0 and 0 or 1)
