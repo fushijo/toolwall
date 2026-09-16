@@ -112,9 +112,13 @@ fn remap_table(
     let mut remove = None;
 
     // A capture in progress swallows the next keypress into its field.
+    //
+    // captured_keycode, not captured: a rebind is matched against waywall's
+    // keycode table, where the keybind spelling of anything but a letter or a
+    // digit does not appear at all.
     if let Some(active) = capture.clone() {
         if active.table == table {
-            if let Some(pressed) = keys::captured(ui.ctx()) {
+            if let Some(pressed) = keys::captured_keycode(ui.ctx()) {
                 if let Some(row) = rows.get_mut(active.row) {
                     if active.to_side {
                         row.1 = pressed;
@@ -137,6 +141,12 @@ fn remap_table(
             if ui.small_button("✕").on_hover_text("Remove").clicked() {
                 remove = Some(index);
             }
+
+            // Inline, because the cost of a bad name is the whole config
+            // failing to load - not just this row going quiet.
+            for half in [&mut row.0, &mut row.1] {
+                changed |= warn_unknown(ui, half);
+            }
         });
     }
 
@@ -155,11 +165,44 @@ fn remap_table(
     if changed {
         remaps.clear();
         for (from, to) in rows {
-            if !from.is_empty() {
+            // Both halves, not just the source. waywall rejects an empty
+            // target outright, and rejecting it takes every other setting in
+            // the document down with it, so a row being filled in is not a
+            // state worth writing to disk.
+            if !from.trim().is_empty() && !to.trim().is_empty() {
                 remaps.insert(from, to);
             }
         }
     }
+}
+
+/// Flag a rebind name waywall will not parse, and offer the fix when there is
+/// an obvious one.
+fn warn_unknown(ui: &mut egui::Ui, value: &mut String) -> bool {
+    if value.trim().is_empty() || toolwall_core::keycodes::is_valid(value) {
+        return false;
+    }
+
+    match toolwall_core::keycodes::repair(value) {
+        Some(fixed) => {
+            let hint = format!(
+                "waywall has no key called {value:?}. Rebinds use kernel key names, \
+                 not the names keybinds use. Click to change it to {fixed}.",
+            );
+            if ui.button(format!("⚠ {fixed}?")).on_hover_text(hint).clicked() {
+                *value = fixed.to_string();
+                return true;
+            }
+        }
+        None => {
+            ui.label("⚠").on_hover_text(format!(
+                "waywall has no key called {value:?}, and this rebind will stop \
+                 the whole config from loading. Press Set and press the key instead.",
+            ));
+        }
+    }
+
+    false
 }
 
 fn capture_field(

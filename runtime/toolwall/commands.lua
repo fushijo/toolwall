@@ -12,6 +12,7 @@
 ]]
 
 local waywall = require("waywall")
+local keycodes = require("toolwall.keycodes")
 local launch = require("toolwall.launch")
 local ninb_api = require("toolwall.ninb_api")
 local ninb_overlay = require("toolwall.ninb_overlay")
@@ -172,7 +173,7 @@ function M.bind(rt)
     end)
 
     M.register("remaps.set", function(_, args)
-        waywall.set_remaps(args.remaps or {})
+        waywall.set_remaps(keycodes.sane(args.remaps, "remaps.set"))
     end)
 
     M.register("key.press", function(_, args)

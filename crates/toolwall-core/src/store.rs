@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
+use crate::keycodes;
 use crate::schema::{Command, Document, SCHEMA_VERSION};
 
 /// Leaderboard rules cap any dimension here, and waywall's own texture limit
@@ -160,6 +161,9 @@ pub enum Scope {
     Mirror(String),
     Image(String),
     Keybind(String),
+    /// One entry in `input.remaps` or `input.remaps_menu`, keyed by its
+    /// source name.
+    Remap(String),
     Ninb,
 }
 
@@ -316,6 +320,41 @@ fn keybinds(doc: &Document, overlays: &HashSet<&str>, out: &mut Vec<Problem>) {
     }
 }
 
+/// Remap halves waywall will not recognise.
+///
+/// This is not a cosmetic check. `config_parse_remap` failing aborts the
+/// entire config load, so one bad name here costs every mode, mirror and
+/// keybind in the document - the failure looks like "toolwall stopped
+/// working", not "that one remap is off".
+fn remaps(doc: &Document, out: &mut Vec<Problem>) {
+    let tables = [("remaps", &doc.input.remaps), ("remaps_menu", &doc.input.remaps_menu)];
+
+    for (table, entries) in tables {
+        for (from, to) in entries {
+            let scope = || Scope::Remap(from.clone());
+
+            for (side, name) in [("source", from), ("target", to)] {
+                if keycodes::is_valid(name) {
+                    continue;
+                }
+
+                let hint = match keycodes::repair(name) {
+                    Some(fixed) => format!(", did you mean {fixed:?}?"),
+                    None => String::new(),
+                };
+
+                let message = if name.trim().is_empty() {
+                    format!("{table}: {from:?} has no {side} key")
+                } else {
+                    format!("{table}: waywall has no input named {name:?} ({side}){hint}")
+                };
+
+                out.push(Problem { scope: scope(), message });
+            }
+        }
+    }
+}
+
 /// Every structural problem in the document, not just the first.
 ///
 /// `validate` is this reduced to a pass/fail; the GUI uses the full list to
@@ -336,6 +375,7 @@ pub fn problems(doc: &Document) -> Vec<Problem> {
 
     document_references(doc, &overlays, &modes, &mut out);
     keybinds(doc, &overlays, &mut out);
+    remaps(doc, &mut out);
 
     out
 }
@@ -401,6 +441,37 @@ mod tests {
     fn accepts_a_valid_document() {
         assert!(validate(&doc_with_mode()).is_ok());
         assert!(problems(&doc_with_mode()).is_empty());
+    }
+
+    #[test]
+    fn rejects_a_remap_waywall_cannot_parse() {
+        // A keysym where a keycode belongs. waywall aborts the whole config
+        // over this one, so it has to be caught before it is written.
+        let mut doc = doc_with_mode();
+        doc.input.remaps.insert("P".into(), "Escape".into());
+
+        let found = problems(&doc);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].scope, Scope::Remap("P".into()));
+        assert!(found[0].message.contains("did you mean \"ESC\""), "{}", found[0].message);
+    }
+
+    #[test]
+    fn accepts_the_remap_names_waywall_accepts() {
+        let mut doc = doc_with_mode();
+        doc.input.remaps.insert("MB4".into(), "HOME".into());
+        doc.input.remaps_menu.insert("mb4".into(), "esc".into());
+        assert!(problems(&doc).is_empty(), "{:?}", problems(&doc));
+    }
+
+    #[test]
+    fn rejects_a_half_filled_remap() {
+        let mut doc = doc_with_mode();
+        doc.input.remaps.insert("X".into(), String::new());
+
+        let found = problems(&doc);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].message.contains("no target key"), "{}", found[0].message);
     }
 
     #[test]

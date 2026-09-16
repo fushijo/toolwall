@@ -23,6 +23,7 @@ local config = require("toolwall.config")
 local commands = require("toolwall.commands")
 local hud = require("toolwall.hud")
 local keybinds = require("toolwall.keybinds")
+local keycodes = require("toolwall.keycodes")
 local modes = require("toolwall.modes")
 local launch = require("toolwall.launch")
 local scene = require("toolwall.scene")
@@ -43,6 +44,7 @@ M.SCHEMA_VERSION = 1
 ]]
 local rt = {
     doc = nil,      -- parsed toolwall.json
+    remaps = nil,   -- { base, menu }, filtered once at setup
     scene = nil,    -- scene registry (live mirror/image objects)
     modes = nil,    -- mode controller
     hud = nil,      -- hud controller
@@ -86,7 +88,7 @@ local function build_waywall_config(doc)
             variant = input.variant or "",
             options = input.options or "",
 
-            remaps = input.remaps or {},
+            remaps = rt.remaps.base,
 
             repeat_rate = input.repeat_rate or -1,
             repeat_delay = input.repeat_delay or -1,
@@ -135,18 +137,14 @@ end
     that opts in on an instance without the mod degrades to the base remaps
     rather than erroring on every state change.
 ]]
-local function apply_state_remaps(doc)
-    local input = doc.input or {}
-    local base = input.remaps or {}
-    local menu = input.remaps_menu or {}
-
+local function apply_state_remaps()
     local ok, state = pcall(waywall.state)
     if not ok or type(state) ~= "table" then
         return
     end
 
     local playing = state.screen == "inworld" and state.inworld == "unpaused"
-    waywall.set_remaps(playing and base or menu)
+    waywall.set_remaps(playing and rt.remaps.base or rt.remaps.menu)
 end
 
 --[[
@@ -183,8 +181,8 @@ local function on_load()
 
     -- ninb is started from its own listener, below, so that it can wait.
 
-    if next(rt.doc.input and rt.doc.input.remaps_menu or {}) then
-        apply_state_remaps(rt.doc)
+    if next(rt.remaps.menu) then
+        apply_state_remaps()
     end
 
     if rt.degraded then
@@ -218,10 +216,8 @@ local function register_listeners(doc)
         Only wired up when a second set is actually configured, so the common
         case costs nothing and the State Output mod stays optional.
     ]]
-    if next(doc.input and doc.input.remaps_menu or {}) then
-        waywall.listen("state", function()
-            apply_state_remaps(doc)
-        end)
+    if next(rt.remaps.menu) then
+        waywall.listen("state", apply_state_remaps)
     end
 
     if doc.hud and doc.hud.follow_state then
@@ -297,6 +293,19 @@ function M.setup(opts)
     end
 
     rt.doc = doc
+
+    --[[
+        Filter the rebinds once, here, rather than wherever they are used.
+
+        The warnings belong to loading a config, not to playing with one: the
+        state listener runs on every screen change, and sanitising there would
+        reprint the same complaint every time you opened a chest.
+    ]]
+    local input = doc.input or {}
+    rt.remaps = {
+        base = keycodes.sane(input.remaps, "remaps"),
+        menu = keycodes.sane(input.remaps_menu, "remaps_menu"),
+    }
 
     local cfg = build_waywall_config(doc)
     cfg.actions = keybinds.build(doc, rt)

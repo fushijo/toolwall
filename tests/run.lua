@@ -904,6 +904,85 @@ check("keybinds all work again once it is switched off", function()
     os.remove(path)
 end)
 
+check("a rebind waywall cannot parse is dropped, not passed on", function()
+    -- One unparseable name aborts waywall's whole config load, so the rest of
+    -- the document has to survive it. "Escape" is the keysym; the keycode is
+    -- "ESC", and reaching for the wrong one is the usual way this happens.
+    local path = write_config([[
+      { "version": 1,
+        "input": { "remaps": { "MB4": "HOME", "P": "Escape", "Fnord": "F3" } } }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+
+    assert_eq(cfg.input.remaps["MB4"], "HOME", "the valid rebind survives")
+    assert_eq(cfg.input.remaps["P"], nil, "the keysym target is dropped")
+    assert_eq(cfg.input.remaps["Fnord"], nil, "the unknown source is dropped")
+
+    os.remove(path)
+end)
+
+check("the generated keycode table still matches waywall's", function()
+    -- keycodes.lua and schema/keycodes.txt are both written by
+    -- tools/keycodes.sh. Hand-editing either one silently desynchronises the
+    -- runtime from what toolwall-core validates against.
+    local keycodes = require("toolwall.keycodes")
+
+    local fh = assert(io.open("schema/keycodes.txt"), "schema/keycodes.txt missing")
+    local section, from_txt = nil, { keys = {}, buttons = {} }
+
+    for line in fh:lines() do
+        line = line:match("^%s*(.-)%s*$")
+        if line == "[keys]" then
+            section = "keys"
+        elseif line == "[buttons]" then
+            section = "buttons"
+        elseif line ~= "" and not line:match("^#") and section then
+            table.insert(from_txt[section], line)
+        end
+    end
+    fh:close()
+
+    for _, which in ipairs({ "keys", "buttons" }) do
+        assert_eq(#keycodes[which], #from_txt[which], which .. " count")
+        for i, name in ipairs(from_txt[which]) do
+            assert_eq(keycodes[which][i], name, which .. "[" .. i .. "]")
+        end
+    end
+end)
+
+check("the menu rebind set swaps in when the cursor appears", function()
+    local path = write_config([[
+      { "version": 1,
+        "input": {
+          "remaps": { "MB4": "HOME" },
+          "remaps_menu": { "MB4": "ESC" }
+        } }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    local function last_set_remaps()
+        local found = nil
+        for _, entry in ipairs(waywall.log) do
+            if entry.name == "set_remaps" then found = entry.args[1] end
+        end
+        return found
+    end
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.fire("state")
+    assert_eq(last_set_remaps()["MB4"], "HOME", "playing uses the base set")
+
+    waywall.state_value = { screen = "inworld", inworld = "menu" }
+    waywall.fire("state")
+    assert_eq(last_set_remaps()["MB4"], "ESC", "a menu swaps to the other set")
+
+    os.remove(path)
+end)
+
 print(("\n%d passed, %d failed"):format(passed, failed))
 
 os.exit(failed == 0 and 0 or 1)

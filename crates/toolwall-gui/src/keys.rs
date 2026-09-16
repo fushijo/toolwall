@@ -133,3 +133,169 @@ pub fn captured(ctx: &egui::Context) -> Option<String> {
         })
     })
 }
+
+/// The waywall *keycode* name for an egui key, where one exists.
+///
+/// Remaps are not keybinds. waywall matches a remap half against
+/// `util_keycodes`, which are the names from `linux/input-event-codes.h`, so
+/// the key that a keybind calls `Escape` a remap has to call `ESC`. Letters,
+/// digits and the function keys are spelled the same in both, which is what
+/// makes the difference so easy to miss: the remaps people try first work,
+/// and the first punctuation key they add takes the whole config down.
+///
+/// Shifted punctuation resolves to the physical key underneath it. A keycode
+/// names a key, not a character, so `?` is the same input as `/`.
+pub fn keycode(key: egui::Key) -> Option<&'static str> {
+    use egui::Key::*;
+
+    Some(match key {
+        ArrowDown => "DOWN",
+        ArrowLeft => "LEFT",
+        ArrowRight => "RIGHT",
+        ArrowUp => "UP",
+
+        Escape => "ESC",
+        Tab => "TAB",
+        Backspace => "BACKSPACE",
+        Enter => "ENTER",
+        Space => "SPACE",
+        Insert => "INSERT",
+        Delete => "DELETE",
+        Home => "HOME",
+        End => "END",
+        PageUp => "PAGEUP",
+        PageDown => "PAGEDOWN",
+
+        Minus => "MINUS",
+        Equals => "EQUAL",
+        Comma => "COMMA",
+        Period => "DOT",
+        Semicolon => "SEMICOLON",
+        Backslash => "BACKSLASH",
+        Slash => "SLASH",
+        OpenBracket => "LEFTBRACE",
+        CloseBracket => "RIGHTBRACE",
+        Backtick => "GRAVE",
+        Quote => "APOSTROPHE",
+
+        // Shifted characters, mapped to the key you actually press.
+        Colon => "SEMICOLON",
+        Pipe => "BACKSLASH",
+        Questionmark => "SLASH",
+        Plus => "EQUAL",
+
+        Num0 => "0",
+        Num1 => "1",
+        Num2 => "2",
+        Num3 => "3",
+        Num4 => "4",
+        Num5 => "5",
+        Num6 => "6",
+        Num7 => "7",
+        Num8 => "8",
+        Num9 => "9",
+
+        A => "A",
+        B => "B",
+        C => "C",
+        D => "D",
+        E => "E",
+        F => "F",
+        G => "G",
+        H => "H",
+        I => "I",
+        J => "J",
+        K => "K",
+        L => "L",
+        M => "M",
+        N => "N",
+        O => "O",
+        P => "P",
+        Q => "Q",
+        R => "R",
+        S => "S",
+        T => "T",
+        U => "U",
+        V => "V",
+        W => "W",
+        X => "X",
+        Y => "Y",
+        Z => "Z",
+
+        F1 => "F1",
+        F2 => "F2",
+        F3 => "F3",
+        F4 => "F4",
+        F5 => "F5",
+        F6 => "F6",
+        F7 => "F7",
+        F8 => "F8",
+        F9 => "F9",
+        F10 => "F10",
+        F11 => "F11",
+        F12 => "F12",
+
+        _ => return None,
+    })
+}
+
+/// Read the first real keypress this frame as a remap name.
+///
+/// Modifiers are deliberately dropped rather than joined on. A remap half is
+/// matched whole, so `Ctrl-N` is not a stricter `N` - it is a name waywall
+/// does not have, and writing one aborts the entire config load.
+pub fn captured_keycode(ctx: &egui::Context) -> Option<String> {
+    ctx.input(|i| {
+        i.events.iter().find_map(|event| match event {
+            egui::Event::Key { key, pressed: true, .. } => {
+                keycode(*key).map(str::to_string)
+            }
+            egui::Event::PointerButton { button, pressed: true, .. } => match button {
+                egui::PointerButton::Extra1 => Some("mb4".to_string()),
+                egui::PointerButton::Extra2 => Some("mb5".to_string()),
+                egui::PointerButton::Middle => Some("mmb".to_string()),
+                _ => None,
+            },
+            _ => None,
+        })
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every name this can emit has to be one waywall will actually parse.
+    #[test]
+    fn captured_remap_names_are_all_valid() {
+        use egui::Key;
+
+        for key in Key::ALL {
+            if let Some(name) = keycode(*key) {
+                assert!(
+                    toolwall_core::keycodes::is_valid(name),
+                    "{key:?} maps to {name:?}, which waywall does not accept",
+                );
+            }
+        }
+
+        for button in ["mb4", "mb5", "mmb"] {
+            assert!(toolwall_core::keycodes::is_valid(button));
+        }
+    }
+
+    /// The bug this table exists to fix: keysyms and keycodes diverge for
+    /// everything that is not a letter, a digit or a function key.
+    #[test]
+    fn keycodes_are_not_keysyms() {
+        assert_eq!(keysym(egui::Key::Escape), Some("Escape"));
+        assert_eq!(keycode(egui::Key::Escape), Some("ESC"));
+
+        assert_eq!(keysym(egui::Key::OpenBracket), Some("bracketleft"));
+        assert_eq!(keycode(egui::Key::OpenBracket), Some("LEFTBRACE"));
+
+        // ... and agree for the ones that made the bug hard to spot.
+        assert_eq!(keysym(egui::Key::A), keycode(egui::Key::A));
+        assert_eq!(keysym(egui::Key::F3), keycode(egui::Key::F3));
+    }
+}
