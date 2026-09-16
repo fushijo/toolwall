@@ -138,6 +138,56 @@ return toolwall.setup()
 waywall adds its config directory to `package.path`, which is what makes
 `require("toolwall")` resolve.
 
+### Importing the config you already have
+
+If you already run waywall, the install reads your config first and turns it
+into your starting `toolwall.json`. You keep your resolutions, your mirrors and
+overlays, your rebinds and the keys you bound them to.
+
+```
+Importing your waywall config...
+
+imported 3 mode(s), 5 mirror(s), 4 overlay image(s), 5 keybind(s)
+  Thin       340x1080  (2 mirror(s), 1 image(s))
+  Tall       384x16384  (3 mirror(s), 2 image(s))
+  Wide       1920x300  (0 mirror(s), 1 image(s))
+
+not carried across:
+  - keybind "Shift-I" was left out: draws a text overlay, which toolwall keeps
+    under Text rather than on a key
+```
+
+This works on [gore's generic config][gore], which is where most people start,
+and on hand-written ones. It does not pattern-match either: a waywall config is
+a program rather than a document, so the importer *runs* it against a `waywall`
+module that records instead of doing, and reads off the mirrors and resolutions
+it tried to build. Keybinds are values you cannot read, so each one is called
+in that same sandbox and classified by what it attempted - a key that reaches
+for `set_resolution(340, 1080)` is your thin key whatever the config called it.
+Nothing shells out while this happens; `exec`, `os.execute` and `io.popen` are
+all stubbed for the duration.
+
+What it will not do is guess. A keybind that does not map onto one of
+toolwall's commands is named in that closing list and left out, not
+approximated. The usual entries are:
+
+| what | why | what to do |
+|---|---|---|
+| a key that draws text | toolwall keeps text under `text`, not on a key | re-add it in the Text tab |
+| a key that runs a command | `exec` is off unless you set `gui.allow_exec` | turn that on, or drop it |
+| a key that swaps rebind sets | toolwall does this from state, not a key | fill in the menu rebinds under Input |
+| "only fired in game" | toolwall has no per-key in-game switch | nothing, unless it bothers you |
+
+Your old files are left alone. `init.lua` becomes the shim above and everything
+it used to load stays on disk unread, so going back is one `cp` from the
+backup. To skip the import and start from the bundled config instead:
+
+```sh
+TOOLWALL_NO_IMPORT=1 ./install.sh
+```
+
+[gore]: https://github.com/arjuncgore/waywall_generic_config
+
 ### Patching waywall
 
 Optional. Only the Ninjabrain Bot readout uses it.

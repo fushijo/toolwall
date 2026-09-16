@@ -983,6 +983,77 @@ check("the menu rebind set swaps in when the cursor appears", function()
     os.remove(path)
 end)
 
+--[[
+    ==== IMPORTER ====
+
+    The importer runs as its own script, because it has to replace the whole
+    `waywall` module before a config loads and this process has already got
+    the mock installed. Shelling out keeps the two sandboxes apart.
+]]
+
+local function import(fixture)
+    local out = os.tmpname()
+    local cmd = ("luajit tools/import.lua tests/fixtures/%s %s 2>&1")
+        :format(fixture, out)
+
+    local pipe = assert(io.popen(cmd))
+    local log = pipe:read("*a")
+    pipe:close()
+
+    local fh = io.open(out)
+    local body = fh and fh:read("*a") or nil
+    if fh then fh:close() end
+    os.remove(out)
+
+    return body and require("toolwall.json").decode(body) or nil, log
+end
+
+check("a hand-written config comes across as modes and keybinds", function()
+    local doc, log = import("handwritten")
+    assert(doc, "no document written: " .. tostring(log))
+
+    assert_eq(#doc.modes, 2, "mode count")
+    assert_eq(doc.input.sensitivity, 2.5, "sensitivity")
+    assert_eq(doc.input.repeat_rate, 20, "repeat rate")
+    assert_eq(doc.window.fullscreen_width, 1920, "fullscreen width")
+
+    -- Named by shape, since the config never says "tall" anywhere.
+    local by_id = {}
+    for _, mode in ipairs(doc.modes) do by_id[mode.id] = mode end
+
+    assert_eq(by_id.tall and by_id.tall.resolution.height, 16384, "tall height")
+    assert_eq(by_id.wide and by_id.wide.resolution.width, 1920, "wide width")
+    assert_eq(#by_id.tall.mirrors, 1, "the tall mirror came with it")
+end)
+
+check("keybinds are classified by what they do, not what they are called", function()
+    local doc = import("handwritten")
+
+    local by_input = {}
+    for _, bind in ipairs(doc.keybinds or {}) do by_input[bind.input] = bind end
+
+    assert_eq(by_input["Shift-T"].command, "mode.set", "toggle_res becomes a mode")
+    assert_eq(by_input["Shift-T"].args.mode, "tall", "and finds the right one")
+    assert_eq(by_input["Shift-F"].command, "fullscreen.toggle", "fullscreen")
+    assert_eq(by_input["Shift-N"].command, "ninb.toggle", "ninb, found by its jar")
+    assert_eq(doc.ninb and doc.ninb.jar, "/opt/ninb/Ninjabrain-Bot-1.5.2.jar", "jar path")
+
+    -- The one it cannot express is left out rather than approximated.
+    assert_eq(by_input["Shift-Z"], nil, "an unmappable keybind is not invented")
+end)
+
+check("a rebind waywall would refuse never reaches the imported config", function()
+    local doc, log = import("handwritten")
+
+    assert_eq(doc.input.remaps["MB4"], "HOME", "the good one survives")
+    assert_eq(doc.input.remaps["P"], nil, "the keysym is dropped")
+    assert_eq(doc.input.remaps["X"], nil, "the half-filled one is dropped")
+
+    -- Dropping silently would be worse than not importing at all.
+    assert(log:match('"P"'), "the dropped rebind is reported")
+    assert(log:match('"X"'), "the half-filled rebind is reported")
+end)
+
 print(("\n%d passed, %d failed"):format(passed, failed))
 
 os.exit(failed == 0 and 0 or 1)
