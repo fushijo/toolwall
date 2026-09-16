@@ -91,7 +91,7 @@ fn sample() -> Document {
                 f3_safe: true,
                 input: "Shift-R".into(),
                 command: Command::RemapsSet,
-                args: Some(json!({ "remaps": { "MB4": "Home" } })),
+                args: Some(json!({ "remaps": { "MB4": "HOME" } })),
                 label: None,
             },
             Keybind {
@@ -131,7 +131,7 @@ fn sample() -> Document {
         Shader { vertex: None, fragment: Some("invert.frag".into()) },
     );
     doc.input.remaps.insert("MB4".into(), "Home".into());
-    doc.input.remaps_menu.insert("MB4".into(), "Escape".into());
+    doc.input.remaps_menu.insert("MB4".into(), "ESC".into());
     doc.ninb.jar = "~/Ninjabrain-Bot.jar".into();
     doc
 }
@@ -142,6 +142,83 @@ fn render(doc: &mut Document, mut body: impl FnMut(&mut egui::Ui, &mut Document)
     let _ = ctx.run(egui::RawInput::default(), |ctx| {
         egui::CentralPanel::default().show(ctx, |ui| body(ui, doc));
     });
+}
+
+/// Bare modifiers are the reason the picker exists.
+///
+/// No keypress can name Left Alt: winit merges the two alts into one flag
+/// before egui sees it, and egui has no `Key` variant for a modifier either.
+/// waywall remaps them fine - `try_remap_key` matches the raw keycode before
+/// any modifier handling - so the editor has to offer them by name.
+#[test]
+fn a_bare_modifier_can_be_rebound() {
+    use toolwall_core::keycodes;
+
+    for name in ["LEFTALT", "RIGHTSHIFT", "RIGHTCTRL", "LEFTMETA", "CAPSLOCK"] {
+        assert!(keycodes::is_valid(name), "{name} rejected");
+
+        // No capture could ever produce it, which is the whole problem.
+        let capturable = egui::Key::ALL.iter().any(|k| keys::keycode(*k) == Some(name));
+        assert!(!capturable, "{name} is capturable after all; the picker may be redundant");
+    }
+
+    // And once named, it survives into the document waywall is handed.
+    let mut doc = sample();
+    doc.input.remaps.insert("LEFTALT".into(), "F3".into());
+    doc.input.remaps.insert("RIGHTSHIFT".into(), "mb4".into());
+
+    let round_tripped: Document =
+        serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap();
+
+    assert_eq!(round_tripped.input.remaps["LEFTALT"], "F3");
+    assert_eq!(round_tripped.input.remaps["RIGHTSHIFT"], "mb4");
+
+    let complaints: Vec<_> = problems(&round_tripped)
+        .into_iter()
+        .filter(|p| matches!(p.scope, toolwall_core::Scope::Remap(_)))
+        .collect();
+    assert!(complaints.is_empty(), "{complaints:?}");
+}
+
+/// The picker list draws every group, including the modifiers.
+#[test]
+fn the_key_picker_renders() {
+    let mut doc = sample();
+
+    render(&mut doc, |ui, _doc| {
+        let id = ui.make_persistent_id("picker-test");
+        tabs::input::picker_list(ui, id);
+
+        // Searching narrows it without dropping the group it lives in.
+        ui.data_mut(|d| d.insert_temp(id, "alt".to_string()));
+        tabs::input::picker_list(ui, id);
+    });
+}
+
+/// A rebind row with the picker armed renders without panicking, and the
+/// popup stays shut until it is opened by a click.
+#[test]
+fn a_rebind_row_with_the_picker_armed_renders() {
+    use tabs::input::{RemapCapture, RemapEntry, RemapTable};
+
+    let mut doc = sample();
+    doc.input.remaps.insert("MB4".into(), "HOME".into());
+
+    let mut capture = Some(RemapCapture {
+        table: RemapTable::Playing,
+        row: 0,
+        to_side: false,
+        how: RemapEntry::Picking,
+    });
+
+    render(&mut doc, |ui, doc| {
+        let found = problems(doc);
+        tabs::input::show(ui, doc, &found, true, &mut capture);
+    });
+
+    // Nothing opened it, so the row gave up on picking rather than leaving a
+    // popup that cannot be dismissed.
+    assert!(capture.is_none());
 }
 
 #[test]

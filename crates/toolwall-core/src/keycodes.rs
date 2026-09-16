@@ -84,6 +84,92 @@ pub fn canonical(name: &str) -> Option<&'static str> {
         .copied()
 }
 
+/// Modifier keys, which are the ones a keypress cannot be captured for.
+///
+/// Winit collapses left and right into one flag before egui sees it, and egui
+/// has no `Key` variant for a modifier at all, so a bare Left Alt press
+/// produces no event the editor could read. waywall itself has no such
+/// problem: remaps are matched on the raw keycode in `try_remap_key`, before
+/// any modifier processing, so `LEFTALT` is as remappable as `A`. The editor
+/// therefore has to offer these by name rather than by listening for them.
+pub const MODIFIERS: &[&str] = &[
+    "LEFTALT",
+    "RIGHTALT",
+    "LEFTSHIFT",
+    "RIGHTSHIFT",
+    "LEFTCTRL",
+    "RIGHTCTRL",
+    "LEFTMETA",
+    "RIGHTMETA",
+    "CAPSLOCK",
+    "COMPOSE",
+];
+
+/// One spelling per mouse button.
+///
+/// waywall accepts four names for most of them (`lmb`, `m1`, `mouse1`,
+/// `leftmouse`); offering all eighteen in a picker would be noise.
+pub const BUTTON_CHOICES: &[&str] = &["lmb", "rmb", "mmb", "mb4", "mb5"];
+
+const NAVIGATION: &[&str] = &[
+    "UP", "DOWN", "LEFT", "RIGHT", "HOME", "END", "PAGEUP", "PAGEDOWN", "INSERT", "DELETE",
+];
+
+const EDITING: &[&str] = &["ESC", "ENTER", "TAB", "SPACE", "BACKSPACE"];
+
+const PUNCTUATION: &[&str] = &[
+    "MINUS", "EQUAL", "LEFTBRACE", "RIGHTBRACE", "SEMICOLON", "APOSTROPHE", "GRAVE", "BACKSLASH",
+    "COMMA", "DOT", "SLASH",
+];
+
+/// Every name a rebind can use, grouped for a picker.
+///
+/// Ordered by how often a runner reaches for each group, not alphabetically:
+/// modifiers first because they are the ones that cannot be captured, mouse
+/// buttons next because they are the usual rebind source.
+pub fn groups() -> Vec<(&'static str, Vec<&'static str>)> {
+    let is_letter = |n: &str| n.len() == 1 && n.as_bytes()[0].is_ascii_alphabetic();
+    let is_digit = |n: &str| n.len() == 1 && n.as_bytes()[0].is_ascii_digit();
+    let is_function = |n: &str| {
+        n.starts_with('F') && n.len() > 1 && n[1..].chars().all(|c| c.is_ascii_digit())
+    };
+    let is_numpad = |n: &str| n.starts_with("KP");
+
+    let named = |list: &[&'static str]| -> Vec<&'static str> {
+        list.iter().filter(|n| is_valid(n)).copied().collect()
+    };
+
+    let mut grouped: Vec<(&'static str, Vec<&'static str>)> = vec![
+        ("Modifiers", named(MODIFIERS)),
+        ("Mouse", named(BUTTON_CHOICES)),
+        ("Letters", keys().iter().filter(|n| is_letter(n)).copied().collect()),
+        ("Digits", keys().iter().filter(|n| is_digit(n)).copied().collect()),
+        ("Function", keys().iter().filter(|n| is_function(n)).copied().collect()),
+        ("Navigation", named(NAVIGATION)),
+        ("Editing", named(EDITING)),
+        ("Punctuation", named(PUNCTUATION)),
+        ("Numpad", keys().iter().filter(|n| is_numpad(n)).copied().collect()),
+    ];
+
+    // Whatever waywall has that none of the above claimed, so the picker can
+    // never be a smaller vocabulary than the config format.
+    let mut claimed: Vec<&str> = grouped.iter().flat_map(|(_, v)| v.iter().copied()).collect();
+    claimed.sort_unstable();
+
+    let rest: Vec<&'static str> = keys()
+        .iter()
+        .filter(|n| claimed.binary_search(n).is_err())
+        .copied()
+        .collect();
+
+    if !rest.is_empty() {
+        grouped.push(("Everything else", rest));
+    }
+
+    grouped.retain(|(_, v)| !v.is_empty());
+    grouped
+}
+
 /// X11 keysym spellings that differ from the keycode name for the same key.
 ///
 /// Only the ones that actually differ: `A`, `F3` and `HOME` are spelled the
@@ -260,6 +346,42 @@ mod tests {
         assert!(keys().contains(&"DOT"));
         assert!(buttons().contains(&"mb4"));
         assert!(!keys().iter().any(|k| k.starts_with('#') || k.starts_with('[')));
+    }
+
+    #[test]
+    fn every_modifier_is_a_name_waywall_takes() {
+        // The point of the picker: these cannot be captured from a keypress,
+        // so if a spelling here is wrong there is no other way in.
+        for name in MODIFIERS {
+            assert!(is_valid(name), "{name} is not in waywall's table");
+        }
+        for name in BUTTON_CHOICES {
+            assert!(is_valid(name), "{name} is not in waywall's table");
+        }
+    }
+
+    #[test]
+    fn the_picker_offers_every_name_the_format_accepts() {
+        let offered: std::collections::HashSet<&str> =
+            groups().into_iter().flat_map(|(_, v)| v).collect();
+
+        // Buttons are deliberately deduplicated, so only keys are checked.
+        for name in keys() {
+            assert!(offered.contains(name), "{name} is in no picker group");
+        }
+
+        assert!(offered.contains("LEFTALT"));
+        assert!(offered.contains("RIGHTSHIFT"));
+    }
+
+    #[test]
+    fn picker_groups_do_not_repeat_a_name() {
+        let mut seen = std::collections::HashSet::new();
+        for (group, names) in groups() {
+            for name in names {
+                assert!(seen.insert(name), "{name} appears twice, second time in {group}");
+            }
+        }
     }
 
     #[test]
