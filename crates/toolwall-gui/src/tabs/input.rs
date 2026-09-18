@@ -115,6 +115,63 @@ pub fn show(
     });
 }
 
+/// The rebind rows as they are being edited, which is not the same set as the
+/// rows that can be saved.
+///
+/// A row you have only half filled in cannot live in the document. waywall
+/// refuses an empty remap target, and refusing it aborts the whole config
+/// load, so the map is only ever allowed to hold complete pairs. But a new row
+/// starts empty by definition, so with the document as the only storage
+/// "Add rebind" wrote a blank row, the save filter dropped it, and the next
+/// frame rebuilt the list without it. The button looked dead.
+///
+/// So the draft lives here, in editor state, and the document gets only the
+/// rows that are finished.
+#[derive(Clone, Default)]
+pub(crate) struct RemapDraft {
+    rows: Vec<(String, String)>,
+    /// The last thing this widget wrote, so an edit from anywhere else - a
+    /// reload, an import, the file changing on disk - can be told apart from
+    /// its own output and reseed the rows.
+    committed: BTreeMap<String, String>,
+}
+
+impl RemapDraft {
+    /// Take up the document's rows, unless we are mid-edit on them already.
+    fn sync(&mut self, remaps: &BTreeMap<String, String>) {
+        if &self.committed == remaps {
+            return;
+        }
+
+        self.rows = remaps.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        self.committed = remaps.clone();
+    }
+
+    fn add(&mut self) {
+        self.rows.push((String::new(), String::new()));
+    }
+
+    fn remove(&mut self, index: usize) {
+        if index < self.rows.len() {
+            self.rows.remove(index);
+        }
+    }
+
+    /// Write the finished rows through, leaving the unfinished ones alone.
+    fn commit_into(&mut self, remaps: &mut BTreeMap<String, String>) {
+        let mut out = BTreeMap::new();
+
+        for (from, to) in &self.rows {
+            if !from.trim().is_empty() && !to.trim().is_empty() {
+                out.insert(from.clone(), to.clone());
+            }
+        }
+
+        *remaps = out.clone();
+        self.committed = out;
+    }
+}
+
 /// A rebind table with a key-capture button and a picker on each side.
 ///
 /// Typing waywall's key names from memory is the kind of thing that sends
@@ -126,10 +183,9 @@ fn remap_table(
     remaps: &mut BTreeMap<String, String>,
     capture: &mut Option<RemapCapture>,
 ) {
-    // Edited as an ordered list so a row keeps its identity while you retype
-    // the key it is filed under.
-    let mut rows: Vec<(String, String)> =
-        remaps.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    let draft_id = ui.make_persistent_id(("remap-draft", table as u8));
+    let mut draft: RemapDraft = ui.data(|d| d.get_temp(draft_id).unwrap_or_default());
+    draft.sync(remaps);
 
     let mut changed = false;
     let mut remove = None;
@@ -142,7 +198,7 @@ fn remap_table(
     if let Some(active) = capture.clone() {
         if active.table == table && active.how == RemapEntry::Listening {
             if let Some(pressed) = keys::captured_keycode(ui.ctx()) {
-                if let Some(row) = rows.get_mut(active.row) {
+                if let Some(row) = draft.rows.get_mut(active.row) {
                     if active.to_side {
                         row.1 = pressed;
                     } else {
@@ -155,7 +211,7 @@ fn remap_table(
         }
     }
 
-    for (index, row) in rows.iter_mut().enumerate() {
+    for (index, row) in draft.rows.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             changed |= capture_field(ui, table, index, false, &mut row.0, capture);
             ui.label("→");
@@ -170,35 +226,43 @@ fn remap_table(
             for half in [&mut row.0, &mut row.1] {
                 changed |= warn_unknown(ui, half);
             }
+
+            // An unfinished row is normal while you are filling it in, so this
+            // says what is missing rather than complaining.
+            if row.0.trim().is_empty() || row.1.trim().is_empty() {
+                ui.weak("unfinished").on_hover_text(
+                    "Both halves are needed before this rebind is saved. \
+                     waywall rejects a rebind with no target, and rejecting \
+                     one stops the whole config from loading.",
+                );
+            }
         });
     }
 
     if let Some(index) = remove {
-        rows.remove(index);
+        draft.remove(index);
         changed = true;
         *capture = None;
     }
 
     if ui.button("Add rebind").clicked() {
-        rows.push((String::new(), String::new()));
+        draft.add();
         changed = true;
-        *capture =
-            Some(RemapCapture { table, row: rows.len() - 1, to_side: false, how: RemapEntry::Listening });
+        *capture = Some(RemapCapture {
+            table,
+            row: draft.rows.len() - 1,
+            to_side: false,
+            how: RemapEntry::Listening,
+        });
     }
 
     if changed {
-        remaps.clear();
-        for (from, to) in rows {
-            // Both halves, not just the source. waywall rejects an empty
-            // target outright, and rejecting it takes every other setting in
-            // the document down with it, so a row being filled in is not a
-            // state worth writing to disk.
-            if !from.trim().is_empty() && !to.trim().is_empty() {
-                remaps.insert(from, to);
-            }
-        }
+        draft.commit_into(remaps);
     }
+
+    ui.data_mut(|d| d.insert_temp(draft_id, draft));
 }
+
 
 /// Flag a rebind name waywall will not parse, and offer the fix when there is
 /// an obvious one.
@@ -388,5 +452,110 @@ fn key_picker(ui: &mut egui::Ui, below: &egui::Response, popup_id: egui::Id) -> 
             Picked::One(name)
         }
         None => Picked::StillOpen,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The reported bug: "Add rebind" appeared to do nothing.
+    ///
+    /// A new row is empty by definition, and the save filter drops incomplete
+    /// rows because waywall aborts its whole config load over a rebind with no
+    /// target. With the document as the only storage those two rules met in
+    /// the middle and the row was gone before it could be drawn.
+    #[test]
+    fn adding_a_rebind_leaves_a_row_to_fill_in() {
+        let mut remaps = BTreeMap::new();
+        let mut draft = RemapDraft::default();
+
+        draft.sync(&remaps);
+        draft.add();
+        draft.commit_into(&mut remaps);
+
+        // Next frame.
+        draft.sync(&remaps);
+        assert_eq!(draft.rows.len(), 1, "the new row did not survive the frame");
+        assert!(remaps.is_empty(), "an unfinished rebind must not reach the document");
+    }
+
+    #[test]
+    fn a_row_reaches_the_document_once_both_halves_are_set() {
+        let mut remaps = BTreeMap::new();
+        let mut draft = RemapDraft::default();
+
+        draft.sync(&remaps);
+        draft.add();
+        draft.commit_into(&mut remaps);
+        draft.sync(&remaps);
+
+        draft.rows[0].0 = "Q".into();
+        draft.commit_into(&mut remaps);
+        draft.sync(&remaps);
+        assert!(remaps.is_empty(), "still half filled");
+        assert_eq!(draft.rows.len(), 1, "and still being edited");
+
+        draft.rows[0].1 = "O".into();
+        draft.commit_into(&mut remaps);
+        draft.sync(&remaps);
+
+        assert_eq!(remaps.get("Q").map(String::as_str), Some("O"));
+        assert_eq!(draft.rows.len(), 1);
+    }
+
+    /// Several new rows at once, which is what happens when you add three
+    /// rebinds before filling any of them in.
+    #[test]
+    fn unfinished_rows_do_not_collide() {
+        let mut remaps = BTreeMap::new();
+        let mut draft = RemapDraft::default();
+        draft.sync(&remaps);
+
+        for _ in 0..3 {
+            draft.add();
+            draft.commit_into(&mut remaps);
+            draft.sync(&remaps);
+        }
+
+        assert_eq!(draft.rows.len(), 3, "empty rows collapsed into one another");
+    }
+
+    #[test]
+    fn removing_a_row_removes_it() {
+        let mut remaps = BTreeMap::new();
+        remaps.insert("MB4".to_string(), "HOME".to_string());
+        remaps.insert("P".to_string(), "F3".to_string());
+
+        let mut draft = RemapDraft::default();
+        draft.sync(&remaps);
+        assert_eq!(draft.rows.len(), 2);
+
+        draft.remove(0);
+        draft.commit_into(&mut remaps);
+        draft.sync(&remaps);
+
+        assert_eq!(draft.rows.len(), 1);
+        assert!(!remaps.contains_key("MB4"));
+    }
+
+    /// A change from outside the widget wins over the draft: loading another
+    /// config, or the file changing on disk, must not be papered over by rows
+    /// left from the previous document.
+    #[test]
+    fn an_edit_from_elsewhere_reseeds_the_rows() {
+        let mut remaps = BTreeMap::new();
+        let mut draft = RemapDraft::default();
+        draft.sync(&remaps);
+        draft.add();
+        draft.rows[0] = ("Q".into(), "O".into());
+        draft.commit_into(&mut remaps);
+
+        // Something else replaces the document's rebinds entirely.
+        remaps.clear();
+        remaps.insert("LEFTALT".to_string(), "F3".to_string());
+        draft.sync(&remaps);
+
+        assert_eq!(draft.rows, vec![("LEFTALT".to_string(), "F3".to_string())]);
     }
 }
