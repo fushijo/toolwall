@@ -90,10 +90,84 @@ So the editor offers them by name instead: the **▾** button beside each field
 opens waywall's full list, searchable and grouped, with the modifiers first.
 Typing the name into the field directly works too.
 
+### Rebinds are unconditional, and the menu set is the only exception
+
+A rebind rewrites the key before Minecraft sees it, so it applies everywhere:
+in game, in your inventory, in chat. Remapping `Q` to `O` does not mean "Q
+types O in text boxes" - it means Minecraft stops receiving Q at all, so Q no
+longer drops items and `Ctrl-Q` becomes `Ctrl-O`.
+
+`input.remaps_menu` is the one way to narrow that. When it is non-empty,
+toolwall listens for instance state and swaps the whole active set: `remaps`
+while you are playing (`inworld/unpaused`), `remaps_menu` otherwise. It needs
+the State Output mod, and the swap is wholesale - the menu set replaces the
+playing set rather than adding to it.
+
+**It cannot separate chat from your inventory.** State Output reports only
+three in-world states, and every GUI screen is the same one:
+
+| reported | what it covers |
+|---|---|
+| `inworld,unpaused` | playing, cursor locked |
+| `inworld,paused` | the escape menu |
+| `inworld,gamescreenopen` | **every** GUI: inventory, chat, crafting book, chests, anvils |
+
+So "type a different character in chat but keep Q for dropping in the
+inventory" is not expressible as a rebind, because chat and the inventory are
+one state. That is what the Layout tab is for: a layout changes what a key
+types without changing which key it is, so it does not have to be conditional
+at all. The other established answer is a manual chat-mode key, which is what
+gore's config binds `Insert` to.
+
 One thing to know: a keybind on the same key wins. `on_keyboard_key` runs
 actions before `try_remap_key` and returns early when one consumes the press,
 so binding `*-Alt_L` as a keybind and rebinding `LEFTALT` at the same time
 means the keybind is what happens.
+
+## Layouts: what a key types, not which key it is
+
+`input.custom_layout` is a keyboard layout built in the editor's Layout tab and
+written out as an XKB symbols file. It is not a rebind, and the difference is
+the whole point of having both:
+
+| | what changes | where it applies | does it cost you a keybind? |
+|---|---|---|---|
+| Rebind (`input.remaps`) | which key the game receives | everywhere, unconditionally | yes - the original key is gone |
+| Layout (`input.custom_layout`) | which character a key types | wherever typing happens | no - the key still is that key |
+
+So a layout is how you get at characters US QWERTY has no key for without
+giving up playing on it. Put an umlaut on `AltGr+Q` and `Q` still drops items,
+because dropping is bound to the key and not to the character.
+
+```json
+"custom_layout": {
+  "name": "mc",
+  "base": "us",
+  "keys": { "AD01": ["", "", "ö", "Ö"] }
+}
+```
+
+Keys are named by XKB code, which is positional: `AD01` is the key US QWERTY
+calls Q. Each entry is the four levels - base, Shift, AltGr, Shift+AltGr - and
+an empty string keeps whatever the base layout has there, so only the keys you
+actually change need an entry.
+
+Two things the generated file does that are easy to miss, and both of which
+produce a keyboard that compiles fine and then misbehaves:
+
+- **`include "us"`.** An `xkb_symbols` section replaces the alphanumeric block
+  rather than adding to it. Without a base, every key the layout does not name
+  is left with no symbol at all: `xkbcomp` says `No symbols defined for <AE02>`
+  and you get a keyboard that types the handful of keys you edited.
+- **`include "level3(ralt_switch)"`.** Four symbols on a key does not make the
+  last two reachable. Something has to emit `ISO_Level3_Shift`, and on a US
+  layout nothing does - Right Alt is plain `Alt_R`. This is only added when the
+  layout actually uses AltGr, so a layout that touches just the first two
+  levels leaves Right Alt alone.
+
+The file is generated from the document, never the other way round. The editor
+writes it on save; `toolwall layout` writes it from the command line, and
+`toolwall layout --print` shows it without writing.
 
 ## Text templates
 

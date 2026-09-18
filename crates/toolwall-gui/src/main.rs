@@ -68,6 +68,8 @@ fn main() -> Result<()> {
                 last_checked: Instant::now(),
                 ninb_keys: ninb_keys::NinbKeys::default(),
                 remap_capture: None,
+                layout_edit: Default::default(),
+                written_layout: None,
                 advanced: false,
                 saved,
                 pending_since: None,
@@ -90,6 +92,7 @@ enum Tab {
     Theme,
     Ninb,
     Input,
+    Layout,
 }
 
 struct App {
@@ -106,6 +109,9 @@ struct App {
     last_checked: Instant,
     ninb_keys: ninb_keys::NinbKeys,
     remap_capture: Option<RemapCapture>,
+    layout_edit: tabs::layout::LayoutEdit,
+    /// The layout last written to disk, so an unchanged one is not rewritten.
+    written_layout: Option<toolwall_core::schema::CustomLayout>,
     advanced: bool,
 
     /// The document as last written, so an edit can be noticed without every
@@ -248,6 +254,28 @@ impl App {
         }
     }
 
+    /// Keep `~/.config/xkb/symbols/<name>` matching the document.
+    ///
+    /// The document is the layout's home; the file is generated from it. Doing
+    /// this on save means a layout edited in the editor cannot silently differ
+    /// from the one waywall loads, which would look exactly like the editor
+    /// not working.
+    fn sync_layout_file(&mut self) -> anyhow::Result<()> {
+        let Some(layout) = self.doc.input.custom_layout.clone() else {
+            return Ok(());
+        };
+
+        // Rewriting an unchanged file on every save would churn its mtime for
+        // nothing.
+        if self.written_layout.as_ref() == Some(&layout) {
+            return Ok(());
+        }
+
+        toolwall_core::xkb::write_symbols(&layout)?;
+        self.written_layout = Some(layout);
+        Ok(())
+    }
+
     fn apply_when_settled(&mut self, ctx: &egui::Context) {
         let current = serde_json::to_string(&self.doc).unwrap_or_default();
 
@@ -268,6 +296,14 @@ impl App {
         // Never write a document the runtime would reject; the error stays on
         // screen and the edit stays in the editor until it is fixed.
         if !problems(&self.doc).is_empty() {
+            return;
+        }
+
+        // The symbols file first, so it is already on disk when the save
+        // trips waywall's reload and it rebuilds its keymap. The other order
+        // reloads the old layout and needs a second save to take.
+        if let Err(err) = self.sync_layout_file() {
+            self.status = Some((false, format!("{err:#}")));
             return;
         }
 
@@ -336,6 +372,7 @@ impl eframe::App for App {
                 ui.selectable_value(&mut self.tab, Tab::Theme, "Theme");
                 ui.selectable_value(&mut self.tab, Tab::Ninb, "Ninjabrain");
                 ui.selectable_value(&mut self.tab, Tab::Input, "Input");
+                ui.selectable_value(&mut self.tab, Tab::Layout, "Layout");
 
                 // Right-aligned close. The editor floats over the game, so
                 // dismissing it needs to be reachable without the keybind.
@@ -443,6 +480,7 @@ impl eframe::App for App {
                     self.advanced,
                     &mut self.remap_capture,
                 ),
+                Tab::Layout => tabs::layout::show(ui, &mut self.doc, &mut self.layout_edit),
             }
         });
 

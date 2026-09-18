@@ -139,6 +139,63 @@ pub struct Input {
     pub sensitivity: f64,
     #[serde(default)]
     pub confine_pointer: bool,
+
+    /// A keyboard layout built in the editor.
+    ///
+    /// Kept in the document rather than only as a file on disk, so it travels
+    /// with a shared config and can be edited back. The symbols file is
+    /// generated from this, never the other way round.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_layout: Option<CustomLayout>,
+}
+
+/// What a key types, as opposed to which key it is.
+///
+/// See [`crate::xkb`] for the difference, which matters: a layout changes the
+/// character a key produces where typing happens, and leaves the key itself
+/// alone, so it never costs you a keybind the way a rebind does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustomLayout {
+    /// Also the filename under `~/.config/xkb/symbols`, and what
+    /// `input.layout` is set to.
+    #[serde(default = "layout_name")]
+    pub name: String,
+
+    /// The layout this one is built on top of.
+    ///
+    /// Not optional in practice. An `xkb_symbols` section replaces the
+    /// alphanumeric block rather than adding to it, so without including a
+    /// base every key the layout does not mention ends up with no symbol at
+    /// all and stops typing.
+    #[serde(default = "layout_base")]
+    pub base: String,
+
+    /// XKB key code (`AD01`) to its four levels: base, Shift, AltGr,
+    /// Shift+AltGr. An empty string keeps whatever US QWERTY has there, so
+    /// only the keys actually changed need an entry.
+    #[serde(default)]
+    pub keys: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+/// Hand-written rather than derived: a derived `Default` would give `base` an
+/// empty string, and a layout with no base is one where every key it does not
+/// mention stops typing.
+impl Default for CustomLayout {
+    fn default() -> Self {
+        Self {
+            name: layout_name(),
+            base: layout_base(),
+            keys: Default::default(),
+        }
+    }
+}
+
+fn layout_name() -> String {
+    "mc".to_string()
+}
+
+fn layout_base() -> String {
+    "us".to_string()
 }
 
 impl Default for Input {
@@ -151,6 +208,7 @@ impl Default for Input {
             options: String::new(),
             remaps: Default::default(),
             remaps_menu: Default::default(),
+            custom_layout: None,
             repeat_rate: -1,
             repeat_delay: -1,
             sensitivity: 1.0,
