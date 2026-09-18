@@ -322,10 +322,10 @@ fn keybinds(doc: &Document, overlays: &HashSet<&str>, out: &mut Vec<Problem>) {
 
 /// Remap halves waywall will not recognise.
 ///
-/// This is not a cosmetic check. `config_parse_remap` failing aborts the
-/// entire config load, so one bad name here costs every mode, mirror and
-/// keybind in the document - the failure looks like "toolwall stopped
-/// working", not "that one remap is off".
+/// Worth failing the whole document over. `config_parse_remap` failing aborts
+/// the entire config load, so one bad name costs every mode, mirror and
+/// keybind, and reads as "toolwall stopped working" rather than "that rebind
+/// is off".
 fn remaps(doc: &Document, out: &mut Vec<Problem>) {
     let tables = [("remaps", &doc.input.remaps), ("remaps_menu", &doc.input.remaps_menu)];
 

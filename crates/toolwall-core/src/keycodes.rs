@@ -9,9 +9,9 @@
 //!   The same three would be `LEFTCTRL`/`LEFTSHIFT`/`N`, `ESC` and
 //!   `APOSTROPHE`, and a `-` is never a separator.
 //!
-//! Getting this wrong is not a quiet failure. `config_parse_remap` returning
-//! non-zero aborts the whole config load, so a single unrecognised remap name
-//! takes every keybind, mode and mirror down with it.
+//! Mixing them up fails loudly and in the wrong place. `config_parse_remap`
+//! returning non-zero aborts the whole config load, so one unrecognised remap
+//! name takes every keybind, mode and mirror down with it.
 //!
 //! The table itself lives in `schema/keycodes.txt`, extracted from waywall's
 //! own source by `tools/keycodes.sh`.
@@ -280,9 +280,8 @@ pub fn repair(name: &str) -> Option<&'static str> {
 
 /// Rewrite a whole remap table, reporting what changed and what was dropped.
 ///
-/// Dropping is the point: waywall refuses the entire config over one bad
-/// name, so a table that cannot be repaired has to lose the offending entry
-/// rather than take everything else down with it.
+/// Entries that cannot be repaired are dropped. waywall refuses the entire
+/// config over one bad name, so losing that rebind beats losing all of them.
 pub struct Repaired {
     pub remaps: BTreeMap<String, String>,
     /// `(side, was, now)` for each half this rewrote.
@@ -365,7 +364,7 @@ mod tests {
         let offered: std::collections::HashSet<&str> =
             groups().into_iter().flat_map(|(_, v)| v).collect();
 
-        // Buttons are deliberately deduplicated, so only keys are checked.
+        // Buttons are deduplicated for the picker, so only keys are checked.
         for name in keys() {
             assert!(offered.contains(name), "{name} is in no picker group");
         }
