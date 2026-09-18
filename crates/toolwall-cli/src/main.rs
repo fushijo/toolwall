@@ -50,6 +50,17 @@ enum Cmd {
 
     /// Trip waywall's hot reload without changing anything.
     Reload,
+
+    /// Write the custom keyboard layout out as an XKB symbols file.
+    ///
+    /// The document is where the layout lives; this is what puts it somewhere
+    /// xkbcommon will find it. The editor does this on save, so this is for
+    /// setting a machine up from a config someone shared.
+    Layout {
+        /// Print the file instead of writing it.
+        #[arg(long)]
+        print: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -115,6 +126,26 @@ fn main() -> Result<()> {
             }
             store.save(&toolwall_core::Document::default())?;
             println!("wrote {}", store.path().display());
+        }
+
+        Cmd::Layout { print } => {
+            let doc = store.load()?;
+            let layout = doc
+                .input
+                .custom_layout
+                .as_ref()
+                .context("this config has no custom layout; build one in the Layout tab")?;
+
+            if print {
+                print!("{}", toolwall_core::xkb::symbols_file(layout));
+            } else {
+                let path = toolwall_core::xkb::write_symbols(layout)?;
+                println!("wrote {}", path.display());
+                println!(
+                    "set input.layout to {:?} for waywall to load it",
+                    toolwall_core::xkb::sanitise_name(&layout.name)
+                );
+            }
         }
 
         Cmd::Reload => {

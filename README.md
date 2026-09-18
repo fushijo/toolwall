@@ -188,6 +188,25 @@ TOOLWALL_NO_IMPORT=1 ./install.sh
 
 [gore]: https://github.com/arjuncgore/waywall_generic_config
 
+### Keyboard layouts
+
+The Layout tab is [xkbedit](https://xkbedit.github.io/) inside the editor, so
+it is reachable in game: a picture of a keyboard, click a key, say what it
+should type. It writes `~/.config/xkb/symbols/<name>` and points waywall at it.
+
+This is not the same thing as a rebind, and the difference is why both exist. A
+rebind changes *which key* the game receives, everywhere and unconditionally. A
+layout changes *which character* a key types, and only where typing happens. So
+putting an umlaut on `AltGr+Q` leaves `Q` dropping items exactly as before.
+
+Each key carries four levels - base, Shift, AltGr, Shift+AltGr - and only the
+keys you change are written out; everything else comes from the base layout.
+AltGr is the roomy one, because nothing sits there on a US layout.
+
+`toolwall layout` writes the file from the command line, for setting up a
+machine from a config someone shared, and `toolwall layout --print` shows it
+without writing.
+
 ### Patching waywall
 
 Optional. Only the Ninjabrain Bot readout uses it.

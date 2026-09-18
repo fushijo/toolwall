@@ -8,6 +8,7 @@ pub mod keycodes;
 pub mod ninb_prefs;
 pub mod schema;
 pub mod store;
+pub mod xkb;
 
 pub use schema::{Document, NINB_PRESETS, SCHEMA_VERSION};
 pub use store::{Problem, Scope, Store, problems, validate};

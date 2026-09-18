@@ -81,7 +81,13 @@ pub fn show(
         ui.label("While the cursor is visible");
         ui.weak(
             "Used instead of the rebinds above in inventories, menus and while paused. \
-             Leave empty to use one set everywhere.",
+             Leave empty to use one set everywhere. Needs the State Output mod, and \
+             replaces the set above rather than adding to it.",
+        );
+        ui.weak(
+            "Chat and your inventory are the same state to Minecraft, so these \
+             cannot tell them apart. To change what a key types without losing \
+             what it does, use the Layout tab instead.",
         );
         remap_table(ui, RemapTable::Menu, &mut doc.input.remaps_menu, capture);
 
