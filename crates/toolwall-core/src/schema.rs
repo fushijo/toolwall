@@ -433,12 +433,13 @@ pub struct Ninb {
     /// port ninb's http api listens on. off by default in ninb's settings.
     #[serde(default = "ninb_port")]
     pub port: u16,
-    /// how long to wait before starting ninb.
+    /// grace period after Minecraft's window appears, before starting ninb.
     ///
-    /// waywall's X server comes up after the config runs, and ninb reads the
-    /// X11 keymap once at startup. start it too early and it falls back to raw
-    /// kernel keycodes, which are eight places out from the X ones, so its
-    /// hotkeys land on the wrong keys.
+    /// The runtime waits for that window first, so this is no longer a guess
+    /// at how long the game takes to load. It has to come after the window for
+    /// two reasons: ninb reads the X11 keymap once at startup and waywall
+    /// brings its X server up after the config runs, and waywall kills the
+    /// first Xwayland surface it sees believing it to be Minecraft under X11.
     #[serde(default = "ninb_delay")]
     pub start_delay_ms: u32,
     /// draw ninb's readout into the scene instead of reading its window
@@ -813,7 +814,7 @@ fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }
 fn ninb_command() -> String { "java -jar {jar}".into() }
 fn ninb_port() -> u16 { 52533 }
 fn ninb_poll() -> u32 { 50 }
-fn ninb_delay() -> u32 { 3000 }
+fn ninb_delay() -> u32 { 500 }
 fn rule() -> String { "#7f8ea380".into() }
 fn ninb_idle() -> String { "no eye throws yet".into() }
 fn readout_x() -> i32 { 8 }

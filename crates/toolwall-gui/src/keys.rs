@@ -241,9 +241,9 @@ pub fn keycode(key: egui::Key) -> Option<&'static str> {
 
 /// Read the first real keypress this frame as a remap name.
 ///
-/// Modifiers are deliberately dropped rather than joined on. A remap half is
-/// matched whole, so `Ctrl-N` is not a stricter `N` - it is a name waywall
-/// does not have, and writing one aborts the entire config load.
+/// Modifiers are dropped rather than joined on. A remap half is matched
+/// whole, so `Ctrl-N` reads as a name of its own, one waywall does not have,
+/// and writing it aborts the entire config load.
 pub fn captured_keycode(ctx: &egui::Context) -> Option<String> {
     ctx.input(|i| {
         i.events.iter().find_map(|event| match event {

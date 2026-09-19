@@ -120,7 +120,7 @@ pub const ROWS: &[&[Key]] = &[
     ],
 ];
 
-/// How many levels XKB gives a key.
+/// How many levels XKB gives a key. Four. It is always four.
 pub const LEVELS: usize = 4;
 
 /// What each level is called, in order.
@@ -140,8 +140,8 @@ pub fn default_symbol(key: &Key, level: usize) -> Option<&'static str> {
     match level {
         0 => key.base,
         1 => key.shift,
-        // Nothing sits on AltGr in a plain US layout, which is exactly why it
-        // is the comfortable place to put a second alphabet.
+        // A plain US layout puts nothing on AltGr, which leaves it free for
+        // a second alphabet.
         _ => None,
     }
 }
@@ -246,9 +246,8 @@ pub fn uses_level3(layout: &CustomLayout) -> bool {
 
 /// Render the symbols file.
 ///
-/// Deliberately the same shape xkbedit emits, so a layout built in either one
-/// is recognisable in the other and anything already pasted into
-/// `~/.config/xkb/symbols` still reads the same.
+/// Same shape xkbedit emits, so a layout built in either one is recognisable
+/// in the other.
 pub fn symbols_file(layout: &CustomLayout) -> String {
     let mut out = String::new();
 
@@ -258,11 +257,10 @@ pub fn symbols_file(layout: &CustomLayout) -> String {
 
     // Everything not mentioned below comes from here.
     //
-    // This include is not a convenience. An xkb_symbols section replaces the
-    // alphanumeric block rather than adding to it, so without it every key the
-    // layout does not name is left with no symbol and stops typing entirely -
-    // xkbcomp says "No symbols defined for <AE02>" and you get a keyboard that
-    // types five characters.
+    // Required, not tidiness. An xkb_symbols section replaces the alphanumeric
+    // block rather than adding to it, so without this every key the layout does
+    // not name loses its symbol: xkbcomp prints "No symbols defined for <AE02>"
+    // and you get a keyboard that types only what you edited.
     let base = layout.base.trim();
     if !base.is_empty() {
         out.push_str(&format!("    include \"{base}\"\n"));

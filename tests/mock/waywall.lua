@@ -32,6 +32,16 @@ M.state_value = { screen = "title" }
 ]]
 M.view_ready = false
 
+--[[
+    The clock reading at which Minecraft's window appears, if a test wants it
+    to turn up partway through a wait rather than before one.
+
+    Needed because waywall kills whatever maps the first Xwayland surface,
+    believing it to be the game, so "did we wait for the real window" is a
+    thing worth being able to write a test about.
+]]
+M.mount_view_at = nil
+
 -- Fake pid -> command line, standing in for /proc.
 M.processes = {}
 M.next_pid = 1000
@@ -57,6 +67,16 @@ function M.reset()
     M.next_id = 0
     M.state_value = { screen = "title" }
     M.view_ready = false
+
+--[[
+    The clock reading at which Minecraft's window appears, if a test wants it
+    to turn up partway through a wait rather than before one.
+
+    Needed because waywall kills whatever maps the first Xwayland surface,
+    believing it to be the game, so "did we wait for the real window" is a
+    thing worth being able to write a test about.
+]]
+M.mount_view_at = nil
     M.launched = {}
     M.sleep_budget = nil
     M.clock = 1000000
@@ -98,6 +118,14 @@ end
 ]]
 function M.mount_view()
     M.view_ready = true
+    M.mount_view_at = nil
+end
+
+--[[
+    Have the window appear `ms` from now, as the clock is advanced by sleeps.
+]]
+function M.mount_view_in(ms)
+    M.mount_view_at = M.clock + ms
 end
 
 function M.live_objects()
@@ -274,6 +302,11 @@ function M.sleep(ms)
     record("sleep", ms)
 
     M.clock = M.clock + (tonumber(ms) or 0)
+
+    if M.mount_view_at and M.clock >= M.mount_view_at then
+        M.view_ready = true
+        M.mount_view_at = nil
+    end
 
     if M.sleep_budget then
         M.sleep_budget = M.sleep_budget - 1

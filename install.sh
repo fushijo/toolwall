@@ -75,7 +75,15 @@ rm -rf "$CONFIG_DIR/toolwall"
 cp -r "$SRC/runtime/toolwall" "$CONFIG_DIR/toolwall"
 cp "$SRC/runtime/toolwall.lua" "$CONFIG_DIR/toolwall.lua"
 
-if [ -f "$CONFIG_DIR/init.lua" ] && [ ! -f "$CONFIG_DIR/init.lua.pre-toolwall" ]; then
+# Back up the config being replaced, once.
+#
+# Not on a re-install, though: by then init.lua is already our own two-line
+# shim, and saving that would fill the one backup slot with a copy of the thing
+# doing the replacing. The guard below is `! -f`, so a worthless backup here
+# means a real one can never be taken.
+if [ -f "$CONFIG_DIR/init.lua" ] &&
+   [ ! -f "$CONFIG_DIR/init.lua.pre-toolwall" ] &&
+   ! grep -q 'require("toolwall")' "$CONFIG_DIR/init.lua" 2>/dev/null; then
     echo "Backing up init.lua -> init.lua.pre-toolwall"
     cp "$CONFIG_DIR/init.lua" "$CONFIG_DIR/init.lua.pre-toolwall"
 fi

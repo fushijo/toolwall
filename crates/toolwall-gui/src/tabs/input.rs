@@ -194,7 +194,7 @@ fn remap_table(
     draft.sync(remaps);
 
     let mut changed = false;
-    let mut remove = None;
+    let mut remove = None; // farewell, little rebind
 
     // A capture in progress swallows the next keypress into its field.
     //

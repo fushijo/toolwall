@@ -42,6 +42,8 @@ M.SCHEMA_VERSION = 1
     scene objects disappear when garbage collected, so anything we create and
     then drop the last reference to will silently vanish from the screen.
 ]]
+-- the shoebox. everything in here has to stay reachable or the garbage
+-- collector quietly eats your overlays.
 local rt = {
     doc = nil,      -- parsed toolwall.json
     remaps = nil,   -- { base, menu }, filtered once at setup
@@ -148,6 +150,60 @@ local function apply_state_remaps()
 end
 
 --[[
+    Block until Minecraft's window exists.
+
+    waywall treats the first view it sees as the game. From on_view_create:
+
+        if (strcmp(view->impl->name, "xwayland") == 0) {
+            ... "X11 minecraft detected" ...
+            kill(pid, SIGKILL);
+        }
+
+    Ninjabrain Bot is a Java app, so its window is Xwayland. Start it before
+    Minecraft has mapped its own surface and waywall decides ninb *is* the
+    game running under X11, prints a banner telling you to check your GLFW
+    path, and kills it. Nothing is wrong with the GLFW path; ninb simply got
+    there first.
+
+    That is what a fixed delay cannot fix. Three seconds is longer than
+    Minecraft usually takes, so it mostly works, and then a cold cache or a
+    slow mod load puts the game over the line and ninb dies. Occasional by
+    construction.
+
+    The probe: set_resolution errors while wrap->view is null, and returns
+    early without touching anything when the requested resolution is the
+    active one already. Asking for 0x0 while 0x0 is active is therefore a
+    pure question, and the answer is whether the window is there.
+]]
+-- are we there yet. are we there yet. are we there yet.
+local VIEW_POLL_MS = 100
+
+local function game_window_exists()
+    local ok, w = pcall(waywall.active_res)
+    if ok and type(w) == "number" and w > 0 then
+        -- A live resolution can only have been set through a view.
+        return true
+    end
+
+    return (pcall(waywall.set_resolution, 0, 0))
+end
+
+local function wait_for_game_window(timeout_ms)
+    local waited = 0
+
+    while waited < timeout_ms do
+        if game_window_exists() then
+            return true
+        end
+
+        pcall(waywall.sleep, VIEW_POLL_MS)
+        waited = waited + VIEW_POLL_MS
+    end
+
+    return false
+end
+
+--[[
     Deferred initialisation. Runs on the "load" event, when the full waywall
     API is legal to call.
 ]]
@@ -227,21 +283,28 @@ local function register_listeners(doc)
     end
 
     --[[
-        Start Ninjabrain Bot, a little after everything else.
+        Start Ninjabrain Bot, once there is a game for it to sit on top of.
 
-        THE PROBLEM
+        TWO THINGS IT MUST NOT BE EARLIER THAN
 
-        ninb reads the X11 keymap once, when it starts, to build the table it
+        ninb reads the X11 keymap once, at startup, to build the table it
         translates key presses through. waywall brings its X server up *after*
-        the config has run, so starting ninb from the config means starting it
-        before there is an X server to read a keymap from. What it ends up with
-        is the raw kernel keycodes, which are the X ones minus 8, so every key
-        it sees is eight places out: right arrow reads as the numpad slash,
-        left arrow as compose, and its hotkeys quietly stop working.
+        the config runs, so starting ninb straight from the config leaves it
+        with raw kernel keycodes, which are the X ones minus 8: right arrow
+        reads as the numpad slash, left arrow as compose, and its hotkeys
+        quietly stop working.
 
-        It also wants to be first so it takes waywall's one anchor slot. Those
-        two pull in opposite directions, and correctness wins: a late anchor
-        sorts itself out, a wrong keymap does not.
+        And waywall takes the first view it sees as the game. ninb's window is
+        Xwayland, so arriving first gets it killed with a banner about X11
+        Minecraft. See wait_for_game_window above.
+
+        Waiting for the window settles both, because Minecraft cannot map a
+        surface before the X server exists. start_delay_ms is now grace on top
+        of that rather than a guess at how long the game takes, so it no longer
+        has a race to lose.
+
+        The anchor still works out: waywall's one anchor slot is for floating
+        windows, and the game is not one, so ninb is still first in that queue.
 
         Its own listener, because the wait must not hold anything else up.
     ]]
@@ -250,7 +313,16 @@ local function register_listeners(doc)
 
     if util.bool(ninb.autostart, false) and ninb_cmd then
         waywall.listen("load", function()
-            pcall(waywall.sleep, math.max(0, math.floor(ninb.start_delay_ms or 3000)))
+            --[[
+                Capped, so an instance that never comes up does not mean an
+                ninb that never starts. Past the cap we are no worse off than
+                the blind sleep this replaced.
+            ]]
+            if not wait_for_game_window(60000) then
+                util.warn("ninb: no game window after 60s, starting it anyway")
+            end
+
+            pcall(waywall.sleep, math.max(0, math.floor(ninb.start_delay_ms or 500)))
             launch.once(waywall, "ninb", ninb_cmd)
         end)
     end
