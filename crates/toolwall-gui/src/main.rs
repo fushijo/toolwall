@@ -377,7 +377,7 @@ impl eframe::App for App {
                 // Right-aligned close. The editor floats over the game, so
                 // dismissing it needs to be reachable without the keybind.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("✕").on_hover_text("Close (Esc)").clicked() {
+                    if ui.button("×").on_hover_text("Close (Esc)").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
 

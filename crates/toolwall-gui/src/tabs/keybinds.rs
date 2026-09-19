@@ -328,7 +328,7 @@ pub fn remap_rows(
                 rename = Some((from.clone(), from_edit));
             }
 
-            ui.label("→");
+            ui.label("->");
 
             let mut to_edit = to.as_str().unwrap_or_default().to_owned();
             if ui
@@ -339,7 +339,7 @@ pub fn remap_rows(
                 changed = true;
             }
 
-            if ui.button("✕").clicked() {
+            if ui.button("×").clicked() {
                 remove = Some(from.clone());
             }
         });
@@ -359,7 +359,7 @@ pub fn remap_rows(
 
     if ui
         .button("Add remap")
-        .on_hover_text("Source key or mouse button → output key")
+        .on_hover_text("Source key or mouse button -> output key")
         .clicked()
     {
         let _ = salt;

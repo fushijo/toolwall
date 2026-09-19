@@ -71,7 +71,8 @@ pub fn show(
         ui.heading("Key rebinds");
         ui.weak(
             "Press Set, then press the key you want. Left is the key you press. \
-             For Left Alt, Right Shift and the other modifiers, use ▾ - they \
+             For Left Alt, Right Shift and the other modifiers, use the \
+             browse button - they \
              reach the editor already merged and cannot be told apart by \
              listening.",
         );
@@ -220,10 +221,10 @@ fn remap_table(
     for (index, row) in draft.rows.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             changed |= capture_field(ui, table, index, false, &mut row.0, capture);
-            ui.label("→");
+            ui.label("->");
             changed |= capture_field(ui, table, index, true, &mut row.1, capture);
 
-            if ui.small_button("✕").on_hover_text("Remove").clicked() {
+            if ui.small_button("×").on_hover_text("Remove").clicked() {
                 remove = Some(index);
             }
 
@@ -334,8 +335,8 @@ fn capture_field(
 
     let picking = active == Some(RemapEntry::Picking);
     let picker = ui
-        .selectable_label(picking, "▾")
-        .on_hover_text("Choose from waywall's list, including Left Alt, Right Shift and the rest");
+        .selectable_label(picking, "…")
+        .on_hover_text("Browse waywall's key list, including Left Alt, Right Shift and the rest");
 
     let popup_id = ui.make_persistent_id(("remap-picker", table as u8, row, to_side));
 
@@ -370,7 +371,8 @@ fn capture_field(
     if listening && ui.ctx().input(|i| i.modifiers.any()) {
         ui.label("⌨").on_hover_text(
             "Left and right modifiers arrive here already merged, so a modifier \
-             on its own cannot be captured. Pick it from the ▾ list instead.",
+             on its own cannot be captured. Use the browse button next to \
+             Set instead.",
         );
     }
 

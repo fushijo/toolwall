@@ -364,3 +364,57 @@ fn a_document_edited_through_the_tabs_still_round_trips() {
     assert_eq!(back.mirrors[0].color_key.as_ref().unwrap().input, "#fff");
     assert_eq!(problems(&back).len(), problems(&doc).len());
 }
+
+/// Every non-ASCII character in the UI has to survive egui's font fallback.
+///
+/// The custom font someone picks goes in front of egui's bundled fonts, not
+/// instead of them, so a glyph missing from their font still renders if one of
+/// the fallbacks has it. What does not render is a glyph missing from all of
+/// them, and that shows up as a blank box with no warning anywhere.
+///
+/// Three got through that way: the picker button and the remove button and the
+/// arrow between the two halves of a rebind, all reported from a screenshot
+/// rather than by anything here. Hence this.
+///
+/// The allowlist is what Ubuntu-Light, NotoEmoji and emoji-icon-font cover
+/// between them, checked against their cmap tables. Adding a character means
+/// checking it the same way first.
+#[test]
+fn ui_text_uses_no_glyph_the_bundled_fonts_lack() {
+    const SAFE: &str = "…×⚠⬆−•⊗✖❌⌨🗀📁📂";
+
+    let sources = [
+        ("main.rs", include_str!("main.rs")),
+        ("keys.rs", include_str!("keys.rs")),
+        ("widgets.rs", include_str!("widgets.rs")),
+        ("tabs/input.rs", include_str!("tabs/input.rs")),
+        ("tabs/layout.rs", include_str!("tabs/layout.rs")),
+        ("tabs/keybinds.rs", include_str!("tabs/keybinds.rs")),
+        ("tabs/modes.rs", include_str!("tabs/modes.rs")),
+        ("tabs/mirrors.rs", include_str!("tabs/mirrors.rs")),
+        ("tabs/images.rs", include_str!("tabs/images.rs")),
+        ("tabs/theme.rs", include_str!("tabs/theme.rs")),
+        ("tabs/ninb.rs", include_str!("tabs/ninb.rs")),
+    ];
+
+    let mut bad: Vec<String> = Vec::new();
+
+    for (name, src) in sources {
+        for (number, line) in src.lines().enumerate() {
+            // Comments are for us, not for the renderer.
+            let code = line.trim_start();
+            if code.starts_with("//") {
+                continue;
+            }
+
+            for ch in line.chars() {
+                if ch.is_ascii() || SAFE.contains(ch) {
+                    continue;
+                }
+                bad.push(format!("{name}:{} {ch:?} (U+{:04X})", number + 1, ch as u32));
+            }
+        }
+    }
+
+    assert!(bad.is_empty(), "glyphs that may not render:\n  {}", bad.join("\n  "));
+}

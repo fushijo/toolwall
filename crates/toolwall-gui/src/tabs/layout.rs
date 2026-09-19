@@ -212,7 +212,7 @@ fn key_editor(ui: &mut egui::Ui, layout: &mut CustomLayout, code: &str, state: &
             if ui.small_button("Reset").on_hover_text("Back to US QWERTY").clicked() {
                 layout.keys.remove(code);
             }
-            if ui.small_button("✕").on_hover_text("Close").clicked() {
+            if ui.small_button("×").on_hover_text("Close").clicked() {
                 state.selected = None;
             }
         });
