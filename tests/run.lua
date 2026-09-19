@@ -808,32 +808,75 @@ check("the readout keeps trying to stream instead of giving up on it", function(
     os.remove(path)
 end)
 
-check("ninb waits for waywall's x server before starting", function()
-    -- ninb reads the x11 keymap once at startup, and waywall's x server comes
-    -- up after the config runs. starting it immediately leaves it eight places
-    -- out on every key.
-    local path = write_config([[
-      { "version": 1,
-        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
-        "ninb": { "jar": "~/ninb.jar", "autostart": true, "start_delay_ms": 3000 } }
-    ]])
+local NINB_CONFIG = [[
+  { "version": 1,
+    "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+    "ninb": { "jar": "~/ninb.jar", "autostart": true, "start_delay_ms": 500 } }
+]]
+
+-- The clock reading when ninb's launcher script was exec'd, or nil.
+local function ninb_launched_at()
+    local clock = nil
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "sleep" then
+            clock = (clock or 0) + (tonumber(entry.args[1]) or 0)
+        elseif entry.name == "exec" and tostring(entry.args[1]):match("%.sh$") then
+            return clock or 0
+        end
+    end
+    return nil
+end
+
+check("ninb waits for minecraft's window, not a fixed delay", function()
+    --[[
+        waywall takes the first view it sees as the game and kills it if it is
+        Xwayland: "X11 minecraft detected". ninb is a Java app, so starting it
+        before Minecraft has mapped its surface gets ninb killed and blames
+        your GLFW path. A fixed delay only wins that race most of the time.
+    ]]
+    local path = write_config(NINB_CONFIG)
     local toolwall = require("toolwall")
     toolwall.setup({ path = path })
 
-    waywall.sleep_budget = 40
+    -- The game turns up well after any delay someone would have guessed.
+    waywall.mount_view_in(9000)
+    waywall.sleep_budget = 400
     waywall.finish_startup()
 
-    local slept_first, launched = nil, nil
-    for _, entry in ipairs(waywall.log) do
-        if entry.name == "sleep" and not slept_first then
-            slept_first = entry.args[1]
-        elseif entry.name == "exec" and tostring(entry.args[1]):match("%.sh$") then
-            launched = launched or slept_first
-        end
-    end
+    local launched = ninb_launched_at()
+    assert(launched, "ninb never launched")
+    assert(launched >= 9000,
+        ("launched at %s, before the window existed at 9000"):format(tostring(launched)))
 
-    assert_eq(slept_first, 3000, "it waits the configured delay")
-    assert_eq(launched, 3000, "and only launches after waiting")
+    os.remove(path)
+end)
+
+check("ninb still waits its grace period once the window is there", function()
+    local path = write_config(NINB_CONFIG)
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    -- Window already up, so the only wait left is the configured grace.
+    waywall.mount_view()
+    waywall.sleep_budget = 400
+    waywall.finish_startup()
+
+    assert_eq(ninb_launched_at(), 500, "grace period")
+    os.remove(path)
+end)
+
+check("ninb starts eventually even if no window ever appears", function()
+    -- A capped wait, so a broken instance does not mean ninb never runs.
+    local path = write_config(NINB_CONFIG)
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    waywall.sleep_budget = 2000
+    waywall.finish_startup()
+
+    local launched = ninb_launched_at()
+    assert(launched, "ninb never launched")
+    assert(launched >= 60000, ("gave up too early, at %s"):format(tostring(launched)))
 
     os.remove(path)
 end)
