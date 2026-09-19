@@ -1,4 +1,5 @@
 # toolwall
+![Editing the Ninjabrain readout with the game running](docs/screenshots/showcase.gif)
 
 A GUI and configuration layer for [waywall](https://github.com/tesselslate/waywall),
 the Wayland compositor for Minecraft speedrunning on Linux.
@@ -29,23 +30,18 @@ Windows runners have Toolscreen for this. I dont think there is one for Linux
 
 ## Screenshots
 
-Editing with the game running. No save button, nothing to restart.
-
-![Editing the Ninjabrain readout with the game running](docs/screenshots/showcase.gif)
-
 ### Overlays in play
 
 ![Thin mode with the measuring window, entity counter, pie chart and readout](docs/screenshots/05-overlays-in-play.png)
 
 Measuring window, entity counter, pie chart and the Ninjabrain readout, all
-drawn by toolwall over a thin-mode game.
+drawn by toolwall.
 
 ### Ninjabrain readout
 
 ![The Ninjabrain tab, with the readout drawn into the scene](docs/screenshots/06-ninb-readout.png)
 
-The readout is scene text, not a window, so it does not vanish when you hide
-the floating windows. The panel and outline need the patch.
+The readout is scene text, not a window, this would need the waywall patch to run correctly.
 
 ### Keybinds
 
