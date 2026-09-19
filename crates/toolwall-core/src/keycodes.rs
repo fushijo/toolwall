@@ -108,7 +108,8 @@ pub const MODIFIERS: &[&str] = &[
 /// One spelling per mouse button.
 ///
 /// waywall accepts four names for most of them (`lmb`, `m1`, `mouse1`,
-/// `leftmouse`); offering all eighteen in a picker would be noise.
+/// `leftmouse`); offering all eighteen in a picker would be noise. Five is
+/// plenty anyway. Nobody is rebinding mouse 11.
 pub const BUTTON_CHOICES: &[&str] = &["lmb", "rmb", "mmb", "mb4", "mb5"];
 
 const NAVIGATION: &[&str] = &[

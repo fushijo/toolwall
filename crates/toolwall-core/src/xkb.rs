@@ -120,7 +120,7 @@ pub const ROWS: &[&[Key]] = &[
     ],
 ];
 
-/// How many levels XKB gives a key.
+/// How many levels XKB gives a key. Four. It is always four.
 pub const LEVELS: usize = 4;
 
 /// What each level is called, in order.

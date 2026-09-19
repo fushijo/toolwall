@@ -120,6 +120,7 @@ end
     Return to the unmodified state: Minecraft stretched to the waywall window,
     default sensitivity, only base overlays live.
 ]]
+-- deep breath, back to normal
 function Modes:reset()
     -- See the comment in Modes:set() about the load-event/view-ready race.
     local ok, err = pcall(waywall.set_resolution, 0, 0)

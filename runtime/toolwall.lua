@@ -42,6 +42,8 @@ M.SCHEMA_VERSION = 1
     scene objects disappear when garbage collected, so anything we create and
     then drop the last reference to will silently vanish from the screen.
 ]]
+-- the shoebox. everything in here has to stay reachable or the garbage
+-- collector quietly eats your overlays.
 local rt = {
     doc = nil,      -- parsed toolwall.json
     remaps = nil,   -- { base, menu }, filtered once at setup
@@ -173,6 +175,7 @@ end
     active one already. Asking for 0x0 while 0x0 is active is therefore a
     pure question, and the answer is whether the window is there.
 ]]
+-- are we there yet. are we there yet. are we there yet.
 local VIEW_POLL_MS = 100
 
 local function game_window_exists()

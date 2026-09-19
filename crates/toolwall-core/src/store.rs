@@ -116,7 +116,7 @@ impl Store {
         self.trigger_reload()
     }
 
-    /// Touch a `.lua` file so waywall's watcher fires.
+    /// Poke waywall with a stick until it looks at the JSON again.
     ///
     /// The content must actually change; some watchers coalesce identical
     /// writes, so a monotonic counter is used rather than a bare `touch`.

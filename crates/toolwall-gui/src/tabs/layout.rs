@@ -149,6 +149,7 @@ fn cap_text(key: &xkb::Key, symbol: &str) -> String {
     symbol.chars().take(5).collect()
 }
 
+// a whole keyboard, for the low price of sixty buttons
 fn keyboard(ui: &mut egui::Ui, layout: &CustomLayout, state: &mut LayoutEdit) {
     // Scroll rather than shrink: the editor is a small floating window and a
     // squeezed key cap stops being readable long before it stops fitting.
