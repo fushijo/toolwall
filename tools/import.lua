@@ -430,8 +430,20 @@ local function classify(input)
         if cmd:lower():match("ninjabrain") then
             return { kind = "command", command = "ninb.toggle", jar = cmd:match("([^%s]+%.jar)") }
         end
-        return nil, ("runs a command (%s); toolwall only allows that once you set gui.allow_exec")
-            :format(cmd:sub(1, 48))
+        --[[
+            Kept rather than dropped. This command was already in the config
+            and already running, so carrying it across loses nothing, and the
+            runtime refuses to run it until gui.allow_exec says otherwise.
+
+            Dropping it meant a paceman key came back as a command line to
+            retype. Now it is a checkbox.
+        ]]
+        return {
+            kind = "command",
+            command = "exec",
+            args = { command = cmd },
+            needs_exec = true,
+        }
     end
 
     if first_call(log, "toggle_floating") or first_call(log, "show_floating") then
@@ -601,20 +613,122 @@ for input, fn in pairs(config.actions or {}) do
                 end
             else
                 bind.command = what.command
+                bind.args = what.args
                 if what.jar then ninb_jar = what.jar end
+
+                if what.needs_exec then
+                    note("keybind %q runs a command, which stays switched off until "
+                        .. "you turn on gui.allow_exec in the editor", tostring(input))
+                end
             end
 
             if bind then
+                bind.ingame_only = is_ingame_only(input)
                 table.insert(keybinds, bind)
-
-                if is_ingame_only(input) then
-                    note("keybind %q only fired in game; toolwall has no such switch, "
-                        .. "so it now fires everywhere", tostring(input))
-                end
             end
         end
     end
 end
+
+--[[
+    Make sure something opens the editor.
+
+    No waywall config binds a toolwall command, so every import lands with no
+    key that opens the GUI - and the GUI is where everything below gets put
+    back by hand. Without this you have to go find the binary yourself, which
+    is not a thing anyone should have to guess at.
+]]
+local EDITOR_KEYS = {
+    "Ctrl-I", "Ctrl-semicolon", "Ctrl-apostrophe", "Ctrl-slash", "Ctrl-period",
+}
+
+-- waywall's modifier names, folded onto one spelling each.
+local MODIFIER_WORDS = {
+    shift = "shift", caps = "caps", lock = "caps", capslock = "caps",
+    control = "ctrl", ctrl = "ctrl", alt = "alt", mod1 = "alt",
+    num = "num", numlock = "num", mod2 = "num", mod3 = "mod3",
+    super = "super", win = "super", mod4 = "super", mod5 = "mod5",
+}
+
+-- An input string split into its key and the modifiers it asks for.
+local function split_bind(input)
+    local key, mods, wild = nil, {}, false
+
+    for elem in tostring(input):gmatch("[^-]+") do
+        local lower = elem:lower()
+        if elem == "*" then
+            wild = true
+        elseif MODIFIER_WORDS[lower] then
+            mods[MODIFIER_WORDS[lower]] = true
+        else
+            key = lower
+        end
+    end
+
+    return key, mods, wild
+end
+
+--[[
+    Would this existing bind still fire if we took the candidate key?
+
+    waywall matches modifiers exactly, so Shift-I and Ctrl-I are different
+    keys and neither shadows the other. A bind carrying "*" is the exception:
+    its modifiers only have to be a subset of what is held, so *-I fires on
+    Ctrl-I too and that key is not ours to take.
+]]
+local function shadowed_by(existing, candidate)
+    local their_key, their_mods, wild = split_bind(existing)
+    local our_key, our_mods = split_bind(candidate)
+
+    if their_key ~= our_key then return false end
+
+    if wild then
+        for mod in pairs(their_mods) do
+            if not our_mods[mod] then return false end
+        end
+        return true
+    end
+
+    for mod in pairs(their_mods) do
+        if not our_mods[mod] then return false end
+    end
+    for mod in pairs(our_mods) do
+        if not their_mods[mod] then return false end
+    end
+    return true
+end
+
+local function add_editor_keybind()
+    for _, bind in ipairs(keybinds) do
+        if bind.command == "gui.toggle" then return end
+    end
+
+    for _, candidate in ipairs(EDITOR_KEYS) do
+        local free = true
+        for _, bind in ipairs(keybinds) do
+            if shadowed_by(bind.input, candidate) then
+                free = false
+                break
+            end
+        end
+
+        if free then
+            table.insert(keybinds, {
+                input = candidate,
+                command = "gui.toggle",
+                f3_safe = true,
+                label = "Open settings",
+            })
+            note("nothing in your config opened the editor, so %s now does", candidate)
+            return
+        end
+    end
+
+    note("every key toolwall would use for the editor was already taken, so no "
+        .. "key opens it; bind gui.toggle by hand or run toolwall-gui yourself")
+end
+
+add_editor_keybind()
 
 -- Stable order, so re-importing the same config produces the same file.
 table.sort(keybinds, function(a, b) return a.input < b.input end)
@@ -698,6 +812,22 @@ local doc = {
         jit = experimental_cfg.jit or false,
         tearing = experimental_cfg.tearing or false,
     },
+    --[[
+        The editor has to be launchable, and nothing in a waywall config says
+        how.
+
+        Leaving this out is not harmless: the runtime reads toolwall.json
+        directly, so an absent gui block means gui.toggle warns "no
+        gui.command configured" and the key added above does nothing at all.
+
+        The path is spelled out because waywall exec()s with its own PATH,
+        which usually does not have ~/.cargo/bin on it.
+    ]]
+    gui = {
+        command = "~/.cargo/bin/toolwall-gui",
+        launch_delay_ms = 400,
+        allow_exec = false,
+    },
     default_mode = nil,
     base_overlays = {},
     modes = modes,
@@ -737,7 +867,7 @@ local ORDER = {
     "id", "label", "name", "description", "path", "template",
     "resolution", "width", "height", "toggle", "sensitivity",
     "src_anchor", "src", "dst", "depth", "shader", "color_key", "color_keys",
-    "x", "y", "w", "h", "input_", "command", "args", "f3_safe",
+    "x", "y", "w", "h", "input_", "command", "args", "f3_safe", "ingame_only",
 }
 
 local rank = {}
@@ -823,9 +953,40 @@ for _, mode in ipairs(modes) do
             #mode.mirrors, #mode.images))
 end
 
+--[[
+    The notes are the useful half of this script, and they scroll past.
+
+    So they also go in a file next to the config. "what did the import drop"
+    has to stay answerable a week later, when the thing you notice missing is
+    a key you rarely press.
+]]
+local REPORT_PATH = CONFIG_DIR .. "/toolwall-import-report.txt"
+
+local report = real_open(REPORT_PATH, "w")
+if report then
+    report:write(("toolwall import of %s\n"):format(CONFIG_DIR))
+    report:write(("%d mode(s), %d mirror(s), %d overlay image(s), %d keybind(s)\n")
+        :format(#modes, #mirrors, #images, #keybinds))
+
+    if #notes > 0 then
+        report:write("\nnot carried across:\n")
+        for _, n in ipairs(notes) do
+            report:write("  - " .. n .. "\n")
+        end
+    else
+        report:write("\neverything carried across.\n")
+    end
+
+    report:write("\nYour old config is still on disk. init.lua was backed up to\n")
+    report:write("init.lua.pre-toolwall, and uninstall.sh puts it back.\n")
+    report:close()
+end
+
 if #notes > 0 then
     print("\nnot carried across:")
     for _, n in ipairs(notes) do
         print("  - " .. n)
     end
 end
+
+print("\nsaved to " .. REPORT_PATH)

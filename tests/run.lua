@@ -37,6 +37,13 @@ launch.runtime_dir = function()
     return TEST_RUNTIME
 end
 
+-- And util.warn tees to a log under XDG_STATE_HOME. Same story: without this
+-- a test run appends its noise to the log a real session is keeping.
+local util = require("toolwall.util")
+util.log_path = function()
+    return TEST_RUNTIME .. "/toolwall.log"
+end
+
 local passed, failed = 0, 0
 
 local function check(name, fn)
@@ -1060,6 +1067,10 @@ local function import(fixture)
     if fh then fh:close() end
     os.remove(out)
 
+    -- The importer drops its report beside the config it read, which for a
+    -- fixture means inside the repo. Not ours to leave lying around.
+    os.remove(("tests/fixtures/%s/toolwall-import-report.txt"):format(fixture))
+
     return body and require("toolwall.json").decode(body) or nil, log
 end
 
@@ -1107,6 +1118,158 @@ check("a rebind waywall would refuse never reaches the imported config", functio
     -- Dropping silently would be worse than not importing at all.
     assert(log:match('"P"'), "the dropped rebind is reported")
     assert(log:match('"X"'), "the half-filled rebind is reported")
+end)
+
+check("a keybind that runs a command comes across switched off", function()
+    --[[
+        gore's config launches paceman on Shift-P. Dropping that bind meant
+        the key came back as a command line to retype; keeping it means one
+        checkbox, and the runtime refuses to run it until that checkbox is on.
+    ]]
+    local doc, log = import("shadowed")
+    assert(doc, "no document written: " .. tostring(log))
+
+    local by_input = {}
+    for _, bind in ipairs(doc.keybinds or {}) do by_input[bind.input] = bind end
+
+    local paceman = by_input["Shift-P"]
+    assert(paceman, "the exec keybind was dropped")
+    assert_eq(paceman.command, "exec", "and it is an exec")
+    assert(paceman.args.command:match("paceman%-tracker"), "with the command intact")
+
+    assert_eq(doc.gui.allow_exec, false, "but exec is still off")
+    assert(log:match("gui%.allow_exec"), "and the report says so")
+end)
+
+check("warnings go somewhere you can find them afterwards", function()
+    --[[
+        waywall logs to stderr and nowhere else, so a session started from a
+        desktop entry throws every warning away. The first bug report on this
+        project was "i dont know if there are logs", and that was the answer.
+    ]]
+    local util = require("toolwall.util")
+    local path = util.log_path()
+    os.remove(path)
+
+    util.warn("the pie chart is on fire")
+
+    local fh = io.open(path)
+    assert(fh, "no log file at " .. tostring(path))
+    local body = fh:read("*a")
+    fh:close()
+
+    assert(body:match("the pie chart is on fire"), "the warning is not in the log")
+    assert(body:match("%d%d:%d%d:%d%d"), "and it is not stamped with a time")
+end)
+
+check("a log that cannot be written does not take the config down with it", function()
+    local util = require("toolwall.util")
+    local original = util.log_path
+
+    -- A directory nobody can create a file in, which is what a read-only or
+    -- missing state directory looks like from here.
+    util.log_path = function() return "/proc/definitely/not/a/path/toolwall.log" end
+
+    local ok = pcall(util.warn, "still fine")
+    util.log_path = original
+
+    assert(ok, "warn threw because it could not write the log")
+end)
+
+check("an imported config always has a key that opens the editor", function()
+    --[[
+        Nobody's waywall config binds a toolwall command, so without this an
+        import lands with no way into the GUI - and the GUI is where every
+        dropped keybind below has to be put back by hand. The first person to
+        try the beta hit exactly this and went looking for the binary.
+    ]]
+    local doc, log = import("handwritten")
+    assert(doc, "no document written: " .. tostring(log))
+
+    local editor = nil
+    for _, bind in ipairs(doc.keybinds or {}) do
+        if bind.command == "gui.toggle" then editor = bind end
+    end
+
+    assert(editor, "nothing opens the editor")
+    assert_eq(editor.input, "Ctrl-I", "and it is the key the readme names")
+    assert(log:match("Ctrl%-I"), "the new bind is reported, not slipped in")
+
+    --[[
+        And the key needs something to launch. The runtime reads this file
+        directly, so with no gui block gui.toggle warns "no gui.command
+        configured" and the bind above is decoration.
+    ]]
+    assert(doc.gui, "no gui block, so the editor key cannot launch anything")
+    assert(doc.gui.command:match("toolwall%-gui"), "gui.command is not set")
+end)
+
+check("the editor key steps aside for a bind that would swallow it", function()
+    --[[
+        waywall matches modifiers exactly, so Shift-I and Ctrl-I coexist. A
+        bind carrying "*" is the exception: its modifiers only have to be a
+        subset of what is held, so *-I fires on Ctrl-I too.
+    ]]
+    local doc, log = import("shadowed")
+    assert(doc, "no document written: " .. tostring(log))
+
+    local editor = nil
+    for _, bind in ipairs(doc.keybinds or {}) do
+        if bind.command == "gui.toggle" then editor = bind end
+    end
+
+    assert(editor, "nothing opens the editor")
+    assert_eq(editor.input, "Ctrl-semicolon", "Ctrl-I was taken, so it moved on")
+
+    -- And the config's own bind is still there, doing what it did.
+    local by_input = {}
+    for _, bind in ipairs(doc.keybinds or {}) do by_input[bind.input] = bind end
+    assert_eq(by_input["*-I"].command, "mode.set", "*-I kept its job")
+end)
+
+check("ingame_only survives the import instead of being reported away", function()
+    local doc = import("shadowed")
+
+    local by_input = {}
+    for _, bind in ipairs(doc.keybinds or {}) do by_input[bind.input] = bind end
+
+    assert_eq(by_input["Shift-B"].ingame_only, true, "the wrapped one is flagged")
+    assert_eq(by_input["*-I"].ingame_only, false, "the bare one is not")
+end)
+
+check("an ingame_only keybind waits until you are unpaused in a world", function()
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "thin", "resolution": {"width":320,"height":1080} } ],
+        "keybinds": [ { "input": "B", "command": "mode.set",
+                        "args": { "mode": "thin" }, "ingame_only": true } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    waywall.state_value = { screen = "title" }
+    assert_eq(cfg.actions["B"](), false, "title screen passes the key through")
+    assert_eq(toolwall.rt.modes.current, nil, "and resizes nothing")
+
+    waywall.state_value = { screen = "inworld", inworld = "menu" }
+    assert_eq(cfg.actions["B"](), false, "a menu counts as not in game")
+    assert_eq(toolwall.rt.modes.current, nil, "still nothing")
+
+    --[[
+        No State Output mod means no answer, and an unreadable state has to
+        read as "not in game". A key that does nothing beats a key that
+        resizes you while you are typing in chat.
+    ]]
+    waywall.state_value = nil
+    assert_eq(cfg.actions["B"](), false, "no state, no fire")
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    cfg.actions["B"]()
+    assert_eq(toolwall.rt.modes.current, "thin", "unpaused in a world, it fires")
+
+    os.remove(path)
 end)
 
 check("screen.edit launches the editor with the overlay flag", function()

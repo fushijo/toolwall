@@ -267,7 +267,7 @@
   },
   "keybinds": [
     {
-      "input": "bracketleft",
+      "input": "Ctrl-I",
       "command": "gui.toggle",
       "label": "Open settings",
       "f3_safe": true

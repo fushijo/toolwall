@@ -114,9 +114,24 @@ same sandbox and sorted by what they attempted, so a key reaching for
 `set_resolution(340, 1080)` is your thin key whatever it was called.
 
 Anything it cannot map is listed at the end and left out rather than guessed
-at.
+at. That list also goes in `~/.config/waywall/toolwall-import-report.txt`, so
+"what did it drop" is still answerable a week later when you finally reach for
+the key that is missing.
+
+Your config has no reason to bind a toolwall command, so the import adds one:
+`Ctrl-I` opens the editor, or another key if yours was already using that. The
+report says which.
 
 `TOOLWALL_NO_IMPORT=1 ./install.sh` skips it.
+
+### Taking it back out
+
+```sh
+./uninstall.sh
+```
+
+Puts your old `init.lua` back from the copy the install made and removes the
+runtime. Your `toolwall.json` is kept unless you pass `--all`.
 
 [gore]: https://github.com/arjuncgore/waywall_generic_config
 
@@ -202,6 +217,22 @@ Adds `waywall.rect` (a solid fill), an outline on scene text, and
 `theme.ninb_hidden`. None of them can be done from Lua. toolwall checks for
 them at runtime and does without if they are missing, so an unpatched waywall
 is fine.
+
+## When something is broken
+
+toolwall writes its complaints to `~/.local/state/toolwall.log`. Keybinds it
+had to drop, files it could not find, commands that failed. waywall itself
+logs to stderr and nowhere else, so if you start your instance from a desktop
+entry that log is the only thing that survives.
+
+If you are reporting a bug, that file plus your `toolwall.json` is everything
+I need.
+
+```sh
+toolwall validate
+```
+
+also lists whatever is wrong with the config without applying it.
 
 ## Planned
 
