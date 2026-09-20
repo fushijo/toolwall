@@ -118,13 +118,23 @@ echo "Done. Next:"
 echo "  cargo install --path crates/toolwall-cli"
 echo "  cargo install --path crates/toolwall-gui"
 echo "  toolwall validate"
+echo
+echo "Then launch your instance. Ctrl-I opens the editor."
 
 if [ -n "$IMPORTED" ]; then
     echo
-    echo "Your old config is still there. init.lua is now a two-line shim, and"
-    echo "the files it used to load (main.lua, remaps.lua, ...) are untouched"
-    echo "but no longer read. To go back:"
-    echo "  cp $CONFIG_DIR/init.lua.pre-toolwall $CONFIG_DIR/init.lua"
+    echo "Everything the import could not carry across is written down in:"
+    echo "  $CONFIG_DIR/toolwall-import-report.txt"
+    echo "Read it. It also names the key it gave the editor, which is not"
+    echo "Ctrl-I if your own config had already taken that."
+fi
+
+if [ -f "$CONFIG_DIR/init.lua.pre-toolwall" ]; then
+    echo
+    echo "Your old config is untouched. init.lua is now a two-line shim, and the"
+    echo "files it used to load (main.lua, remaps.lua, ...) are still sitting"
+    echo "there unread. To undo all of this and get init.lua back:"
+    echo "  ./uninstall.sh"
 fi
 
 echo
