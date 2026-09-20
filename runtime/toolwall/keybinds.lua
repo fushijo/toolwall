@@ -16,6 +16,7 @@ local M = {}
 
 --[[
     The one command that survives a suspension, because it is the way back.
+    Locking yourself out of your own settings menu: a classic.
 
     Suspending every key including this one would leave no way to unsuspend
     from inside the game, and the editor is where the switch lives.

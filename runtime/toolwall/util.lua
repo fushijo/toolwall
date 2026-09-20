@@ -17,14 +17,13 @@ M.NULL = setmetatable({}, {
     Where warnings go to be found later.
 
     waywall logs to stderr and nowhere else, so if you started it from a
-    desktop entry rather than a terminal every complaint toolwall makes lands
-    in the void. The first bug report on this project arrived as "i dont know
+    desktop entry, every complaint toolwall makes lands in the void. The first bug report on this project arrived as "i dont know
     if there are logs", which is not a thing anyone should have to guess at.
 ]]
 local LOG_MAX = 256 * 1024
 
--- A function rather than a constant so the tests can point it somewhere that
--- is not the real state directory. They found out the hard way.
+-- A function, not a constant, so the tests can point it somewhere that is not
+-- the real state directory. They found that out the hard way.
 function M.log_path()
     local state = os.getenv("XDG_STATE_HOME")
     if not state or state == "" then

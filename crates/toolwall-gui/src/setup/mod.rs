@@ -71,8 +71,9 @@ pub struct Setup {
 
     /// The import notes install.sh left behind, if there are any.
     report: Option<String>,
-    /// Whether the config on disk had anything in it when we opened.
-    had_config: bool,
+    /// What was on disk when this opened, for the first step to describe.
+    /// Not `base`, which changes the moment you pick something else.
+    had_config: Option<(usize, usize)>,
 
     busy: Option<String>,
     status: Option<(bool, String)>,
@@ -82,13 +83,15 @@ pub struct Setup {
 impl Setup {
     pub fn new(store: Store) -> Self {
         // A config that will not parse is exactly when this is needed, so a
-        // failed load starts from the preset rather than refusing to open.
+        // failed load starts from the preset. refusing to open would be an
+        // unhelpful moment to pick.
         let (base, origin, had_config) = match store.load() {
             Ok(doc) if !doc.modes.is_empty() || !doc.keybinds.is_empty() => {
-                (doc, "the config already on disk".to_string(), true)
+                let counts = (doc.modes.len(), doc.keybinds.len());
+                (doc, "the config already on disk".to_string(), Some(counts))
             }
-            Ok(_) => (preset::preset(), "the toolwall preset".to_string(), false),
-            Err(_) => (preset::preset(), "the toolwall preset".to_string(), false),
+            Ok(_) => (preset::preset(), "the toolwall preset".to_string(), None),
+            Err(_) => (preset::preset(), "the toolwall preset".to_string(), None),
         };
 
         let choices = preset::choices_for(&base);
@@ -215,6 +218,8 @@ fn import_gore(config_dir: &Path) -> Result<(Document, String), String> {
 }
 
 /// Keep the end of a string, which for a path is the part worth reading.
+///
+/// Nobody has ever needed to be told they are still inside /home.
 fn elide(text: &str, most: usize) -> String {
     let count = text.chars().count();
     if count <= most {
@@ -232,6 +237,8 @@ fn which(exe: &str) -> bool {
 
 /// Copy files that are not already there, one level deep. Enough for a
 /// resources directory and not enough to be a surprise.
+///
+/// One level. We are not here to recursively adopt somebody's home folder.
 fn copy_into(from: &Path, to: &Path) {
     let Ok(entries) = std::fs::read_dir(from) else { return };
 
@@ -301,7 +308,12 @@ impl Setup {
 
             for (index, (step, name)) in STEPS.iter().enumerate() {
                 let label = format!("{}.  {name}", index + 1);
-                ui.selectable_value(&mut self.step, *step, label);
+                // Whatever the last step had to say about itself is not news
+                // on the next one, and a red line that never goes away reads
+                // as something still being wrong.
+                if ui.selectable_value(&mut self.step, *step, label).clicked() {
+                    self.status = None;
+                }
             }
         });
 
@@ -312,9 +324,11 @@ impl Setup {
 
                 if at > 0 && ui.button("Back").clicked() {
                     self.step = STEPS[at - 1].0;
+                    self.status = None;
                 }
                 if at + 1 < STEPS.len() && ui.button("Next").clicked() {
                     self.step = STEPS[at + 1].0;
+                    self.status = None;
                 }
 
                 // Whatever is worth saying, at the right hand end.
@@ -374,12 +388,11 @@ impl Setup {
         ui.heading("Where to start");
         ui.add_space(6.0);
 
-        if self.had_config {
+        if let Some((screens, keys)) = self.had_config {
             ui.label(format!(
-                "There is already a config here, with {} screen(s) and {} keybind(s). \
-                 The steps after this one let you change it.",
-                self.base.modes.len(),
-                self.base.keybinds.len()
+                "There is already a config here, with {screens} screen(s) and \
+                 {keys} keybind(s). The steps after this one let you change it, \
+                 or start over from one of these."
             ));
         } else {
             ui.label(
@@ -828,7 +841,7 @@ impl Setup {
             return;
         }
 
-        if self.had_config {
+        if self.had_config.is_some() {
             ui.colored_label(
                 egui::Color32::from_rgb(255, 170, 80),
                 format!("This replaces {}.", self.store.path().display()),
@@ -902,7 +915,7 @@ mod tests {
 
         // Nothing on disk, so it should have fallen back to the preset rather
         // than opening empty. That is the case darvz was in.
-        assert!(!setup.had_config);
+        assert!(setup.had_config.is_none());
         assert!(!setup.base.modes.is_empty(), "started with no screens");
 
         draw_every_step(&mut setup);
@@ -938,7 +951,7 @@ mod tests {
         std::fs::write(&path, "{ not json at all").unwrap();
 
         let mut setup = Setup::new(Store::new(&path));
-        assert!(!setup.had_config, "a broken file is not a config to keep");
+        assert!(setup.had_config.is_none(), "a broken file is not a config to keep");
         assert!(!setup.base.modes.is_empty(), "fell back to nothing");
 
         draw_every_step(&mut setup);
@@ -967,7 +980,7 @@ mod tests {
     #[test]
     fn turning_every_screen_off_still_leaves_a_config_that_loads() {
         // Someone will do this, and the result has to be a config waywall
-        // accepts rather than one with keybinds pointing at nothing.
+        // accepts, not one with keybinds pointing at nothing.
         let (mut setup, dir) = fresh("noscreens");
 
         for screen in &mut setup.choices.screens {
@@ -1011,7 +1024,7 @@ mod tests {
             "and nothing else is on that key"
         );
 
-        // And the window says so rather than quietly dropping them.
+        // And the window says so instead of quietly eating one of them.
         draw_every_step(&mut setup);
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -1090,6 +1103,49 @@ mod tests {
                     check(inner, clip, step, bad);
                 }
             }
+            _ => {}
+        }
+    }
+
+    /// Prints what one step draws. `TOOLWALL_DUMP=<step number>`.
+    ///
+    /// Not a check, a pair of eyes: this window is OpenGL, and a screenshot
+    /// of an OpenGL window under XWayland comes back as a rectangle of black
+    /// no matter which tool takes it.
+    #[test]
+    fn dump_a_step() {
+        let Ok(want) = std::env::var("TOOLWALL_DUMP") else { return };
+        let want: usize = want.parse().unwrap_or(1);
+
+        let (mut setup, dir) = fresh("dump");
+        setup.step = STEPS[want.saturating_sub(1).min(STEPS.len() - 1)].0;
+
+        let ctx = egui::Context::default();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(900.0, 700.0),
+            )),
+            ..Default::default()
+        };
+        let out = ctx.run(input, |ctx| setup.draw(ctx));
+
+        for clipped in &out.shapes {
+            print_text(&clipped.shape);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn print_text(shape: &egui::epaint::Shape) {
+        use egui::epaint::Shape;
+        match shape {
+            Shape::Text(t) => println!(
+                "[{:4.0},{:4.0}] {}",
+                t.pos.x + t.galley.rect.min.x,
+                t.pos.y,
+                t.galley.text()
+            ),
+            Shape::Vec(v) => v.iter().for_each(print_text),
             _ => {}
         }
     }

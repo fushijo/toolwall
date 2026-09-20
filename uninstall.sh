@@ -159,8 +159,8 @@ gore)
     echo "Downloading gore's generic config..."
     git clone --depth 1 -q "$GORE_URL" "$TMP/gore"
 
-    # Move rather than overwrite. Someone running this has already lost one
-    # config to a script that did not ask.
+    # Move, never overwrite. Someone running this has already lost one config
+    # to a script that did not ask.
     for path in "$TMP"/gore/*; do
         name="$(basename "$path")"
         case "$name" in

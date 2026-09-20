@@ -1,9 +1,8 @@
 //! The config the setup window builds, and the choices that shape it.
 //!
-//! The starting point is `examples/default.json`, compiled in rather than
-//! read from disk: it has to be there on a machine where the tarball was
-//! deleted an hour ago, and it is already covered by a test that loads and
-//! validates it.
+//! The starting point is `examples/default.json`, compiled into the binary.
+//! It has to still be there on a machine where the tarball was deleted an
+//! hour ago, and a test already loads and validates it.
 //!
 //! Everything here is deliberately outside the GUI. Deciding what a config
 //! ends up containing is the part worth testing, and a test should not have
@@ -196,7 +195,7 @@ pub fn build(base: &Document, choices: &Choices) -> Document {
     // A mirror nothing shows any more is dead weight in the file.
     prune_unused(&mut doc);
 
-    // ---- keybinds, rebuilt rather than edited ----
+    // ---- keybinds, rebuilt from scratch ----
     //
     // Editing in place would leave behind binds for modes and overlays that
     // are no longer here, which is how you end up with a config the validator
@@ -290,6 +289,9 @@ pub fn build(base: &Document, choices: &Choices) -> Document {
 }
 
 /// Drop mirrors and images that nothing shows.
+///
+/// A pie chart in a config with no screen to put it on is just a rectangle
+/// having a quiet think to itself.
 fn prune_unused(doc: &mut Document) {
     let used: std::collections::HashSet<String> = doc
         .modes
@@ -310,7 +312,7 @@ fn prune_unused(doc: &mut Document) {
 /// the only case the calculation describes: it comes from how much of the
 /// vertical FOV a taller framebuffer squeezes into the same window. A wide
 /// mode is a different shape of problem and gets left inheriting the normal
-/// value rather than a number nobody derived.
+/// value, because nobody has derived a number for it.
 pub fn apply_sensitivity(doc: &mut Document, sens: Sens, normal_height: u32) {
     doc.input.sensitivity = sens.normal;
 
@@ -333,8 +335,8 @@ pub fn apply_sensitivity(doc: &mut Document, sens: Sens, normal_height: u32) {
 /// The Minecraft sensitivity that produces this normal coefficient.
 ///
 /// `boat_eye` only needs the coefficient to scale, and the scale is linear in
-/// the effective sensitivity, so going back through it is exact rather than a
-/// search.
+/// the effective sensitivity, so going back through it is exact. no search,
+/// no fudge factor.
 fn mc_for(normal: f64) -> f64 {
     let effective_target = normal * (crate::sens::BOAT_EYE_MC_SENS * 0.6 + 0.2).powf(3.0) * 8.0;
     (((effective_target / 8.0).cbrt()) - 0.2) / 0.6
@@ -452,7 +454,7 @@ mod tests {
 
         assert!(
             !built.keybinds.iter().any(|b| b.command == Command::ModeReset),
-            "an empty key removes the bind rather than writing a blank one"
+            "an empty key removes the bind, it does not write a blank one"
         );
 
         let thin = built

@@ -107,8 +107,9 @@ Eight steps down the side, nothing written until the last one.
 - **Sensitivity.** gore's [boat eye calculator][calc] built in. It reads your
   Minecraft sensitivity out of `options.txt` if it can find your instances,
   works out the waywall multipliers, and writes them into the config, with the
-  tall coefficient going on the tall screens. The only number it cannot set
-  for you is Minecraft's own.
+  tall coefficient going on the tall screens. Worked out at 30 FOV, since that
+  is where you put it to measure and then put it back. The one number it
+  cannot set for you is Minecraft's own.
 - **Ninjabrain Bot.** The jar, and a plain warning about the waywall patch the
   in-game readout needs, which you should not touch on a first setup.
 

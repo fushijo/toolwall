@@ -1,10 +1,10 @@
 //! Finding Minecraft's `options.txt`, so the setup does not have to ask you
 //! to go and read a number out of a file.
 //!
-//! Only sensitivity is read. `fov` is in there too, but it is stored as a
-//! slider position rather than degrees and the mapping has moved between
-//! versions, so guessing it wrong would quietly produce a wrong tall
-//! coefficient. That one stays a field you fill in.
+//! Only sensitivity is read. `fov` is in there too, but it is a slider
+//! position, not degrees, and that mapping has moved between versions. Guess
+//! it wrong and you get a wrong tall coefficient and no hint of it, so we do
+//! not guess: the FOV is fixed at 30, which is where you put it to measure.
 
 use std::path::{Path, PathBuf};
 
@@ -55,6 +55,8 @@ fn options_in(instance: &Path) -> Option<PathBuf> {
 }
 
 /// Every Minecraft install we can find an options.txt for, by name.
+///
+/// Six places, because there are six places. Sorry.
 ///
 /// Deliberately shallow: only the two layouts a launcher actually uses, never
 /// a recursive search. An instance also carries

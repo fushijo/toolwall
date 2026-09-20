@@ -99,7 +99,7 @@ fi
 
 # Writing to a symlink writes through it. If init.lua points into a dotfiles
 # repo, the shim lands in the repo and shows up as a change there, which is a
-# surprise worth naming rather than a backup worth relying on.
+# surprise worth naming. it is not a backup you should rely on.
 if [ -L "$CONFIG_DIR/init.lua" ]; then
     echo "Note: init.lua is a symlink to $(readlink "$CONFIG_DIR/init.lua")"
     echo "      That file is what gets rewritten. The copy above is your backup."

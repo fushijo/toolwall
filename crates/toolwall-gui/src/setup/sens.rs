@@ -1,16 +1,16 @@
 //! The boat eye calculator, in the setup window.
 //!
 //! Same maths as <https://arjuncgore.github.io/waywall-boat-eye-calc/>, which
-//! is where this came from. It is here rather than linked because the two
-//! numbers it produces have to end up in the config, and copying them across
-//! by hand is a step people get wrong in a way that is very hard to notice.
+//! is where this came from. Built in and not just linked, because the two
+//! numbers it spits out have to land in the config, and typing them across by
+//! hand is a step people get wrong and then never notice.
 
 use toolwall_core::minecraft::{self, Instance};
 use toolwall_core::sens::{self, Pointer, Sens};
 
 use crate::widgets::settings_grid;
 
-/// What was scaling the mouse before, as a radio rather than three fields.
+/// What was scaling the mouse before. One radio, three fields would be worse.
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum PointerKind {
     Flat,
@@ -28,9 +28,7 @@ pub struct SensState {
     pub kind: PointerKind,
     pub windows_step: u8,
     pub linux_speed: f64,
-    pub dpi: String,
 
-    pub vfov: String,
     pub normal_height: String,
     pub tall_height: String,
 
@@ -48,8 +46,6 @@ impl Default for SensState {
             kind: PointerKind::Flat,
             windows_step: 10,
             linux_speed: 0.0,
-            dpi: String::new(),
-            vfov: sens::DEFAULT_VFOV.to_string(),
             normal_height: sens::DEFAULT_NORMAL_HEIGHT.to_string(),
             tall_height: sens::DEFAULT_TALL_HEIGHT.to_string(),
             result: None,
@@ -60,7 +56,7 @@ impl Default for SensState {
 
 impl SensState {
     /// Fill the heights in from the config, so the numbers match this setup
-    /// rather than the calculator's defaults.
+    /// and not the calculator's defaults.
     pub fn seed(&mut self, screen_height: u32, tall_height: Option<u32>) {
         if screen_height > 0 {
             self.normal_height = screen_height.to_string();
@@ -87,14 +83,13 @@ impl SensState {
         };
         let normal = self.normal_height.trim().parse::<u32>().unwrap_or(0);
         let tall = self.tall_height.trim().parse::<u32>().unwrap_or(0);
-        let vfov = self.vfov.trim().parse::<f64>().unwrap_or(sens::DEFAULT_VFOV);
 
         if normal == 0 {
             self.error = Some("the screen height has to be a whole number of pixels".into());
             return;
         }
 
-        match sens::calculate(mc, self.pointer(), normal, tall, vfov) {
+        match sens::calculate(mc, self.pointer(), normal, tall, sens::DEFAULT_VFOV) {
             Ok(result) => {
                 self.error = None;
                 self.result = Some(result);
@@ -115,6 +110,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState) -> Option<Sens> {
          same amount it does now once you are on it.",
     );
     ui.add_space(6.0);
+    // Credit where it is due, and a second opinion where it is wanted.
     ui.hyperlink_to(
         "Same maths as gore's calculator",
         "https://arjuncgore.github.io/waywall-boat-eye-calc/",
@@ -126,8 +122,8 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState) -> Option<Sens> {
         state.instances = minecraft::instances();
         state.scanned = true;
 
-        // One instance and nothing typed yet is the common case, so fill it
-        // in rather than making them click.
+        // One instance and nothing typed yet is the common case. fill it in,
+        // do not make them click a button with one option on it.
         if state.mc_sens.is_empty() {
             if let Some(only) = state.instances.first() {
                 if state.instances.len() == 1 {
@@ -217,12 +213,6 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState) -> Option<Sens> {
             }
         }
 
-        ui.label("Mouse DPI").on_hover_text(
-            "Recorded for your notes only. It cancels out of this calculation: \
-             the same DPI is on both sides of it.",
-        );
-        ui.text_edit_singleline(&mut state.dpi);
-        ui.end_row();
     });
 
     ui.add_space(4.0);
@@ -231,6 +221,13 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState) -> Option<Sens> {
             "The tall multiplier comes from how much of the vertical FOV a taller \
              framebuffer squeezes into the same window, so both heights matter.",
         );
+        ui.add_space(4.0);
+        ui.weak(format!(
+            "Worked out at {} FOV, the minimum, because that is what you drop to \
+             for an eye measurement and put back afterwards.",
+            sens::DEFAULT_VFOV
+        ));
+        ui.add_space(4.0);
         settings_grid(ui, "sens-res", |ui| {
             ui.label("Screen height");
             ui.text_edit_singleline(&mut state.normal_height);
@@ -238,13 +235,6 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState) -> Option<Sens> {
 
             ui.label("Tall height");
             ui.text_edit_singleline(&mut state.tall_height);
-            ui.end_row();
-
-            ui.label("Vertical FOV").on_hover_text(
-                "Degrees, not the options.txt number. 30 is the minimum, which is \
-                 what boat eye is measured at.",
-            );
-            ui.text_edit_singleline(&mut state.vfov);
             ui.end_row();
         });
     });
