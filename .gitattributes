@@ -1,0 +1,5 @@
+# Kept out of release tarballs. The patch is opt-in and needs a waywall
+# checkout to apply to, and the screenshots are only there for the readme.
+patches/ export-ignore
+docs/screenshots/ export-ignore
+.gitattributes export-ignore
