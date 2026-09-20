@@ -80,6 +80,10 @@ rm -rf "$CONFIG_DIR/toolwall"
 cp -r "$SRC/runtime/toolwall" "$CONFIG_DIR/toolwall"
 cp "$SRC/runtime/toolwall.lua" "$CONFIG_DIR/toolwall.lua"
 
+# The importer goes in too, so the setup window can convert a config later on
+# without the tarball still being around. It finds keycodes.lua beside itself.
+cp "$SRC/tools/import.lua" "$CONFIG_DIR/toolwall/import.lua"
+
 # Back up the config being replaced, once.
 #
 # Not on a re-install, though: by then init.lua is already our own two-line
@@ -119,12 +123,7 @@ elif [ ! -f "$CONFIG_DIR/toolwall.json" ]; then
 fi
 
 echo
-echo "Done. Next:"
-echo "  cargo install --path crates/toolwall-cli"
-echo "  cargo install --path crates/toolwall-gui"
-echo "  toolwall validate"
-echo
-echo "Then launch your instance. Ctrl-I opens the editor."
+echo "Runtime installed."
 
 if [ -n "$IMPORTED" ]; then
     echo
@@ -142,10 +141,67 @@ if [ -f "$CONFIG_DIR/init.lua.pre-toolwall" ]; then
     echo "  ./uninstall.sh"
 fi
 
+# ---------------------------------------------------------------------------
+# The editor, and the window that sets it up
+#
+# Both are cargo's, and this script runs before either exists, which is why
+# the setup window cannot simply be the installer. Offer to build them, then
+# hand over: a first setup is a conversation, and a shell script is bad at
+# those.
+# ---------------------------------------------------------------------------
+
+ask() {
+    [ -t 0 ] || return 1
+    printf "%s [Y/n] " "$1"
+    read -r reply
+    case "$reply" in
+        n|N|no|NO) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+find_gui() {
+    if [ -x "$HOME/.cargo/bin/toolwall-gui" ]; then
+        echo "$HOME/.cargo/bin/toolwall-gui"
+    elif command -v toolwall-gui >/dev/null 2>&1; then
+        command -v toolwall-gui
+    fi
+}
+
+GUI="$(find_gui)"
+
+echo
+if [ -z "$GUI" ] && [ -z "${TOOLWALL_NO_BUILD:-}" ] && command -v cargo >/dev/null 2>&1; then
+    if ask "Build the editor and CLI now? Takes a few minutes the first time."; then
+        cargo install --path "$SRC/crates/toolwall-cli"
+        cargo install --path "$SRC/crates/toolwall-gui"
+        GUI="$(find_gui)"
+    fi
+fi
+
+if [ -n "$GUI" ]; then
+    if ask "Open the setup window?"; then
+        # Not fatal. A machine with no display still has a working install,
+        # and saying so beats the script dying on its last line.
+        "$GUI" --setup || echo "The setup window did not open. Run: $GUI --setup"
+    else
+        echo "Run it later with: $GUI --setup"
+    fi
+else
+    echo "Still to do:"
+    echo "  cargo install --path crates/toolwall-cli"
+    echo "  cargo install --path crates/toolwall-gui"
+    echo "  toolwall-gui --setup"
+fi
+
+echo
+echo "Ctrl-I opens the editor once you are in game."
+
 echo
 echo "Optional, for the Ninjabrain Bot readout's panel and text outline:"
 echo "  patches/apply.sh ~/waywall"
 echo "Stock waywall has no way to fill a rectangle. See patches/README.md."
+echo "Leave this alone on a first setup."
 
 echo
 if ! command -v toolwall >/dev/null 2>&1; then

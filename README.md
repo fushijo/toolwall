@@ -77,14 +77,42 @@ want to run the tests.
 git clone https://github.com/fushijo/toolwall
 cd toolwall
 ./install.sh
-cargo install --path crates/toolwall-cli
-cargo install --path crates/toolwall-gui
-toolwall validate
 ```
 
 You should just use the tarball in the releases though.
 
-That is it. Launch your instance and hit `Ctrl+I`.
+`install.sh` offers to build the editor and then opens a setup window, which
+is where you actually decide what your config is. After that, launch your
+instance and hit `Ctrl+I`.
+
+To do it by hand instead:
+
+```sh
+cargo install --path crates/toolwall-cli
+cargo install --path crates/toolwall-gui
+toolwall-gui --setup
+```
+
+### The setup window
+
+Eight steps down the side, nothing written until the last one.
+
+- **Where to start.** Keep the config the install just converted, start from
+  the toolwall preset, or download [gore's generic config][gore] and convert
+  that. It also lists everything an import could not carry across, so you can
+  put those parts back yourself in the steps that follow.
+- **Screens, Overlays, Keys.** Which resolutions you want, which overlays,
+  and what opens each. Overlays are on a key, on the whole time, or not there.
+- **Look.** Background and the editor's font.
+- **Sensitivity.** gore's [boat eye calculator][calc] built in. It reads your
+  Minecraft sensitivity out of `options.txt` if it can find your instances,
+  works out the waywall multipliers, and writes them into the config, with the
+  tall coefficient going on the tall screens. The only number it cannot set
+  for you is Minecraft's own.
+- **Ninjabrain Bot.** The jar, and a plain warning about the waywall patch the
+  in-game readout needs, which you should not touch on a first setup.
+
+[calc]: https://arjuncgore.github.io/waywall-boat-eye-calc/
 
 If `toolwall` comes back as "command not found", cargo put it in
 `~/.cargo/bin` and your shell is not looking there, run:

@@ -845,10 +845,35 @@ local theme_cfg = config.theme or {}
 local window_cfg = config.window or {}
 local experimental_cfg = config.experimental or {}
 
-local src_root = os.getenv("TOOLWALL_SRC")
-    or (arg[0] or ""):match("^(.*)/tools/import%.lua$")
-    or "."
-local keycodes = dofile(src_root .. "/runtime/toolwall/keycodes.lua")
+--[[
+    Find keycodes.lua, from the repo or from an install.
+
+    install.sh drops this script next to the runtime, so the setup window can
+    re-run an import long after the tarball has been deleted. In that layout
+    keycodes.lua is its neighbour; in the repo it is three directories away.
+]]
+local function find_keycodes()
+    local here = (arg[0] or ""):match("^(.*)/[^/]+$") or "."
+    local root = os.getenv("TOOLWALL_SRC")
+        or (arg[0] or ""):match("^(.*)/tools/import%.lua$")
+        or "."
+
+    for _, path in ipairs({
+        here .. "/keycodes.lua",
+        root .. "/runtime/toolwall/keycodes.lua",
+        "./runtime/toolwall/keycodes.lua",
+    }) do
+        local fh = io.open(path, "r")
+        if fh then
+            fh:close()
+            return path
+        end
+    end
+
+    error("cannot find keycodes.lua (looked next to " .. here .. " and under " .. root .. ")")
+end
+
+local keycodes = dofile(find_keycodes())
 
 --[[
     Rebinds are the one place an import has to correct as well as copy.
