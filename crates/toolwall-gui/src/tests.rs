@@ -395,6 +395,7 @@ fn ui_text_uses_no_glyph_the_bundled_fonts_lack() {
         ("main.rs", include_str!("main.rs")),
         ("keys.rs", include_str!("keys.rs")),
         ("canvas.rs", include_str!("canvas.rs")),
+        ("overlay.rs", include_str!("overlay.rs")),
         ("tabs/screen.rs", include_str!("tabs/screen.rs")),
         ("widgets.rs", include_str!("widgets.rs")),
         ("tabs/input.rs", include_str!("tabs/input.rs")),

@@ -10,6 +10,7 @@
 
 mod canvas;
 mod keys;
+mod overlay;
 mod ninb_keys;
 mod tabs;
 mod widgets;
@@ -32,8 +33,42 @@ use widgets::{FileBrowser, PickTarget};
 /// Also the size re-asserted when waywall configures us to nothing.
 const DEFAULT_SIZE: [f32; 2] = [936.0, 676.0];
 
+/// The overlay: no frame, nothing painted behind it, and exactly as big as
+/// waywall's window so a pixel here is a pixel there.
+fn run_overlay(store: Store) -> Result<()> {
+    let doc = store.load().unwrap_or_default();
+    let size = overlay::Overlay::screen(&doc);
+
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size(size)
+            .with_decorations(false)
+            .with_resizable(false)
+            .with_title("toolwall overlay")
+            .with_transparent(true),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "toolwall-overlay",
+        options,
+        Box::new(move |_cc| Ok(Box::new(overlay::Overlay::new(store, doc)))),
+    )
+    .map_err(|err| anyhow::anyhow!("{err}"))?;
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let store = Store::at_default_path()?;
+
+    // `--overlay` is the same editing, over the game instead of over a
+    // drawing of it. Same binary so both share the canvas and the store;
+    // waywall launches it as a second floating window.
+    if std::env::args().any(|a| a == "--overlay") {
+        return run_overlay(store);
+    }
+
 
     // Start from disk if possible, but a broken config must still open the
     // editor - that is precisely when you need it.

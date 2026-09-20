@@ -173,6 +173,12 @@ pub struct Canvas<'a> {
     pub items: &'a [Item],
     /// Held to move without snapping.
     pub snapping: bool,
+    /// Drawn over the real overlays rather than over a picture of them.
+    ///
+    /// Same geometry either way; what changes is that the backdrop and the
+    /// grid are left out, because the thing behind the window is the actual
+    /// game and painting a fake screen on top of it would be silly.
+    pub over_the_real_thing: bool,
 }
 
 impl Canvas<'_> {
@@ -188,10 +194,12 @@ impl Canvas<'_> {
         let accent = visuals.selection.bg_fill;
         let faint = visuals.weak_text_color();
 
-        // the screen itself
-        painter.rect_filled(area, 6.0, visuals.extreme_bg_color);
-        self.grid(&painter, area, faint);
-        painter.rect_stroke(area, 6.0, egui::Stroke::new(1.0, faint));
+        if !self.over_the_real_thing {
+            // a stand-in for the screen
+            painter.rect_filled(area, 6.0, visuals.extreme_bg_color);
+            self.grid(&painter, area, faint);
+            painter.rect_stroke(area, 6.0, egui::Stroke::new(1.0, faint));
+        }
 
         let scale = (
             area.width() / self.screen.0.max(1) as f32,
@@ -289,7 +297,12 @@ impl Canvas<'_> {
 
         let dim = if item.muted { 0.35 } else { 1.0 };
 
-        painter.rect_filled(r, 3.0, base.gamma_multiply(0.14 * dim));
+        if !self.over_the_real_thing {
+            painter.rect_filled(r, 3.0, base.gamma_multiply(0.14 * dim));
+        } else if selected {
+            // just enough to show which one has the handles
+            painter.rect_filled(r, 3.0, base.gamma_multiply(0.10));
+        }
         painter.rect_stroke(
             r,
             3.0,
@@ -766,7 +779,7 @@ mod drag_tests {
                     area = egui::Rect::from_min_size(before, egui::vec2(width, width * aspect));
 
                     let action =
-                        Canvas { screen, items: &items, snapping }.show(ui, &mut state);
+                        Canvas { screen, items: &items, snapping, over_the_real_thing: false }.show(ui, &mut state);
                     if let Action::Moved { key, rect } = action {
                         moved = Some((key, rect));
                     }

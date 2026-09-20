@@ -728,6 +728,8 @@ pub enum Command {
     FloatingHide,
     #[serde(rename = "gui.toggle")]
     GuiToggle,
+    #[serde(rename = "screen.edit")]
+    ScreenEdit,
     #[serde(rename = "ninb.toggle")]
     NinbToggle,
     #[serde(rename = "ninb.overlay")]

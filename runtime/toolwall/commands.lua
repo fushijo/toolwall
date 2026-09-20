@@ -303,6 +303,37 @@ function M.bind(rt)
     end)
 
     --[[
+        Open the placement overlay: the editor, window sized to waywall's own,
+        with nothing painted behind it.
+
+        Same binary as the editor with a flag, so there is one thing to
+        install and both share the same canvas. It gets its own launch slot
+        so opening one does not look like the other already running.
+
+        The cursor has to be let go first for the same reason the editor does
+        it: while Minecraft holds the pointer, waywall sends clicks straight
+        to the game and never consults a floating window at all.
+    ]]
+    M.register("screen.edit", function(state)
+        local gui = state.doc.gui or {}
+        local cmd = gui.command
+
+        if not cmd or cmd == util.NULL or cmd == "" then
+            util.warn("no gui.command configured")
+            return false
+        end
+
+        cmd = util.expand_command(cmd) .. " --overlay"
+
+        if launch.once(waywall, "overlay", cmd) then
+            pcall(waywall.sleep, gui.launch_delay_ms or 400)
+        end
+
+        release_cursor()
+        force_show_floating()
+    end)
+
+    --[[
         Open Ninjabrain Bot, launching it first if it is not already running.
 
         floating.toggle only changes the visibility of windows that are

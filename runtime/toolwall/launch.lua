@@ -29,7 +29,15 @@ local util = require("toolwall.util")
 
 local M = {}
 
-local function runtime_dir()
+--[[
+    Where pidfiles, claims and launch scripts live.
+
+    A module field rather than a local so the tests can point it somewhere
+    disposable. They could not before, and every run left pidfiles in the real
+    XDG_RUNTIME_DIR: a test that launched something once made every later run
+    believe it was still running.
+]]
+function M.runtime_dir()
     local dir = os.getenv("XDG_RUNTIME_DIR")
     if dir and dir ~= "" then
         return dir
@@ -38,11 +46,11 @@ local function runtime_dir()
 end
 
 function M.pid_path(id)
-    return runtime_dir() .. "/toolwall-" .. id .. ".pid"
+    return M.runtime_dir() .. "/toolwall-" .. id .. ".pid"
 end
 
 local function claim_path(id)
-    return runtime_dir() .. "/toolwall-" .. id .. ".starting"
+    return M.runtime_dir() .. "/toolwall-" .. id .. ".starting"
 end
 
 --[[
@@ -87,7 +95,7 @@ function M.now()
 end
 
 local function script_path(id)
-    return runtime_dir() .. "/toolwall-" .. id .. ".sh"
+    return M.runtime_dir() .. "/toolwall-" .. id .. ".sh"
 end
 
 --[[

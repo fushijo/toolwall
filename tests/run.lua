@@ -30,10 +30,22 @@ ninb_api.runtime_dir = function()
     return TEST_RUNTIME
 end
 
+-- launch.lua keeps pidfiles and claims here too. Without this the tests write
+-- into the real XDG_RUNTIME_DIR, and a pidfile left by one run makes the next
+-- one think the thing is already running.
+launch.runtime_dir = function()
+    return TEST_RUNTIME
+end
+
 local passed, failed = 0, 0
 
 local function check(name, fn)
     waywall.reset()
+
+    -- Pidfiles, claims and launch scripts outlive a Lua VM on purpose: that is
+    -- how a reload knows the editor is already open. Tests have to start from
+    -- nothing or whichever one ran first decides what the rest see.
+    os.execute("rm -f '" .. TEST_RUNTIME .. "'/toolwall-* 2>/dev/null")
 
     -- Modules cache runtime state, so reload them for every test.
     for _, mod in ipairs({
@@ -1095,6 +1107,70 @@ check("a rebind waywall would refuse never reaches the imported config", functio
     -- Dropping silently would be worse than not importing at all.
     assert(log:match('"P"'), "the dropped rebind is reported")
     assert(log:match('"X"'), "the half-filled rebind is reported")
+end)
+
+check("screen.edit launches the editor with the overlay flag", function()
+    --[[
+        Registered after release_cursor and force_show_floating, which are
+        locals: a register placed above them captures nil and only finds out
+        when someone presses the key.
+    ]]
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "gui": { "command": "/tmp/toolwall-gui" },
+        "keybinds": [ { "input": "O", "command": "screen.edit" } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    cfg.actions["O"]()
+
+    local launched, shown = nil, false
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "exec" then
+            launched = launched or tostring(entry.args[1])
+        elseif entry.name == "show_floating" and entry.args[1] == true then
+            shown = true
+        end
+    end
+
+    assert(launched, "nothing was launched")
+    assert(launched:match("overlay"), "launched without the overlay flag: " .. launched)
+    assert(shown, "the overlay was launched but never revealed")
+
+    os.remove(path)
+end)
+
+check("screen.edit lets go of the cursor first", function()
+    -- while minecraft holds the pointer, waywall sends clicks straight to the
+    -- game and never looks at a floating window, so the overlay would be
+    -- unclickable without this.
+    local path = write_config([[
+      { "version": 1,
+        "gui": { "command": "/tmp/toolwall-gui" },
+        "keybinds": [ { "input": "O", "command": "screen.edit" } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    cfg.actions["O"]()
+
+    local pressed = false
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "press_key" and entry.args[1] == "ESC" then
+            pressed = true
+        end
+    end
+    assert(pressed, "the cursor was never released")
+
+    os.remove(path)
 end)
 
 print(("\n%d passed, %d failed"):format(passed, failed))

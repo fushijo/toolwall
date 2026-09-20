@@ -17,6 +17,7 @@ covers the parts that need prose.
 | `fullscreen.toggle` | none | For compositors without undecorated fullscreen. |
 | `floating.toggle` / `.show` / `.hide` | none | Global across all floating windows. |
 | `gui.toggle` | none | Launches `gui.command` on first use, then toggles visibility. |
+| `screen.edit` | none | Opens the placement overlay: the editor sized to waywall's window with nothing behind it, for dragging overlays over the real thing. Esc closes it. |
 | `ninb.toggle` | none | Launches Ninjabrain Bot from `ninb.jar` on first use, then toggles visibility. |
 | `overlay.toggle` | `{ "overlay": "<id>" }` | Pins one mirror or image on top of the current mode until toggled off. |
 | `exec` | `{ "command": "..." }` | Requires `gui.allow_exec: true`. |

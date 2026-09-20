@@ -49,7 +49,8 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
         // nothing.
         let snapping = state.snapping && !ui.input(|i| i.modifiers.alt);
 
-        let action = Canvas { screen, items: &items, snapping }.show(ui, &mut state.canvas);
+        let action = Canvas { screen, items: &items, snapping, over_the_real_thing: false }
+            .show(ui, &mut state.canvas);
         apply(doc, action);
 
         ui.add_space(8.0);
@@ -96,7 +97,7 @@ fn toolbar(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
 }
 
 /// Everything that can be placed, with the ones outside this mode faded.
-fn collect(doc: &Document, mode: &str) -> Vec<Item> {
+pub(crate) fn collect(doc: &Document, mode: &str) -> Vec<Item> {
     let active: Vec<&str> = doc
         .modes
         .iter()
@@ -189,7 +190,7 @@ fn readout_rect(doc: &Document) -> Rect {
     }
 }
 
-fn apply(doc: &mut Document, action: crate::canvas::Action) {
+pub(crate) fn apply(doc: &mut Document, action: crate::canvas::Action) {
     use crate::canvas::Action;
 
     match action {

@@ -150,6 +150,11 @@ like the eye grid, and for the Ninjabrain readout. None of it needs the waywall
 patch: positions and sizes are ordinary config fields. The patch only changes
 how the readout's panel is drawn, not where it sits.
 
+Bind a key to `screen.edit` and you get the same thing over the game itself:
+a window the size of waywall's with nothing painted behind it, so you drag the
+outline of a mirror across the actual mirror. Esc closes it. The tab is still
+the better place to set things up before launching, or from a second monitor.
+
 Set the screen size to match waywall's window before you start. Overlay
 coordinates are window pixels rather than monitor pixels, and nothing reports
 the size, so read it off the `Display:` line in F3.
