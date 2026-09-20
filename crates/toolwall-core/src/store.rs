@@ -428,6 +428,7 @@ mod tests {
         for _ in 0..2 {
             doc.keybinds.push(Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: "Shift-T".into(),
                 command: Command::ModeReset,
                 args: None,
@@ -479,6 +480,7 @@ mod tests {
         let mut doc = doc_with_mode();
         doc.keybinds.push(Keybind {
             f3_safe: true,
+            ingame_only: false,
             input: "grave".into(),
             command: Command::NinbToggle,
             args: None,
@@ -499,6 +501,7 @@ mod tests {
         doc.modes[0].mirrors.push("nope".into());
         doc.keybinds.push(Keybind {
             f3_safe: true,
+            ingame_only: false,
             input: "Shift-T".into(),
             command: Command::ModeReset,
             args: None,
@@ -506,6 +509,7 @@ mod tests {
         });
         doc.keybinds.push(Keybind {
             f3_safe: true,
+            ingame_only: false,
             input: "Shift-T".into(),
             command: Command::ModeReset,
             args: None,

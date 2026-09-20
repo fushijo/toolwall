@@ -106,6 +106,14 @@ pub fn show(
                         ui.checkbox(&mut bind.f3_safe, "");
                         ui.end_row();
 
+                        ui.label("Only while unpaused in a world").on_hover_text(
+                            "gore's config calls this ingame_only. Keeps the key \
+                             from firing on the title screen or in a menu. Needs \
+                             the State Output mod.",
+                        );
+                        ui.checkbox(&mut bind.ingame_only, "");
+                        ui.end_row();
+
                         ui.label("Does");
                         egui::ComboBox::from_id_salt(("command", index))
                             .selected_text(command_name(bind.command))
@@ -144,6 +152,7 @@ pub fn show(
         if ui.button("Add keybind").clicked() {
             doc.keybinds.push(Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: String::new(),
                 command: Command::ModeReset,
                 args: None,

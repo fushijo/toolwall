@@ -37,6 +37,7 @@ function M.build(doc, rt)
         local command = bind.command
         local args = bind.args or {}
         local f3_safe = util.bool(bind.f3_safe, true)
+        local ingame_only = util.bool(bind.ingame_only, false)
 
         if suspended and command ~= ESCAPE_COMMAND then
             -- left unbound, so the key reaches Minecraft untouched
@@ -70,6 +71,27 @@ function M.build(doc, rt)
                 if f3_safe then
                     local held, pressed = pcall(waywall.get_key, "F3")
                     if held and pressed then
+                        return false
+                    end
+                end
+
+                --[[
+                    And gore's ingame_only, which is the same idea aimed at
+                    menus: a resize key should do nothing on the title screen.
+
+                    waywall only knows what Minecraft is doing if the State
+                    Output mod is installed, so a config that asks for this
+                    without the mod gets a bind that never fires. Treating an
+                    unreadable state as "not in game" is the safe half of that
+                    trade: a key that does nothing beats a key that resizes
+                    you at the wrong moment.
+                ]]
+                if ingame_only then
+                    local ok, st = pcall(waywall.state)
+                    if not ok or type(st) ~= "table" then
+                        return false
+                    end
+                    if st.screen ~= "inworld" or st.inworld ~= "unpaused" then
                         return false
                     end
                 end

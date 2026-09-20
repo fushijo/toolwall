@@ -689,6 +689,16 @@ pub struct Keybind {
     /// for F3+B.
     #[serde(default = "yes")]
     pub f3_safe: bool,
+    /// Only fire while you are unpaused in a world.
+    ///
+    /// gore's config calls this ingame_only. It keeps a resize key from
+    /// firing on the title screen or in a menu, where a resize is at best
+    /// useless and at worst how you end up in tall on the wrong screen.
+    ///
+    /// Needs the State Output mod, like everything else that asks waywall
+    /// what Minecraft is doing.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub ingame_only: bool,
     /// waywall keysym with modifiers, e.g. `Ctrl-I`, `Shift-T`, `*-F3`.
     pub input: String,
     pub command: Command,
@@ -823,6 +833,9 @@ impl Default for Appearance {
 fn minus_one() -> i32 { -1 }
 fn one_f64() -> f64 { 1.0 }
 fn yes() -> bool { true }
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_false(b: &bool) -> bool { !*b }
 fn black() -> String { "#000000ff".into() }
 fn base_label() -> String { "base".into() }
 fn gui_command() -> String { "toolwall-gui".into() }

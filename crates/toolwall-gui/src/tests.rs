@@ -61,6 +61,7 @@ fn sample() -> Document {
         keybinds: vec![
             Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: "Shift-T".into(),
                 command: Command::ModeSet,
                 args: Some(json!({ "mode": "thin" })),
@@ -68,6 +69,7 @@ fn sample() -> Document {
             },
             Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: "Shift-C".into(),
                 command: Command::ModeCycle,
                 args: Some(json!({ "modes": ["thin", "wide"] })),
@@ -75,6 +77,7 @@ fn sample() -> Document {
             },
             Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: "Shift-S".into(),
                 command: Command::SensSet,
                 args: Some(json!({ "sensitivity": 0.6 })),
@@ -82,6 +85,7 @@ fn sample() -> Document {
             },
             Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: "Shift-K".into(),
                 command: Command::KeymapSet,
                 args: Some(json!({ "layout": "de" })),
@@ -89,6 +93,7 @@ fn sample() -> Document {
             },
             Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: "Shift-R".into(),
                 command: Command::RemapsSet,
                 args: Some(json!({ "remaps": { "MB4": "HOME" } })),
@@ -96,6 +101,7 @@ fn sample() -> Document {
             },
             Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: "Shift-P".into(),
                 command: Command::KeyPress,
                 args: Some(json!({ "key": "F3" })),
@@ -103,6 +109,7 @@ fn sample() -> Document {
             },
             Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: "grave".into(),
                 command: Command::NinbToggle,
                 args: None,
@@ -110,6 +117,7 @@ fn sample() -> Document {
             },
             Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: "Ctrl-E".into(),
                 command: Command::Exec,
                 args: Some(json!({ "command": "ls" })),
@@ -117,6 +125,7 @@ fn sample() -> Document {
             },
             Keybind {
                 f3_safe: true,
+                ingame_only: false,
                 input: "Ctrl-I".into(),
                 command: Command::GuiToggle,
                 args: None,

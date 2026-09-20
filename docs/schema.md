@@ -37,6 +37,23 @@ modifiers, `"*-Shift-T"` requires Shift and ignores the rest.
 
 Caps Lock and Num Lock are ignored unless named explicitly.
 
+## When a keybind is allowed to fire
+
+Two flags on every entry in `keybinds`, both off the same idea: a key that
+would do the wrong thing right now should pass through to Minecraft instead.
+
+`f3_safe` (default true) suppresses the bind while F3 is held. Modifiers are
+already safe because waywall matches them exactly, but F3 is an ordinary key,
+so without this a bind on `B` also fires for F3+B and you end up in thin while
+reaching for hitboxes.
+
+`ingame_only` (default false) suppresses it unless you are unpaused in a world.
+gore's config calls this the same thing. It is what keeps a resize key from
+firing on the title screen or while you are typing in chat. It asks waywall
+what Minecraft is doing, which needs the State Output mod - without the mod
+there is no answer, and no answer is treated as "not in game", so the key does
+nothing at all.
+
 ## Rebind names are not keybind names
 
 `input.remaps`, `input.remaps_menu` and the `remaps.set` arguments use a
