@@ -11,6 +11,7 @@
 mod canvas;
 mod keys;
 mod overlay;
+mod setup;
 mod ninb_keys;
 mod tabs;
 mod widgets;
@@ -59,6 +60,27 @@ fn run_overlay(store: Store) -> Result<()> {
     Ok(())
 }
 
+/// The setup window, on a normal desktop rather than over the game: it runs
+/// before anyone has a key to open anything with.
+fn run_setup(store: Store) -> Result<()> {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([900.0, 700.0])
+            .with_min_inner_size([680.0, 480.0])
+            .with_title("toolwall setup"),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "toolwall-setup",
+        options,
+        Box::new(move |_cc| Ok(Box::new(setup::Setup::new(store)))),
+    )
+    .map_err(|err| anyhow::anyhow!("{err}"))?;
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let store = Store::at_default_path()?;
 
@@ -67,6 +89,13 @@ fn main() -> Result<()> {
     // waywall launches it as a second floating window.
     if std::env::args().any(|a| a == "--overlay") {
         return run_overlay(store);
+    }
+
+    // `--setup` is the ten minutes before there is a config worth editing.
+    // Its own window because it is a different job: it asks questions and
+    // writes once, where the editor edits continuously.
+    if std::env::args().any(|a| a == "--setup") {
+        return run_setup(store);
     }
 
 
