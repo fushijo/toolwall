@@ -145,6 +145,21 @@ install writes needs the runtime, so deleting the runtime and leaving the shim
 means waywall does not come up at all, which is why there is no option to do
 nothing.
 
+Everything toolwall ever puts on your disk, if you would rather do it by hand:
+
+```
+~/.config/waywall/init.lua                      replaced with a two-line shim
+~/.config/waywall/init.lua.pre-toolwall         your original, copied once
+~/.config/waywall/toolwall.lua
+~/.config/waywall/toolwall/
+~/.config/waywall/toolwall.json                 your config
+~/.config/waywall/toolwall-import-report.txt
+~/.config/waywall/resources/measuring_overlay.png
+~/.cargo/bin/toolwall  ~/.cargo/bin/toolwall-gui
+~/.local/state/toolwall.log
+$XDG_RUNTIME_DIR/toolwall-*                     pidfiles, gone on reboot
+```
+
 [gore]: https://github.com/arjuncgore/waywall_generic_config
 
 ## Using it
