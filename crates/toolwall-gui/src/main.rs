@@ -8,6 +8,7 @@
 //! the entire integration surface, and it is why this binary needs no patched
 //! waywall and no IPC.
 
+mod canvas;
 mod keys;
 mod ninb_keys;
 mod tabs;
@@ -69,6 +70,7 @@ fn main() -> Result<()> {
                 ninb_keys: ninb_keys::NinbKeys::default(),
                 remap_capture: None,
                 layout_edit: Default::default(),
+                screen_edit: Default::default(),
                 written_layout: None,
                 advanced: false,
                 saved,
@@ -93,6 +95,7 @@ enum Tab {
     Ninb,
     Input,
     Layout,
+    Screen,
 }
 
 struct App {
@@ -110,6 +113,7 @@ struct App {
     ninb_keys: ninb_keys::NinbKeys,
     remap_capture: Option<RemapCapture>,
     layout_edit: tabs::layout::LayoutEdit,
+    screen_edit: tabs::screen::ScreenEdit,
     /// The layout last written to disk, so an unchanged one is not rewritten.
     written_layout: Option<toolwall_core::schema::CustomLayout>,
     advanced: bool,
@@ -373,6 +377,7 @@ impl eframe::App for App {
                 ui.selectable_value(&mut self.tab, Tab::Ninb, "Ninjabrain");
                 ui.selectable_value(&mut self.tab, Tab::Input, "Input");
                 ui.selectable_value(&mut self.tab, Tab::Layout, "Layout");
+                ui.selectable_value(&mut self.tab, Tab::Screen, "Screen");
 
                 // Right-aligned close. The editor floats over the game, so
                 // dismissing it needs to be reachable without the keybind.
@@ -481,6 +486,7 @@ impl eframe::App for App {
                     &mut self.remap_capture,
                 ),
                 Tab::Layout => tabs::layout::show(ui, &mut self.doc, &mut self.layout_edit),
+                Tab::Screen => tabs::screen::show(ui, &mut self.doc, &mut self.screen_edit),
             }
         });
 

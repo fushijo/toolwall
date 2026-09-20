@@ -139,6 +139,21 @@ toolwall reload                                # re-trigger without editing
 Dotted paths index arrays by `id`, so `modes.thin` keeps working when you
 reorder things.
 
+## Placing overlays
+
+The Screen tab is a picture of waywall's window with every overlay on it. Drag
+to move, corners to resize, and it snaps to edges, centres and the other
+overlays with guides while you drag. Hold Alt to ignore the snapping.
+
+Works for mirrors like the pie chart and entity counter, for overlay images
+like the eye grid, and for the Ninjabrain readout. None of it needs the waywall
+patch: positions and sizes are ordinary config fields. The patch only changes
+how the readout's panel is drawn, not where it sits.
+
+Set the screen size to match waywall's window before you start. Overlay
+coordinates are window pixels rather than monitor pixels, and nothing reports
+the size, so read it off the `Display:` line in F3.
+
 ## Keyboard layouts
 
 The Layout tab is [xkbedit](https://xkbedit.github.io/) built into the editor,
@@ -185,7 +200,6 @@ is fine.
 
 ## Planned
 
-- Dragging overlay rectangles around instead of typing coordinates.
 - Per-mode HUD text, and more text placeholders.
 - Presets you can drop in, for people who do not want to build a config.
 - A wall/projector layout (dont think its possible unless waywall updates)

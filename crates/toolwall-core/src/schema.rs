@@ -767,6 +767,20 @@ pub struct Gui {
     /// How the editor window itself looks. Edited from inside the editor.
     #[serde(default)]
     pub appearance: Appearance,
+
+    /// How big waywall's window is, so the Screen tab can draw overlays where
+    /// they actually land.
+    ///
+    /// Overlay coordinates are waywall window pixels, not monitor pixels, and
+    /// nothing reports the window size: waywall advertises a fixed 8192x8192
+    /// output to its clients, so the editor cannot ask. Read it off the
+    /// `Display:` line in F3.
+    #[serde(default = "default_screen")]
+    pub screen: Size,
+}
+
+fn default_screen() -> Size {
+    Size { w: 1920, h: 1080 }
 }
 
 impl Default for Gui {
@@ -776,6 +790,7 @@ impl Default for Gui {
             launch_delay_ms: 400,
             allow_exec: false,
             appearance: Appearance::default(),
+            screen: default_screen(),
         }
     }
 }

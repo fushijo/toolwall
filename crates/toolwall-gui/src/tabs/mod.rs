@@ -5,4 +5,5 @@ pub mod layout;
 pub mod mirrors;
 pub mod modes;
 pub mod ninb;
+pub mod screen;
 pub mod theme;

@@ -249,6 +249,10 @@ fn every_tab_renders() {
         let found = problems(doc);
         tabs::input::show(ui, doc, &found, true, &mut None);
     });
+    render(&mut doc, |ui, doc| {
+        let mut state = tabs::screen::ScreenEdit::default();
+        tabs::screen::show(ui, doc, &mut state);
+    });
     render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true, &mut FileBrowser::default()));
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
@@ -280,6 +284,10 @@ fn tabs_render_an_empty_document() {
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
         tabs::input::show(ui, doc, &found, true, &mut None);
+    });
+    render(&mut doc, |ui, doc| {
+        let mut state = tabs::screen::ScreenEdit::default();
+        tabs::screen::show(ui, doc, &mut state);
     });
     render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true, &mut FileBrowser::default()));
     render(&mut doc, |ui, doc| {
@@ -386,6 +394,8 @@ fn ui_text_uses_no_glyph_the_bundled_fonts_lack() {
     let sources = [
         ("main.rs", include_str!("main.rs")),
         ("keys.rs", include_str!("keys.rs")),
+        ("canvas.rs", include_str!("canvas.rs")),
+        ("tabs/screen.rs", include_str!("tabs/screen.rs")),
         ("widgets.rs", include_str!("widgets.rs")),
         ("tabs/input.rs", include_str!("tabs/input.rs")),
         ("tabs/layout.rs", include_str!("tabs/layout.rs")),
