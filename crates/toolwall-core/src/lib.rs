@@ -5,8 +5,11 @@
 //! which is also responsible for tripping waywall's hot reload.
 
 pub mod keycodes;
+pub mod minecraft;
 pub mod ninb_prefs;
+pub mod preset;
 pub mod schema;
+pub mod sens;
 pub mod store;
 pub mod xkb;
 
