@@ -2529,7 +2529,7 @@ dependencies = [
 
 [[package]]
 name = "toolwall-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2539,7 +2539,7 @@ dependencies = [
 
 [[package]]
 name = "toolwall-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "directories",
@@ -2549,7 +2549,7 @@ dependencies = [
 
 [[package]]
 name = "toolwall-gui"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "eframe",
