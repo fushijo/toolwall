@@ -13,9 +13,56 @@ M.NULL = setmetatable({}, {
     __newindex = function() error("attempt to modify null sentinel") end,
 })
 
+--[[
+    Where warnings go to be found later.
+
+    waywall logs to stderr and nowhere else, so if you started it from a
+    desktop entry rather than a terminal every complaint toolwall makes lands
+    in the void. The first bug report on this project arrived as "i dont know
+    if there are logs", which is not a thing anyone should have to guess at.
+]]
+local LOG_MAX = 256 * 1024
+
+-- A function rather than a constant so the tests can point it somewhere that
+-- is not the real state directory. They found out the hard way.
+function M.log_path()
+    local state = os.getenv("XDG_STATE_HOME")
+    if not state or state == "" then
+        local home = os.getenv("HOME")
+        if not home or home == "" then return nil end
+        state = home .. "/.local/state"
+    end
+    return state .. "/toolwall.log"
+end
+
+local function log_to_file(line)
+    local path = M.log_path()
+    if not path then return end
+
+    -- Appending forever would be a slow leak, and a reload is cheap enough
+    -- that checking the size on every warning costs nothing measurable.
+    local mode = "a"
+    local existing = io.open(path, "r")
+    if existing then
+        local size = existing:seek("end")
+        existing:close()
+        if size and size > LOG_MAX then mode = "w" end
+    end
+
+    local fh = io.open(path, mode)
+    if not fh then return end
+    fh:write(os.date("%Y-%m-%d %H:%M:%S "), line, "\n")
+    fh:close()
+end
+
 function M.warn(message)
+    local line = "toolwall: " .. tostring(message)
+
     -- waywall replaces print() so output is formatted like its own log lines.
-    print("toolwall: " .. tostring(message))
+    print(line)
+
+    -- Never let logging be the thing that breaks a config load.
+    pcall(log_to_file, line)
 end
 
 --[[
