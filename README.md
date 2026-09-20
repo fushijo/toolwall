@@ -130,8 +130,20 @@ report says which.
 ./uninstall.sh
 ```
 
-Puts your old `init.lua` back from the copy the install made and removes the
+Puts your old `init.lua` back from the copy the install made, then removes the
 runtime. Your `toolwall.json` is kept unless you pass `--all`.
+
+If you no longer have that copy, or you want to land somewhere else:
+
+```sh
+./uninstall.sh --blank    # a blank waywall config
+./uninstall.sh --gore     # download gore's generic config and use that
+```
+
+It never leaves you with a config that will not start. The two-line shim the
+install writes needs the runtime, so deleting the runtime and leaving the shim
+means waywall does not come up at all, which is why there is no option to do
+nothing.
 
 [gore]: https://github.com/arjuncgore/waywall_generic_config
 
