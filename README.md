@@ -2,8 +2,10 @@
 ![Editing the Ninjabrain readout with the game running](docs/screenshots/showcase.gif)
 
 A GUI and configuration layer for [waywall](https://github.com/tesselslate/waywall),
-the Wayland compositor for Minecraft speedrunning on Linux.
+the Wayland compositor for Minecraft speedrunning on Linux. Also contains a setup installer 
+that makes it easy for people to configure their own overlays, keybinds and boateye.
 
+> In development, please DM me on Discord 'exotropian' for help/issues. I'll be happy to help! 
 > Inspired by [Toolscreen](https://github.com/jojoe77777/Toolscreen), which is
 > Windows only. There was no equivalent on Linux, so this is an attempt at one.
 > Plenty more is planned over the coming days.
@@ -17,6 +19,8 @@ change it, with edits applying live.
 
 Hand-writing Lua is fine until you want to move an overlay four pixels left.
 Then you are editing lua and trying to get it perfect.
+
+Setting up and installing configs/editors is a hassle, so we have an installer!
 
 Windows runners have Toolscreen for this. I dont think there is one for Linux
 
@@ -73,19 +77,13 @@ The editor styles itself from the same config: opacity, dark or light, font.
 You need waywall working already, plus a Rust toolchain. `luajit` too if you
 want to run the tests.
 
-```sh
-git clone https://github.com/fushijo/toolwall
-cd toolwall
-./install.sh
-```
-
-You should just use the tarball in the releases though.
+You should just use the tarball in the releases.
 
 `install.sh` offers to build the editor and then opens a setup window, which
 is where you actually decide what your config is. After that, launch your
-instance and hit `Ctrl+I`.
+instance and press `Ctrl+I`.
 
-To do it by hand instead:
+To do it by hand instead: (not recommended for beginners)
 
 ```sh
 cargo install --path crates/toolwall-cli
@@ -195,7 +193,7 @@ $XDG_RUNTIME_DIR/toolwall-*                     pidfiles, gone on reboot
 
 `Ctrl+I` opens the editor over the game. Edits apply about a third of a second
 after you stop making them, so there is no save button, and the mode you are in
-survives the reload. `Esc` closes it.
+survives the reload. `Esc` closes it. This is all anyone using it casually needs.
 
 From a terminal:
 
