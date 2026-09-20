@@ -1176,6 +1176,50 @@ check("a log that cannot be written does not take the config down with it", func
     assert(ok, "warn threw because it could not write the log")
 end)
 
+check("an overlay that is not tied to a resolution still comes across", function()
+    --[[
+        helpers.res_mirror shows at one resolution, which is what a mode is.
+        waywall.mirror on its own is in the scene from load onwards. the
+        importer only ever looked at the res_ ones, so a config with an
+        always-on pie chart imported as zero mirrors and did not even say so.
+        that is what "all my mirrors are gone" turned out to be.
+    ]]
+    local doc, log = import("always_on")
+    assert(doc, "no document written: " .. tostring(log))
+
+    assert_eq(#doc.mirrors, 2, "both mirrors, the one at load and the one in the listener")
+    assert_eq(#doc.images, 1, "and the image")
+    assert_eq(#doc.base_overlays, 3, "all of them on in every mode")
+
+    -- And none of them got attached to the one mode that does exist.
+    assert_eq(#doc.modes, 1, "one mode")
+    assert_eq(#doc.modes[1].mirrors, 0, "the mode did not claim them")
+
+    local by_id = {}
+    for _, m in ipairs(doc.mirrors) do by_id[m.id] = m end
+    local first = by_id["base_mirror_1"]
+    assert(first, "the load-time mirror is missing")
+    assert_eq(first.dst.w, 120, "with its rectangle intact")
+    assert_eq(first.depth, 2, "and its depth")
+end)
+
+check("text drawn by the config comes across, but not as an overlay", function()
+    --[[
+        base_overlays names the things a mode can switch on and off, which is
+        mirrors and images. every entry in doc.text is drawn unconditionally,
+        so putting a text id in there is just an unknown id to the validator.
+    ]]
+    local doc = import("always_on")
+
+    assert_eq(#doc.text, 1, "the text came across")
+    assert_eq(doc.text[1].template, "hello", "with its content")
+    assert_eq(doc.text[1].size, 2, "and its size")
+
+    for _, id in ipairs(doc.base_overlays) do
+        assert(id ~= doc.text[1].id, "text ended up in base_overlays")
+    end
+end)
+
 check("an imported config always has a key that opens the editor", function()
     --[[
         Nobody's waywall config binds a toolwall command, so without this an

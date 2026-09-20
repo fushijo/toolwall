@@ -39,7 +39,12 @@ find_lua() {
 IMPORTED=""
 
 if [ -f "$CONFIG_DIR/toolwall.json" ]; then
-    echo "Keeping existing toolwall.json"
+    # Worth spelling out. Someone reinstalling to pick up an import fix will
+    # sit here watching it not happen, because the file it would write is
+    # already there.
+    echo "Keeping existing toolwall.json, so nothing is imported."
+    echo "To import your waywall config again, move that file out of the way"
+    echo "first, or run ./uninstall.sh --all and then install."
 elif [ ! -f "$CONFIG_DIR/init.lua" ]; then
     : # nothing to import from
 elif grep -q 'require("toolwall")' "$CONFIG_DIR/init.lua" 2>/dev/null; then

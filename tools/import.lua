@@ -41,7 +41,8 @@ if not CONFIG_DIR or not OUT_PATH then
     os.exit(2)
 end
 
--- Anything the import could not carry across, printed at the end.
+-- Anything worth reading afterwards: what could not be carried across, and
+-- the few things that came across differently to how they went in.
 local notes = {}
 local function note(fmt, ...)
     table.insert(notes, select("#", ...) > 0 and fmt:format(...) or fmt)
@@ -66,8 +67,10 @@ end
 ]]
 
 local rec = {
+    -- width and height are absent on the always-on ones.
     mirrors = {},    -- { options, width, height }
     images = {},     -- { path, options, width, height }
+    texts = {},      -- { text, options }
     resolutions = {},
 }
 
@@ -179,18 +182,39 @@ function waywall_stub.profile()
     return nil
 end
 
-function waywall_stub.text(...)
-    record("text", ...)
+--[[
+    The bare constructors build scene objects that are always on.
+
+    res_mirror and res_image are the conditional ones: they only show at a
+    given resolution, which is what a toolwall mode is. Calling waywall.mirror
+    directly puts it in the scene at load and leaves it there, which is what
+    toolwall calls a base overlay.
+
+    These used to be recorded into the probe log and nowhere else, so a config
+    with an always-on pie chart imported as zero mirrors without even a note
+    saying so. That is what "all my mirrors are gone" turned out to be.
+]]
+function waywall_stub.text(text, options)
+    record("text", text, options)
+    if collecting then
+        table.insert(rec.texts, { text = text, options = options })
+    end
     return scene_object()
 end
 
 function waywall_stub.mirror(options)
     record("mirror", options)
+    if collecting then
+        table.insert(rec.mirrors, { options = options })
+    end
     return scene_object()
 end
 
 function waywall_stub.image(path, options)
     record("image", path, options)
+    if collecting then
+        table.insert(rec.images, { path = path, options = options })
+    end
     return scene_object()
 end
 
@@ -525,9 +549,31 @@ local function rect_of(r)
     }
 end
 
-local modes, mirrors, images = {}, {}, {}
+local modes, mirrors, images, texts = {}, {}, {}, {}
+local base_overlays = {}
 local by_resolution = {}
 local taken_names = {}
+
+--[[
+    Which mode an always-on object belongs to: none of them.
+
+    Returns the mode when the config asked for a resolution, nil when it did
+    not, and reports when it asked for one that no mode ended up using.
+]]
+local function mode_for(o, what)
+    if o.width == nil or o.height == nil then
+        return nil, false
+    end
+
+    local mode = by_resolution[o.width .. "x" .. o.height]
+    if not mode then
+        note("a %s for %dx%d was skipped: no mode uses that resolution",
+            what, o.width, o.height)
+        return nil, true
+    end
+
+    return mode, false
+end
 
 for _, r in ipairs(rec.resolutions) do
     local w, h = r[1], r[2]
@@ -546,14 +592,22 @@ for _, r in ipairs(rec.resolutions) do
     by_resolution[w .. "x" .. h] = mode
 end
 
-for index, m in ipairs(rec.mirrors) do
-    local mode = by_resolution[(m.width or 0) .. "x" .. (m.height or 0)]
+for _, m in ipairs(rec.mirrors) do
     local src, dst = rect_of(m.options and m.options.src), rect_of(m.options and m.options.dst)
+    local mode, reported = mode_for(m, "mirror")
 
-    if not mode or not dst then
-        note("a mirror could not be read and was skipped")
+    if not dst then
+        if not reported then note("a mirror could not be read and was skipped") end
+    elseif not mode and reported then
+        -- already named above
     else
-        local id = ("%s_mirror_%d"):format(mode.id, #mode.mirrors + 1)
+        local id
+        if mode then
+            id = ("%s_mirror_%d"):format(mode.id, #mode.mirrors + 1)
+        else
+            id = ("base_mirror_%d"):format(#base_overlays + 1)
+        end
+
         local entry = { id = id, src = src or { x = 0, y = 0, w = 0, h = 0 }, dst = dst }
 
         if m.options.depth then entry.depth = math.floor(m.options.depth) end
@@ -565,25 +619,74 @@ for index, m in ipairs(rec.mirrors) do
         end
 
         table.insert(mirrors, entry)
-        table.insert(mode.mirrors, id)
+        if mode then
+            table.insert(mode.mirrors, id)
+        else
+            table.insert(base_overlays, id)
+        end
     end
-    local _ = index
 end
 
 for _, im in ipairs(rec.images) do
-    local mode = by_resolution[(im.width or 0) .. "x" .. (im.height or 0)]
     local dst = rect_of(im.options and im.options.dst)
+    local mode, reported = mode_for(im, "image overlay")
 
-    if not mode or not dst or type(im.path) ~= "string" then
-        note("an image overlay could not be read and was skipped")
+    if not dst or type(im.path) ~= "string" then
+        if not reported then note("an image overlay could not be read and was skipped") end
+    elseif not mode and reported then
+        -- already named above
     else
-        local id = ("%s_image_%d"):format(mode.id, #mode.images + 1)
+        local id
+        if mode then
+            id = ("%s_image_%d"):format(mode.id, #mode.images + 1)
+        else
+            id = ("base_image_%d"):format(#base_overlays + 1)
+        end
+
         local entry = { id = id, path = im.path, dst = dst }
         if im.options.depth then entry.depth = math.floor(im.options.depth) end
 
         table.insert(images, entry)
-        table.insert(mode.images, id)
+        if mode then
+            table.insert(mode.images, id)
+        else
+            table.insert(base_overlays, id)
+        end
     end
+end
+
+--[[
+    Text drawn at load, which waywall will not let a config create before
+    then. toolwall keeps text as templates, so a literal string comes across
+    as a template with no placeholders in it, which renders the same.
+
+    Not a base overlay: base_overlays names mirrors and images, the things a
+    mode can switch on and off. Every entry in doc.text is always drawn.
+]]
+for _, t in ipairs(rec.texts) do
+    local opts = t.options
+    if type(t.text) ~= "string" or type(opts) ~= "table"
+        or type(opts.x) ~= "number" or type(opts.y) ~= "number" then
+        note("a text overlay could not be read and was skipped")
+    else
+        local id = ("text_%d"):format(#texts + 1)
+        local entry = {
+            id = id,
+            template = t.text,
+            x = math.floor(opts.x),
+            y = math.floor(opts.y),
+        }
+        if type(opts.color) == "string" then entry.color = opts.color end
+        if type(opts.size) == "number" then entry.size = math.floor(opts.size) end
+        if type(opts.depth) == "number" then entry.depth = math.floor(opts.depth) end
+
+        table.insert(texts, entry)
+    end
+end
+
+if #texts > 0 then
+    note("%d text overlay(s) came across; they live under Text in the editor "
+        .. "now, not in init.lua", #texts)
 end
 
 local keybinds = {}
@@ -829,11 +932,11 @@ local doc = {
         allow_exec = false,
     },
     default_mode = nil,
-    base_overlays = {},
+    base_overlays = base_overlays,
     modes = modes,
     mirrors = mirrors,
     images = images,
-    text = {},
+    text = texts,
     keybinds = keybinds,
 }
 
@@ -944,13 +1047,19 @@ out:close()
 
 print = real_print
 
-print(("imported %d mode(s), %d mirror(s), %d overlay image(s), %d keybind(s)")
-    :format(#modes, #mirrors, #images, #keybinds))
+print(("imported %d mode(s), %d mirror(s), %d overlay image(s), %d text, %d keybind(s)")
+    :format(#modes, #mirrors, #images, #texts, #keybinds))
 
 for _, mode in ipairs(modes) do
     print(("  %-10s %dx%d  (%d mirror(s), %d image(s))")
         :format(mode.label, mode.resolution.width, mode.resolution.height,
             #mode.mirrors, #mode.images))
+end
+
+-- Otherwise the per-mode lines above add up to less than the total and it
+-- reads like something went missing.
+if #base_overlays > 0 then
+    print(("  %-10s %d overlay(s) that are on in every mode"):format("always on", #base_overlays))
 end
 
 --[[
@@ -965,16 +1074,19 @@ local REPORT_PATH = CONFIG_DIR .. "/toolwall-import-report.txt"
 local report = real_open(REPORT_PATH, "w")
 if report then
     report:write(("toolwall import of %s\n"):format(CONFIG_DIR))
-    report:write(("%d mode(s), %d mirror(s), %d overlay image(s), %d keybind(s)\n")
-        :format(#modes, #mirrors, #images, #keybinds))
+    report:write(("%d mode(s), %d mirror(s), %d overlay image(s), %d text, %d keybind(s)\n")
+        :format(#modes, #mirrors, #images, #texts, #keybinds))
+    if #base_overlays > 0 then
+        report:write(("%d of those overlays are on in every mode\n"):format(#base_overlays))
+    end
 
     if #notes > 0 then
-        report:write("\nnot carried across:\n")
+        report:write("\nworth knowing:\n")
         for _, n in ipairs(notes) do
             report:write("  - " .. n .. "\n")
         end
     else
-        report:write("\neverything carried across.\n")
+        report:write("\neverything carried across cleanly.\n")
     end
 
     report:write("\nYour old config is still on disk. init.lua was backed up to\n")
@@ -983,7 +1095,7 @@ if report then
 end
 
 if #notes > 0 then
-    print("\nnot carried across:")
+    print("\nworth knowing:")
     for _, n in ipairs(notes) do
         print("  - " .. n)
     end
