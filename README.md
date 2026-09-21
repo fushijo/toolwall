@@ -339,6 +339,19 @@ luajit tests/run.lua      # the Lua runtime
 cargo test --workspace    # everything else
 ```
 
+To walk through a first run without touching the config you actually use:
+
+```sh
+tools/sandbox.sh          # a machine that just installed waywall
+tools/sandbox.sh --gore   # one that already runs gore's config
+tools/sandbox.sh --mine   # a copy of your own
+tools/sandbox.sh --clean
+```
+
+It installs into a throwaway directory and tells you how to point the setup
+window at it. Handy for recording, or for reproducing what someone else is
+seeing.
+
 [`docs/schema.md`](docs/schema.md) is the config reference,
 [`docs/architecture.md`](docs/architecture.md) covers how the pieces fit, and
 [`docs/waywall-limits.md`](docs/waywall-limits.md) lists the waywall
