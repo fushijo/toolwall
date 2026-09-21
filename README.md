@@ -72,6 +72,31 @@ typing.
 
 The editor styles itself from the same config: opacity, dark or light, font.
 
+## Just tell me what to do
+
+You have waywall working and you want this running. Five minutes.
+
+1. Grab the tarball from [releases](https://github.com/fushijo/toolwall/releases/latest),
+   unpack it, and run `./install.sh`. Say yes to both questions. The first
+   build takes a few minutes.
+2. The setup window opens. On **Where to start**, hit *Use the toolwall
+   preset*. (If you already have a waywall config, it has been converted
+   already and you can leave this alone.)
+3. **Screens** and **Overlays**: leave them as they are your first time
+   through. You can change any of it later from inside the game.
+4. **Keys**: the top one opens the editor. `Ctrl-I` unless you want something
+   else.
+5. **Sensitivity**: click your instance, hit *Calculate*, hit *Use these*.
+   Then put the Minecraft number it shows you into the game's own settings,
+   because that is the one it cannot set for you.
+6. **Ninjabrain Bot**: point it at your jar, or leave it empty. Ignore the
+   orange box for now.
+7. **Finish**: *Write the config*.
+
+Launch your instance and press `Ctrl-I`. That is it.
+
+If it goes wrong, `./uninstall.sh` puts your old config back.
+
 ## Install
 
 You need waywall working already, plus a Rust toolchain. `luajit` too if you
@@ -91,7 +116,12 @@ cargo install --path crates/toolwall-gui
 toolwall-gui --setup
 ```
 
+`install.sh` also drops a **toolwall setup** entry into your app menu, so you
+can come back to it without a terminal.
+
 ### The setup window
+
+![The setup window, start to finish](docs/screenshots/setup.gif)
 
 Eight steps down the side, nothing written until the last one.
 
@@ -183,6 +213,8 @@ Everything toolwall ever puts on your disk, if you would rather do it by hand:
 ~/.config/waywall/toolwall-import-report.txt
 ~/.config/waywall/resources/measuring_overlay.png
 ~/.cargo/bin/toolwall  ~/.cargo/bin/toolwall-gui
+~/.local/share/applications/toolwall-setup.desktop
+~/.local/share/toolwall/toolwall.png             the app menu icon
 ~/.local/state/toolwall.log
 $XDG_RUNTIME_DIR/toolwall-*                     pidfiles, gone on reboot
 ```

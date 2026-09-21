@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=toolwall setup
+GenericName=waywall config
+Comment=Pick your screens, keys and sensitivity
+Exec=@EXEC@ --setup
+Icon=@ICON@
+Terminal=false
+Categories=Game;
+Keywords=minecraft;speedrun;waywall;mcsr;
+StartupWMClass=toolwall-setup

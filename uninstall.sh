@@ -56,6 +56,7 @@ fi
 echo "This will remove from $CONFIG_DIR:"
 echo "  toolwall.lua"
 echo "  toolwall/"
+echo "and the \"toolwall setup\" entry from your app menu."
 echo
 
 case "$WANT" in
@@ -191,6 +192,15 @@ esac
 rm -f "$CONFIG_DIR/toolwall.lua"
 rm -rf "$CONFIG_DIR/toolwall"
 echo "Removed the runtime"
+
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+if [ -f "$DATA/applications/toolwall-setup.desktop" ]; then
+    rm -f "$DATA/applications/toolwall-setup.desktop"
+    rm -rf "$DATA/toolwall"
+    command -v update-desktop-database >/dev/null 2>&1 &&
+        update-desktop-database "$DATA/applications" 2>/dev/null || true
+    echo "Removed the app menu entry"
+fi
 
 if [ -n "$ALL" ]; then
     rm -f "$CONFIG_DIR/toolwall.json" "$CONFIG_DIR/toolwall-import-report.txt"

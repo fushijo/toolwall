@@ -194,6 +194,32 @@ else
     echo "  toolwall-gui --setup"
 fi
 
+# ---------------------------------------------------------------------------
+# A desktop entry, so setup is in the app menu and not only in a terminal
+#
+# Icon by absolute path on purpose. The themed icon directories want exact
+# pixel sizes in the folder name, and a 300x300 logo fits none of them.
+# ---------------------------------------------------------------------------
+
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+ICON="$DATA/toolwall/toolwall.png"
+
+if [ -n "$GUI" ]; then
+    mkdir -p "$DATA/toolwall" "$DATA/applications"
+    cp "$SRC/resources/toolwall.png" "$ICON"
+
+    sed -e "s|@EXEC@|$GUI|" -e "s|@ICON@|$ICON|" \
+        "$SRC/resources/toolwall-setup.desktop" \
+        > "$DATA/applications/toolwall-setup.desktop"
+
+    # Some desktops only notice a new entry once this has run, and plenty of
+    # systems do not ship it. Neither case is worth failing over.
+    command -v update-desktop-database >/dev/null 2>&1 &&
+        update-desktop-database "$DATA/applications" 2>/dev/null || true
+
+    echo "Added \"toolwall setup\" to your app menu."
+fi
+
 echo
 echo "Ctrl-I opens the editor once you are in game."
 
