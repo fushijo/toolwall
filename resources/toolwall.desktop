@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=toolwall
+Comment=The in-game editor
+Exec=@EXEC@
+Icon=@ICON@
+Terminal=false
+Categories=Game;
+NoDisplay=true
+StartupWMClass=toolwall

@@ -46,6 +46,7 @@ fn run_overlay(store: Store) -> Result<()> {
             .with_decorations(false)
             .with_resizable(false)
             .with_title("toolwall overlay")
+            .with_app_id("toolwall-overlay")
             .with_transparent(true),
         ..Default::default()
     };
@@ -67,7 +68,12 @@ fn run_setup(store: Store) -> Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([900.0, 700.0])
             .with_min_inner_size([680.0, 480.0])
-            .with_title("toolwall setup"),
+            .with_title("toolwall setup")
+            // Wayland finds a window's icon by matching this against a
+            // .desktop file's name, and egui-winit only sets it when you
+            // hand it one. Without this the window has no app id at all and
+            // the dock falls back to a grey placeholder.
+            .with_app_id("toolwall-setup"),
         ..Default::default()
     };
 
@@ -113,6 +119,7 @@ fn main() -> Result<()> {
             .with_inner_size(DEFAULT_SIZE)
             .with_min_inner_size([480.0, 360.0])
             .with_title("toolwall")
+            .with_app_id("toolwall")
             .with_transparent(true),
         ..Default::default()
     };

@@ -76,6 +76,10 @@ The editor styles itself from the same config: opacity, dark or light, font.
 
 You have waywall working and you want this running. Five minutes.
 
+0. Make sure your instance actually runs under waywall first. In Prism:
+   *Edit Instance* then *Settings* then *Custom commands*, and put
+   `waywall wrap --` in the **Wrapper command** box. If Minecraft already
+   opens inside waywall, you have done this.
 1. Grab the tarball from [releases](https://github.com/fushijo/toolwall/releases/latest),
    unpack it, and run `./install.sh`. Say yes to both questions. The first
    build takes a few minutes.

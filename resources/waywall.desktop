@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=waywall
+Comment=Minecraft, wrapped
+Exec=waywall wrap --
+Icon=@ICON@
+Terminal=false
+Categories=Game;
+NoDisplay=true
+StartupWMClass=waywall

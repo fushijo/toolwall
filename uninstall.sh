@@ -195,7 +195,9 @@ echo "Removed the runtime"
 
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
 if [ -f "$DATA/applications/toolwall-setup.desktop" ]; then
-    rm -f "$DATA/applications/toolwall-setup.desktop"
+    rm -f "$DATA/applications/toolwall-setup.desktop" \
+          "$DATA/applications/toolwall.desktop" \
+          "$DATA/applications/waywall.desktop"
     rm -rf "$DATA/toolwall"
     command -v update-desktop-database >/dev/null 2>&1 &&
         update-desktop-database "$DATA/applications" 2>/dev/null || true

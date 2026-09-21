@@ -13,10 +13,21 @@ set -eu
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/waywall"
 SRC="$(cd "$(dirname "$0")" && pwd)"
 
+# waywall never makes this directory. It watches it and reads init.lua out of
+# it, and that is all, so somebody who installed waywall five minutes ago does
+# not have one. This used to stop here and tell them to "run waywall once so it
+# generates one", which is advice that does not work.
 if [ ! -d "$CONFIG_DIR" ]; then
-    echo "waywall config directory not found: $CONFIG_DIR" >&2
-    echo "Run waywall once so it generates one, then re-run this script." >&2
-    exit 1
+    echo "Creating $CONFIG_DIR"
+    mkdir -p "$CONFIG_DIR"
+fi
+
+if ! command -v waywall >/dev/null 2>&1; then
+    echo
+    echo "Note: waywall is not on your PATH. toolwall configures it, it does"
+    echo "not install it. If you have not got it yet, start here:"
+    echo "  https://github.com/tesselslate/waywall"
+    echo
 fi
 
 # ---------------------------------------------------------------------------
@@ -208,9 +219,21 @@ if [ -n "$GUI" ]; then
     mkdir -p "$DATA/toolwall" "$DATA/applications"
     cp "$SRC/resources/toolwall.png" "$ICON"
 
-    sed -e "s|@EXEC@|$GUI|" -e "s|@ICON@|$ICON|" \
-        "$SRC/resources/toolwall-setup.desktop" \
-        > "$DATA/applications/toolwall-setup.desktop"
+    # One entry per window, because Wayland picks a window's icon by matching
+    # its app id against a .desktop file's name. Only the setup one is meant
+    # to be clicked; the other two are NoDisplay and exist purely so the
+    # editor and your instance stop showing up as a grey placeholder.
+    #
+    # waywall.desktop is a file we install for somebody else's window. It
+    # ships no entry of its own, so nothing is being overridden, and
+    # uninstall.sh takes it back out. Set TOOLWALL_NO_WAYWALL_ICON=1 to skip.
+    entries="toolwall-setup.desktop toolwall.desktop"
+    [ -z "${TOOLWALL_NO_WAYWALL_ICON:-}" ] && entries="$entries waywall.desktop"
+
+    for entry in $entries; do
+        sed -e "s|@EXEC@|$GUI|" -e "s|@ICON@|$ICON|" \
+            "$SRC/resources/$entry" > "$DATA/applications/$entry"
+    done
 
     # Some desktops only notice a new entry once this has run, and plenty of
     # systems do not ship it. Neither case is worth failing over.
