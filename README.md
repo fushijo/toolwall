@@ -325,6 +325,24 @@ survives. Sending me that plus your `toolwall.json` is everything I need.
 gone, `./uninstall.sh --blank` or `./uninstall.sh --gore` will leave you with
 something that starts.
 
+**Opening the screen overlay killed my editor keybind.**
+Fixed in 0.3.5. The editor and the screen overlay are the same binary,
+`toolwall-gui` and `toolwall-gui --overlay`, and the guard that stops a second
+copy starting matched on a substring. So each one saw the other's process and
+decided it was already running, silently. If a stale copy is still hanging
+around: `pkill -f toolwall-gui`.
+
+**Changing a setting in game toggles fullscreen off, then on again.**
+Fixed in 0.3.5. Every save reloads the config, and `fullscreen_on_start` was
+running again each time. It is a toggle, so it flipped. It now happens once per
+waywall rather than once per reload.
+
+**The Ninjabrain readout ended up in the middle of the screen.**
+Fixed in 0.3.5. `toolwall screen` moved every overlay to the new size but left
+the readout where it was, so one that had been against the right edge at 1707
+wide landed in the middle of 2560. Run `toolwall screen <w> <h>` again on
+0.3.5, or just drag it in the Screen tab.
+
 **How do I show a mirror in every mode?**
 Tick *Show in every mode* on it in the Mirrors or Images tab. It is not a mode,
 so it does not appear in the Modes tab. That puts it in `base_overlays`, which

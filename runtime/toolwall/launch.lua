@@ -99,16 +99,59 @@ local function script_path(id)
 end
 
 --[[
-    The most distinctive token of a command line, used to confirm that a pid
-    still belongs to what we started. For "java -jar ~/ninb.jar" that is the
-    jar path; for a bare "toolwall-gui" it is the binary itself.
+    A command line safe to put inside single quotes in the launch script.
 ]]
-local function signature(command)
-    local last
-    for token in tostring(command):gmatch("%S+") do
-        last = token
+local function shell_quoted(command)
+    return "'" .. tostring(command):gsub("'", "'\\''") .. "'"
+end
+
+--[[
+    waywall's own pid, for things that should happen once per waywall rather
+    than once per config reload. This Lua runs inside waywall, so /proc/self
+    is waywall.
+]]
+function M.self_pid()
+    local fh = io.open("/proc/self/stat", "r")
+    if not fh then return nil end
+
+    local line = fh:read("*l") or ""
+    fh:close()
+    return tonumber(line:match("^(%d+)"))
+end
+
+--[[
+    True the first time this is asked for a key in this waywall, false after.
+
+    Every save reloads the config and rebuilds the Lua VM, so a "load"
+    listener runs again on every edit. For something idempotent that is fine.
+    For a toggle it is not: going fullscreen on start would come back out of
+    fullscreen on the next save, back in on the one after, which is what it
+    did.
+
+    The marker carries the pid, so a new waywall starts fresh. Old ones are
+    left behind until the runtime directory is cleared at logout, and they are
+    empty files in a tmpfs.
+]]
+function M.first_time(key)
+    local pid = M.self_pid()
+    if not pid then
+        -- Cannot tell, so do the thing. Better twice than never.
+        return true
     end
-    return last
+
+    local path = M.runtime_dir() .. "/toolwall-" .. key .. "-" .. pid
+    local existing = io.open(path, "r")
+    if existing then
+        existing:close()
+        return false
+    end
+
+    local fh = io.open(path, "w")
+    if fh then
+        fh:write("1")
+        fh:close()
+    end
+    return true
 end
 
 local function read_pid(id)
@@ -147,10 +190,16 @@ function M.running(id, command)
     local cmdline = M.proc_cmdline(pid)
     if not cmdline or cmdline == "" then return false end
 
-    local expect = signature(command)
-    if not expect then return true end
+    --[[
+        Whole command line, not a substring of it. "toolwall-gui" is a
+        substring of "toolwall-gui --overlay", so a loose match had each of
+        those two believing the other was itself.
+    ]]
+    local want = tostring(command)
+    if want == "" then return true end
 
-    return cmdline:find(expect, 1, true) ~= nil
+    -- /proc turns the separators into spaces and leaves one on the end.
+    return (cmdline:gsub("%s+$", "")) == want
 end
 
 --[[
@@ -204,16 +253,21 @@ function M.once(waywall, id, command)
         keypress sees "not running" and starts a rival. the shell can ask the
         process table directly, which lua cannot, so the guard lives here.
 
-        the pattern is the command's most distinctive token, and pgrep -f
-        matches full command lines. this script's own line is "sh <path>", so
-        it cannot match itself.
+        -x as well as -f, so the pattern has to match the whole command line
+        and not appear anywhere in it. the editor is "toolwall-gui" and the
+        screen overlay is "toolwall-gui --overlay", so a substring match made
+        each one look like the other was already running: opening the overlay
+        killed the editor's keybind, and the editor killed the overlay's, and
+        neither said anything about it.
+
+        this script's own line is "sh <path>", so it cannot match itself.
     ]]
     fh:write(([[
 #!/bin/sh
-if pgrep -f '%s' >/dev/null 2>&1; then exit 0; fi
+if pgrep -x -f %s >/dev/null 2>&1; then exit 0; fi
 echo $$ > '%s'
 exec %s
-]]):format(signature(command), M.pid_path(id), command))
+]]):format(shell_quoted(command), M.pid_path(id), command))
     fh:close()
 
     -- waywall.exec() splits on spaces, so both tokens must be space-free.

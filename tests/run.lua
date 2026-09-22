@@ -1069,6 +1069,42 @@ check("fullscreen on start waits for the game, then goes fullscreen once", funct
     os.remove(path)
 end)
 
+check("fullscreen on start does not flip back on every save", function()
+    --[[
+        Every save reloads the config and runs the load listeners again, and
+        toggle_fullscreen is a toggle. So it went fullscreen on start, came
+        back out on the next settings change, went back in on the one after.
+        Reported as "whenever I change my settings ingame it toggles
+        fullscreen off and on".
+    ]]
+    local path = write_config([[
+      { "version": 1,
+        "window": { "fullscreen_width": 2560, "fullscreen_height": 1600,
+                    "fullscreen_on_start": true },
+        "gui": { "screen": { "w": 2560, "h": 1600 } },
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ] }
+    ]])
+    local toolwall = require("toolwall")
+
+    toolwall.setup({ path = path })
+    waywall.mount_view()
+    waywall.finish_startup()
+
+    -- Three more reloads, which is three more saves.
+    for _ = 1, 3 do
+        toolwall.setup({ path = path })
+        waywall.fire("load")
+    end
+
+    local toggles = 0
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "toggle_fullscreen" then toggles = toggles + 1 end
+    end
+    assert_eq(toggles, 1, "it toggled more than once, so a save flips it back out")
+
+    os.remove(path)
+end)
+
 check("fullscreen on start stays off unless asked", function()
     local path = write_config([[
       { "version": 1,
@@ -1694,6 +1730,72 @@ check("an ingame_only keybind waits until you are unpaused in a world", function
     assert_eq(toolwall.rt.modes.current, "thin", "unpaused in a world, it fires")
 
     os.remove(path)
+end)
+
+check("the editor and the screen overlay do not block each other", function()
+    --[[
+        They are the same binary: "toolwall-gui" and "toolwall-gui --overlay".
+        The launch guard used to grep for a substring of the command, so each
+        one saw the other's process and decided it was already running.
+
+        What that looked like: open the screen overlay once, and from then on
+        the key for the editor did nothing at all, silently. Then the overlay
+        key did nothing either, because its own copy was still alive.
+    ]]
+    local gui_cmd = "/tmp/toolwall-gui"
+    local overlay_cmd = "/tmp/toolwall-gui --overlay"
+
+    waywall.finish_startup()
+
+    local scripts = {}
+    local function guard_of(id, command)
+        launch.once(waywall, id, command)
+        local fh = io.open(launch.runtime_dir() .. "/toolwall-" .. id .. ".sh")
+        local body = fh and fh:read("*a") or ""
+        if fh then fh:close() end
+        scripts[id] = body
+        return body:match("pgrep[^\n]*")
+    end
+
+    local gui_guard = guard_of("gui", gui_cmd)
+    local overlay_guard = guard_of("overlay", overlay_cmd)
+
+    assert(gui_guard, "no guard in the editor's script")
+    assert(overlay_guard, "no guard in the overlay's script")
+
+    -- -x makes the pattern match the whole command line, so one cannot be a
+    -- prefix of the other.
+    assert(gui_guard:match("%-x"), "the editor's guard is not exact: " .. gui_guard)
+    assert(overlay_guard:match("%-x"), "the overlay's guard is not exact: " .. overlay_guard)
+
+    assert(
+        gui_guard:find(gui_cmd, 1, true) and not gui_guard:find("--overlay", 1, true),
+        "the editor's guard mentions the overlay: " .. gui_guard
+    )
+    assert(
+        overlay_guard:find("--overlay", 1, true),
+        "the overlay's guard does not name itself: " .. overlay_guard
+    )
+end)
+
+check("a running overlay is not mistaken for the editor", function()
+    -- running() compares the whole recorded command line now, for the same
+    -- reason: one is a prefix of the other.
+    local gui_cmd = "/tmp/toolwall-gui"
+    local overlay_cmd = "/tmp/toolwall-gui --overlay"
+
+    -- Our own process stands in for something alive, with a command line we
+    -- know is neither of the above.
+    local fh = assert(io.open(launch.pid_path("gui"), "w"))
+    fh:write(tostring(require("toolwall.launch").self_pid and 1 or 1))
+    fh:close()
+
+    -- A pid that is not running at all is the simple case.
+    local gone = io.open(launch.pid_path("overlay"), "w")
+    gone:write("999999")
+    gone:close()
+    assert_eq(launch.running("overlay", overlay_cmd), false, "a dead pid is not running")
+    assert_eq(launch.running("overlay", gui_cmd), false, "and still not running")
 end)
 
 check("screen.edit launches the editor with the overlay flag", function()

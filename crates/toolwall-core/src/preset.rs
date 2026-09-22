@@ -342,6 +342,20 @@ pub fn fit_to_screen(doc: &mut Document, width: u32, height: u32) {
         *anchor = Some(if to_right { Anchor::TopRight } else { Anchor::TopLeft });
     }
 
+    // The Ninjabrain readout is placed by hand and was not moving with
+    // everything else, so rescaling a config left it wherever it had been in
+    // the old coordinates. Reported as the readout ending up in the middle of
+    // the screen: it had been against the right edge at 1707 wide, and 1700 is
+    // the middle of 2560.
+    //
+    // Clamped too, because an offset already off the edge scales to further
+    // off the edge, and an invisible readout looks the same as a broken one.
+    {
+        let o = &mut doc.ninb.overlay;
+        o.x = shift(o.x).clamp(0, width.saturating_sub(1) as i32);
+        o.y = shift(o.y).clamp(0, height.saturating_sub(1) as i32);
+    }
+
     // Text is positioned, not sized, so only its offsets move.
     for text in &mut doc.text {
         text.x = shift(text.x);
@@ -490,6 +504,42 @@ mod tests {
         }
 
         assert!(problems(&doc).is_empty(), "{:?}", problems(&doc));
+    }
+
+    #[test]
+    fn the_readout_moves_with_everything_else() {
+        // It was placed by hand and left behind, so a config rescaled from
+        // 1707 to 2560 wide put a readout that had been against the right
+        // edge into the middle of the screen.
+        let mut doc = preset();
+        doc.gui.screen = Size { w: 1707, h: 1067 };
+        doc.ninb.overlay.x = 1700;
+        doc.ninb.overlay.y = 900;
+
+        fit_to_screen(&mut doc, 2560, 1600);
+
+        let k: f64 = 1600.0 / 1067.0;
+        assert_eq!(doc.ninb.overlay.x, (1700.0 * k).round() as i32, "x scaled");
+        assert_eq!(doc.ninb.overlay.y, (900.0 * k).round() as i32, "y scaled");
+
+        // Still near the right edge, which is where it started.
+        assert!(doc.ninb.overlay.x > 2400, "it drifted away from the edge");
+    }
+
+    #[test]
+    fn a_readout_already_off_the_edge_is_brought_back() {
+        // Scaling an out of bounds offset puts it further out, and a readout
+        // nobody can see looks exactly like a broken one.
+        let mut doc = preset();
+        doc.gui.screen = Size { w: 1707, h: 1067 };
+        doc.ninb.overlay.x = 1700;
+        doc.ninb.overlay.y = 1200; // already past the bottom at 1067 tall
+
+        fit_to_screen(&mut doc, 2560, 1600);
+
+        assert!(doc.ninb.overlay.y < 1600, "still off the bottom");
+        assert!(doc.ninb.overlay.x < 2560, "still off the right");
+        assert!(doc.ninb.overlay.y >= 0 && doc.ninb.overlay.x >= 0);
     }
 
     #[test]

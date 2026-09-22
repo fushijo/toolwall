@@ -373,6 +373,18 @@ local function register_listeners(doc)
     local window = doc.window or {}
     if util.bool(window.fullscreen_on_start, false) then
         waywall.listen("load", function()
+            --[[
+                Once per waywall, not once per reload. Every save reloads the
+                config and runs this listener again, and toggle_fullscreen is
+                a toggle: it went fullscreen on start, came back out on the
+                next settings change, went back in on the one after. waywall
+                exposes no way to ask whether it is fullscreen already, so the
+                marker is the only way to know.
+            ]]
+            if not launch.first_time("fullscreen") then
+                return
+            end
+
             wait_for_game_window(60000)
             local ok, err = pcall(waywall.toggle_fullscreen)
             if not ok then
