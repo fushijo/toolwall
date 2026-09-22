@@ -125,12 +125,17 @@ echo "Installing overlays -> $CONFIG_DIR/resources"
 mkdir -p "$CONFIG_DIR/resources"
 cp -n "$SRC/resources/measuring_overlay.png" "$CONFIG_DIR/resources/" 2>/dev/null || true
 
+STARTER=""
+
 if [ -n "$IMPORTED" ]; then
     mv "$IMPORTED" "$CONFIG_DIR/toolwall.json"
     echo "Installing imported config -> $CONFIG_DIR/toolwall.json"
 elif [ ! -f "$CONFIG_DIR/toolwall.json" ]; then
-    echo "Installing starter config -> $CONFIG_DIR/toolwall.json"
-    cp "$SRC/examples/default.json" "$CONFIG_DIR/toolwall.json"
+    # Written further down, once the CLI exists. It is the only thing that
+    # knows how to size the starter config for a window that is not
+    # 1920x1080, and copying the file straight in is how people ended up with
+    # a pie chart off the side of their screen.
+    STARTER=1
 fi
 
 echo
@@ -190,11 +195,17 @@ if [ -z "$GUI" ] && [ -z "${TOOLWALL_NO_BUILD:-}" ] && command -v cargo >/dev/nu
     fi
 fi
 
+SETUP_RAN=""
+
 if [ -n "$GUI" ]; then
     if ask "Open the setup window?"; then
         # Not fatal. A machine with no display still has a working install,
         # and saying so beats the script dying on its last line.
-        "$GUI" --setup || echo "The setup window did not open. Run: $GUI --setup"
+        if "$GUI" --setup; then
+            SETUP_RAN=1
+        else
+            echo "The setup window did not open. Run: $GUI --setup"
+        fi
     else
         echo "Run it later with: $GUI --setup"
     fi
@@ -214,6 +225,37 @@ fi
 
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
 ICON="$DATA/toolwall/toolwall.png"
+
+# ---------------------------------------------------------------------------
+# The starter config, sized by the CLI
+#
+# examples/default.json is written for 1920x1080 with every overlay at an
+# absolute position. Copied straight onto a 1366 wide laptop, half of it is
+# off the screen. `toolwall init` scales and anchors it instead, and says out
+# loud what it assumed.
+# ---------------------------------------------------------------------------
+
+CLI=""
+if [ -x "$HOME/.cargo/bin/toolwall" ]; then
+    CLI="$HOME/.cargo/bin/toolwall"
+elif command -v toolwall >/dev/null 2>&1; then
+    CLI="$(command -v toolwall)"
+fi
+
+if [ -n "$STARTER" ]; then
+    echo
+    if [ -n "$CLI" ]; then
+        echo "Writing the starter config:"
+        "$CLI" --config "$CONFIG_DIR/toolwall.json" init
+    else
+        echo "Installing starter config -> $CONFIG_DIR/toolwall.json"
+        cp "$SRC/examples/default.json" "$CONFIG_DIR/toolwall.json"
+        echo
+        echo "It is sized for 1920x1080. Nothing here can size it for you"
+        echo "without the CLI, so if your window is a different size, install"
+        echo "the CLI and run: toolwall screen <width> <height>"
+    fi
+fi
 
 if [ -n "$GUI" ]; then
     mkdir -p "$DATA/toolwall" "$DATA/applications"
@@ -241,6 +283,24 @@ if [ -n "$GUI" ]; then
         update-desktop-database "$DATA/applications" 2>/dev/null || true
 
     echo "Added \"toolwall setup\" to your app menu."
+fi
+
+# The one thing worth repeating at the bottom, where people actually look.
+if [ -n "$STARTER" ] && [ -z "$SETUP_RAN" ]; then
+    echo
+    echo "-------------------------------------------------------------------"
+    echo "Your config is sized for a 1920x1080 window. If waywall's window is"
+    echo "a different size, half the overlays will be in the wrong place."
+    echo
+    if [ -n "$CLI" ]; then
+        echo "  toolwall screen <width> <height>"
+    else
+        echo "  toolwall-gui --setup"
+    fi
+    echo
+    echo "The number you want is the Display line in F3, not your monitor's"
+    echo "resolution. On a scaled desktop those are different."
+    echo "-------------------------------------------------------------------"
 fi
 
 echo

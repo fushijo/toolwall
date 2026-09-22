@@ -237,10 +237,16 @@ tell you. Or `gui.command` points somewhere that does not exist, which you can
 check with `toolwall get gui.command`.
 
 **My overlays are in the wrong place, or off the side of the screen.**
-`gui.screen` does not match your monitor. It is the Display line in F3. Set it
-on the first step of `toolwall-gui --setup`, or with
-`toolwall set gui.screen.w 2560`. If you started from the preset before 0.3,
-run setup again and pick your resolution.
+toolwall has the wrong idea of how big waywall's window is. One command:
+
+```sh
+toolwall screen 2560 1440
+```
+
+That sets the size and moves every overlay to suit, anchoring them so it stays
+right if the window changes again. The number you want is the **Display line in
+F3**, not your monitor's resolution: on a scaled desktop those are different,
+and the window is the smaller of the two.
 
 **My mirrors did not come across when I imported my config.**
 Fixed in 0.1.1. Configs that build overlays with `waywall.mirror` rather than
@@ -326,6 +332,7 @@ survives the reload. `Esc` closes it. This is all anyone using it casually needs
 From a terminal:
 
 ```sh
+toolwall screen 2560 1440                      # window size, and move the overlays
 toolwall validate                              # check without applying
 toolwall modes                                 # list modes
 toolwall get modes.thin.resolution.width

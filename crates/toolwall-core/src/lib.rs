@@ -9,6 +9,7 @@ pub mod minecraft;
 pub mod ninb_prefs;
 pub mod preset;
 pub mod schema;
+pub mod screen;
 pub mod sens;
 pub mod store;
 pub mod xkb;

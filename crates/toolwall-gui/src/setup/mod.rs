@@ -76,6 +76,9 @@ pub struct Setup {
     /// How big waywall's window is. Everything downstream is placed against
     /// this, so it is the first question on the first step.
     screen: (u32, u32),
+    /// What the monitors say they are, as a line of text to show. A hint
+    /// only: see where it is drawn for why it is never filled in.
+    monitor_hint: Option<String>,
     /// Whether the config still needs reshaping for that screen.
     ///
     /// Only the preset does. An imported config was already written for the
@@ -129,6 +132,7 @@ impl Setup {
             choices,
             origin,
             screen,
+            monitor_hint: toolwall_core::screen::hint(),
             fit_preset: had_config.is_none(),
             step: Step::Start,
             capture: None,
@@ -468,6 +472,15 @@ impl Setup {
                 ui.weak("the preset is resized to fit");
             }
         });
+
+        // Offered, never filled in. The monitor's mode is in physical pixels
+        // and waywall's window is in the compositor's logical ones, so on a
+        // scaled desktop they differ and using this would put every overlay
+        // off the side of the screen.
+        if let Some(hint) = &self.monitor_hint {
+            ui.add_space(4.0);
+            ui.weak(hint);
+        }
 
         ui.add_space(14.0);
         ui.separator();

@@ -46,6 +46,19 @@ enum Cmd {
     Init {
         #[arg(long)]
         force: bool,
+        /// Size the starter config for this window, e.g. 2560x1440.
+        #[arg(long, value_name = "WxH")]
+        screen: Option<String>,
+    },
+
+    /// Tell toolwall how big waywall's window is, and move the overlays to suit.
+    ///
+    /// The number you want is the Display line in F3, not your monitor's
+    /// resolution. On a scaled desktop they are different, and the window is
+    /// the smaller of the two.
+    Screen {
+        width: u32,
+        height: u32,
     },
 
     /// Trip waywall's hot reload without changing anything.
@@ -61,6 +74,45 @@ enum Cmd {
         #[arg(long)]
         print: bool,
     },
+}
+
+/// `2560x1440` or `2560 1440`, because people type both.
+fn parse_screen(text: &str) -> Result<(u32, u32)> {
+    let cleaned = text.trim().to_lowercase();
+    let (w, h) = cleaned
+        .split_once(['x', ' '])
+        .ok_or_else(|| anyhow::anyhow!("expected something like 2560x1440, got {text:?}"))?;
+
+    let width: u32 = w.trim().parse().map_err(|_| anyhow::anyhow!("bad width {w:?}"))?;
+    let height: u32 = h.trim().parse().map_err(|_| anyhow::anyhow!("bad height {h:?}"))?;
+
+    if width < 320 || height < 240 {
+        anyhow::bail!("{width}x{height} is too small to be a window");
+    }
+    Ok((width, height))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_screen;
+
+    #[test]
+    fn a_screen_size_can_be_typed_either_way() {
+        assert_eq!(parse_screen("2560x1440").unwrap(), (2560, 1440));
+        assert_eq!(parse_screen("2560 1440").unwrap(), (2560, 1440));
+        assert_eq!(parse_screen(" 2560X1440 ").unwrap(), (2560, 1440));
+    }
+
+    #[test]
+    fn nonsense_is_refused_rather_than_guessed_at() {
+        assert!(parse_screen("2560").is_err(), "one number is not a size");
+        assert!(parse_screen("wide x tall").is_err());
+        assert!(parse_screen("").is_err());
+
+        // Small enough to be a typo for something, and a config sized for it
+        // would be unusable.
+        assert!(parse_screen("16x9").is_err(), "an aspect ratio is not a size");
+    }
 }
 
 fn main() -> Result<()> {
@@ -120,12 +172,46 @@ fn main() -> Result<()> {
             }
         }
 
-        Cmd::Init { force } => {
+        Cmd::Init { force, screen } => {
             if store.path().exists() && !force {
                 anyhow::bail!("{} already exists (use --force)", store.path().display());
             }
-            store.save(&toolwall_core::Document::default())?;
+
+            // The preset, not an empty document: a config with nothing in it
+            // is not a starting point, it is a blank page.
+            let mut doc = toolwall_core::preset::preset();
+
+            match screen {
+                Some(text) => {
+                    let (w, h) = parse_screen(&text)?;
+                    toolwall_core::preset::fit_to_screen(&mut doc, w, h);
+                    println!("sized for {w}x{h}");
+                }
+                None => {
+                    println!("sized for 1920x1080, which is the default");
+                    if let Some(hint) = toolwall_core::screen::hint() {
+                        println!("{hint}");
+                    }
+                    println!("Run `toolwall screen <width> <height>` if that is wrong.");
+                }
+            }
+
+            store.save(&doc)?;
             println!("wrote {}", store.path().display());
+        }
+
+        Cmd::Screen { width, height } => {
+            let mut doc = store.load()?;
+            let was = doc.gui.screen;
+
+            toolwall_core::preset::fit_to_screen(&mut doc, width, height);
+            store.save(&doc)?;
+
+            println!("was {}x{}, now {width}x{height}", was.w, was.h);
+            println!(
+                "{} overlay(s) anchored, so this stays right if the window changes again",
+                doc.mirrors.len() + doc.images.len()
+            );
         }
 
         Cmd::Layout { print } => {
