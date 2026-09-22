@@ -274,6 +274,22 @@ Rebinds are not keybinds. They use Linux keycode names, so `ESC` and not
 toolwall drops bad ones with a warning instead of letting that happen, but a
 config hand-edited outside it can still do this.
 
+**The game stops a few seconds into loading, with no crash report.**
+Check the last line of the instance log. If it ends at
+`Backend library: LWJGL version 3.2.2` and there is no crash report and no
+`Stopping!`, the game did not crash, something took it down.
+
+waywall keeps its own log at `~/.local/state/waywall/wrap-0`. If that also ends
+abruptly, at a line like `new connection from process N`, then waywall itself
+went down and the game went with it. That is a waywall crash, not a config
+problem, and 0.3.3 stops toolwall doing anything during the window where it
+happens: the Ninjabrain readout now waits for the game to exist before it
+starts, instead of driving waywall's scene at 20Hz while Xwayland is still
+coming up.
+
+If it still happens on 0.3.3, that log plus the instance log is what to report,
+and it is worth reporting to waywall rather than here.
+
 **Ninjabrain Bot gets killed on launch, or the log says "X11 minecraft
 detected".**
 Fixed. toolwall waits for Minecraft's window before starting ninb. If ninb

@@ -242,7 +242,11 @@ local function wait_for_game_window(timeout_ms)
             return true
         end
 
-        pcall(waywall.sleep, VIEW_POLL_MS)
+        -- A sleep that fails means waywall is going away, and spinning the
+        -- rest of the timeout doing nothing helps nobody.
+        if not pcall(waywall.sleep, VIEW_POLL_MS) then
+            return false
+        end
         waited = waited + VIEW_POLL_MS
     end
 
@@ -382,6 +386,22 @@ local function register_listeners(doc)
     ]]
     if util.bool((doc.ninb and doc.ninb.overlay or {}).enabled, false) then
         waywall.listen("load", function()
+            --[[
+                The same wait the autostart does, and for a sharper reason.
+
+                This loop forks a curl every 500ms until ninb answers. ninb
+                does not even start until the game window exists, so before
+                that every one of those forks is guaranteed waste, and they
+                land exactly while waywall is bringing up Xwayland and
+                Minecraft is connecting to it.
+
+                Two sessions in ten died right there, both at the same line of
+                waywall's log: "new connection from process N", then nothing.
+                waywall goes down and takes the game with it. Whether the
+                forks cause that or merely lose the race, there is no reason
+                to be doing them at the one moment startup is most fragile.
+            ]]
+            wait_for_game_window(60000)
             commands.run_ninb_overlay(rt)
         end)
     end

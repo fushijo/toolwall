@@ -79,8 +79,14 @@ function M.run_ninb_overlay(st)
     ]]
     local RESTART_MS = 30000
     local FETCH_MS = 500
+    local FETCH_MAX_MS = 8000
 
     local last_start, last_fetch = 0, 0
+
+    -- Backs off while nothing answers, because every attempt is a fork and a
+    -- silent port means ninb is not up yet. Straight back to 500ms the moment
+    -- it replies, so the readout is still immediate once there is one.
+    local fetch_gap = FETCH_MS
 
     --[[
         The freshest stronghold reading.
@@ -93,17 +99,20 @@ function M.run_ninb_overlay(st)
     local function stronghold(now)
         local streamed = live and ninb_api.read(ninb_api.STRONGHOLD) or nil
         if streamed then
+            fetch_gap = FETCH_MS
             return streamed
         end
 
-        if now - last_fetch >= FETCH_MS then
+        if now - last_fetch >= fetch_gap then
             last_fetch = now
             for _, query in ipairs(queries) do
                 ninb_api.fetch(query, port)
             end
         end
 
-        return ninb_api.read(ninb_api.STRONGHOLD, true)
+        local answered = ninb_api.read(ninb_api.STRONGHOLD, true)
+        fetch_gap = answered and FETCH_MS or math.min(fetch_gap * 2, FETCH_MAX_MS)
+        return answered
     end
 
     local function messages()

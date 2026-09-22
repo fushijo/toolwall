@@ -1016,6 +1016,14 @@ check("the readout starts on its own when it is enabled", function()
 
     assert_eq(toolwall.rt.ninb_overlay, nil, "not running before load")
 
+    --[[
+        The readout waits for the game window before it starts, because until
+        then ninb is not running either and every fetch it makes is a fork
+        landing while waywall is still bringing Xwayland up. So: mount the
+        view first, or it waits rather than starting.
+    ]]
+    waywall.mount_view()
+
     -- finish_startup fires the load event, which is what starts it. the loop
     -- only ends when a sleep fails, which is what teardown looks like.
     waywall.sleep_budget = 2
@@ -1026,6 +1034,61 @@ check("the readout starts on its own when it is enabled", function()
         if entry.name == "sleep" then sleeps = sleeps + 1 end
     end
     assert_eq(sleeps, 3, "the loop ran until its sleeps ran out")
+
+    os.remove(path)
+end)
+
+check("the readout forks nothing before the game window exists", function()
+    --[[
+        This one cost two sessions.
+
+        The readout loop forks a curl every 500ms until ninb answers, and ninb
+        does not start until the game window exists, so before that every fork
+        is guaranteed waste. They land while waywall is bringing up Xwayland
+        and Minecraft is connecting to it, and in two runs out of ten waywall
+        went down right there, at the same line of its log every time:
+        "new connection from process N", and then nothing.
+
+        So: no window, no loop, no forks.
+    ]]
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "ninb": { "jar": "~/ninb.jar", "overlay": { "enabled": true } } }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    --[[
+        No mount_view, so there is no game window to find. The budget is
+        generous so the wait runs rather than giving up on its first sleep:
+        the question is what happens *while* it waits, not what happens after
+        it times out. Past the timeout it does start, because a probe that
+        never works must not mean a readout that never appears.
+    ]]
+    waywall.sleep_budget = 700
+    waywall.finish_startup()
+
+    local sleeps_before_first_exec, sleeps = 0, 0
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "sleep" then
+            sleeps = sleeps + 1
+        elseif entry.name == "exec" and sleeps_before_first_exec == 0 then
+            sleeps_before_first_exec = sleeps
+        end
+    end
+
+    --[[
+        600 polls is the whole 60s wait at 100ms each. Anything less means the
+        loop started before the wait finished, and the measured difference is
+        stark: without the wait the first fork lands at 160 polls, with it at
+        exactly 600.
+    ]]
+    assert(sleeps > 100, "it did not wait, it only slept " .. sleeps .. " times")
+    assert(
+        sleeps_before_first_exec >= 600,
+        "forked after only " .. sleeps_before_first_exec .. " polls, so it did not wait first"
+    )
 
     os.remove(path)
 end)
