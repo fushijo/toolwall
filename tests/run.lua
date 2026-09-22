@@ -215,6 +215,257 @@ check("HUD re-renders on mode change without leaking text objects", function()
     os.remove(path)
 end)
 
+--[[
+    ==== CHAT MODE ====
+]]
+
+local CHAT = [[
+  { "version": 1,
+    "input": {
+      "layout": "no",
+      "custom_layout": { "name": "mcsr", "base": "us", "keys": {} },
+      "remaps": { "T": "4" },
+      "remaps_menu": { "MB4": "ESC" }
+    },
+    "modes": [ { "id": "thin", "resolution": {"width":340,"height":1080} } ],
+    "keybinds": [ { "input": "Insert", "command": "remaps.toggle" } ] }
+]]
+
+local function last_call(name)
+    local found
+    for _, c in ipairs(waywall.log or {}) do
+        if c.name == name then found = c end
+    end
+    return found
+end
+
+check("chat mode swaps the rebinds and the keymap together", function()
+    --[[
+        Every config that tries this only does the rebinds. A search-crafting
+        layout lives in the keymap, so swapping rebinds alone leaves you
+        typing the other language into chat, which is what faith ran into in
+        the waywall discord.
+    ]]
+    local path = write_config(CHAT)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Insert"]()
+
+    assert_eq(toolwall.rt.typing, true, "chat mode is on")
+
+    local remaps = last_call("set_remaps")
+    assert(remaps, "the rebinds were not changed")
+    assert_eq(remaps.args[1]["MB4"], "ESC", "the menu set is in use")
+    assert_eq(remaps.args[1]["T"], nil, "and the game rebind is gone")
+
+    local keymap = last_call("set_keymap")
+    assert(keymap, "the keymap was not changed")
+    assert_eq(keymap.args[1].layout, "us", "back to the base layout")
+
+    os.remove(path)
+end)
+
+check("toggling chat mode off puts everything back", function()
+    local path = write_config(CHAT)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Insert"]()
+    cfg.actions["Insert"]()
+
+    assert_eq(toolwall.rt.typing, false, "chat mode is off")
+
+    local remaps = last_call("set_remaps")
+    assert_eq(remaps.args[1]["T"], "4", "the game rebind is back")
+
+    local keymap = last_call("set_keymap")
+    assert_eq(keymap.args[1].layout, "no", "and the configured layout is back")
+
+    os.remove(path)
+end)
+
+check("the automatic switch leaves chat mode alone", function()
+    --[[
+        Opening a chest mid-sentence must not put the game rebinds back
+        underneath you. The manual toggle outranks the state listener.
+    ]]
+    local path = write_config(CHAT)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Insert"]()
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.fire("state")
+
+    local remaps = last_call("set_remaps")
+    assert_eq(remaps.args[1]["T"], nil, "the game rebinds stayed off")
+    assert_eq(toolwall.rt.typing, true, "and chat mode is still on")
+
+    os.remove(path)
+end)
+
+check("a reload puts you back in the game rebinds", function()
+    -- The runtime table outlives the Lua VM, so chat mode would otherwise
+    -- survive an edit and look like the keyboard had broken.
+    local path = write_config(CHAT)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Insert"]()
+    assert_eq(toolwall.rt.typing, true, "on before the reload")
+
+    toolwall.setup({ path = path })
+    assert_eq(toolwall.rt.typing, false, "off after it")
+
+    os.remove(path)
+end)
+
+--[[
+    ==== ANCHORED OVERLAYS ====
+
+    Two directions, and they resolve against different things. A capture is
+    measured from a corner of the *game*, which changes every time you switch
+    resolution. A destination is measured from a corner of the *screen*, which
+    does not change but is different on everybody's machine.
+]]
+
+local function only_mirror()
+    for _, obj in pairs(waywall.live_objects()) do
+        if obj.kind == "mirror" then return obj end
+    end
+end
+
+local function anchored_config(src_anchor, dst_anchor)
+    return ([[
+      { "version": 1,
+        "gui": { "screen": { "w": 2560, "h": 1440 } },
+        "modes": [ { "id": "thin", "resolution": {"width":340,"height":1080},
+                     "mirrors": ["m"] } ],
+        "mirrors": [ { "id": "m",
+                       %s
+                       %s
+                       "src": {"x":40,"y":60,"w":100,"h":50},
+                       "dst": {"x":30,"y":20,"w":400,"h":200} } ],
+        "keybinds": [ { "input": "T", "command": "mode.set",
+                        "args": { "mode": "thin" } } ] }
+    ]]):format(
+        src_anchor and ('"src_anchor": "' .. src_anchor .. '",') or "",
+        dst_anchor and ('"dst_anchor": "' .. dst_anchor .. '",') or ""
+    )
+end
+
+local function mirror_with(src_anchor, dst_anchor)
+    local path = write_config(anchored_config(src_anchor, dst_anchor))
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+    cfg.actions["T"]()
+
+    local obj = only_mirror()
+    os.remove(path)
+    return obj
+end
+
+check("without an anchor a rectangle is where the numbers say", function()
+    local obj = mirror_with(nil, nil)
+    assert(obj, "no mirror was created")
+
+    assert_eq(obj.payload.src.x, 40, "src x")
+    assert_eq(obj.payload.src.y, 60, "src y")
+    assert_eq(obj.payload.dst.x, 30, "dst x")
+    assert_eq(obj.payload.dst.y, 20, "dst y")
+end)
+
+check("a capture anchored to a corner follows the game resolution", function()
+    -- thin is 340x1080, and the offsets are distances from the anchored
+    -- edges to the near edge of the region.
+    local obj = mirror_with("bottomright", nil)
+    assert(obj, "no mirror was created")
+
+    assert_eq(obj.payload.src.x, 340 - 40, "src x from the right edge")
+    assert_eq(obj.payload.src.y, 1080 - 60, "src y from the bottom edge")
+    assert_eq(obj.payload.src.w, 100, "width is untouched")
+
+    -- The destination was not anchored, so it did not move.
+    assert_eq(obj.payload.dst.x, 30, "dst x")
+end)
+
+check("a destination anchored to a corner follows the screen", function()
+    --[[
+        This is the one that was missing. A dst written at 1920x1080 lands off
+        the edge of a 1366 wide laptop and halfway across a 3440 ultrawide,
+        and three people in the waywall discord hit exactly that.
+    ]]
+    local obj = mirror_with(nil, "topright")
+    assert(obj, "no mirror was created")
+
+    -- gui.screen is 2560x1440 in this config.
+    assert_eq(obj.payload.dst.x, 2560 - 30, "dst x from the right edge")
+    assert_eq(obj.payload.dst.y, 20, "dst y is still from the top")
+    assert_eq(obj.payload.dst.w, 400, "width is untouched")
+
+    -- And the capture stayed absolute, because it was not anchored.
+    assert_eq(obj.payload.src.x, 40, "src x")
+end)
+
+check("a centred destination sits in the middle of the screen", function()
+    local obj = mirror_with(nil, "center")
+    assert(obj, "no mirror was created")
+
+    assert_eq(obj.payload.dst.x, math.floor((2560 - 400) / 2), "centred x")
+    assert_eq(obj.payload.dst.y, math.floor((1440 - 200) / 2), "centred y")
+end)
+
+check("both ends can be anchored at once", function()
+    local obj = mirror_with("center", "bottomright")
+    assert(obj, "no mirror was created")
+
+    assert_eq(obj.payload.src.x, math.floor((340 - 100) / 2), "src centred on the crosshair")
+    assert_eq(obj.payload.dst.x, 2560 - 30, "dst from the right edge")
+    assert_eq(obj.payload.dst.y, 1440 - 20, "dst from the bottom edge")
+end)
+
+check("anchoring a destination with no screen size says so", function()
+    --[[
+        gui.screen is the only record of how big waywall's window is, so an
+        anchored overlay without one has nothing to measure against. Better a
+        named error than an overlay silently at 0,0.
+    ]]
+    local path = write_config([[
+      { "version": 1,
+        "gui": { "screen": { "w": 0, "h": 0 } },
+        "modes": [ { "id": "thin", "resolution": {"width":340,"height":1080},
+                     "mirrors": ["m"] } ],
+        "mirrors": [ { "id": "m", "dst_anchor": "topright",
+                       "src": {"x":0,"y":0,"w":10,"h":10},
+                       "dst": {"x":0,"y":0,"w":10,"h":10} } ],
+        "keybinds": [ { "input": "T", "command": "mode.set",
+                        "args": { "mode": "thin" } } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+    cfg.actions["T"]()
+
+    -- The mode still switches; the overlay is the only casualty.
+    assert_eq(toolwall.rt.modes.current, "thin", "the mode still applied")
+    assert_eq(only_mirror(), nil, "and the overlay was not placed at 0,0")
+
+    os.remove(path)
+end)
+
 check("a mode referencing an unknown mirror is rejected at load", function()
     local path = write_config([[
       { "version": 1,
@@ -1118,6 +1369,23 @@ check("a rebind waywall would refuse never reaches the imported config", functio
     -- Dropping silently would be worse than not importing at all.
     assert(log:match('"P"'), "the dropped rebind is reported")
     assert(log:match('"X"'), "the half-filled rebind is reported")
+end)
+
+check("chat mode comes across as the toggle instead of being dropped", function()
+    --[[
+        gore's config swaps to a second rebind set on a key and calls it chat
+        mode. toolwall used to drop it, because it only had the automatic
+        switch that follows the cursor and no key you could press yourself.
+    ]]
+    local doc, log = import("shadowed")
+    assert(doc, "no document written: " .. tostring(log))
+
+    local by_input = {}
+    for _, bind in ipairs(doc.keybinds or {}) do by_input[bind.input] = bind end
+
+    assert(by_input["Insert"], "the chat mode key was dropped")
+    assert_eq(by_input["Insert"].command, "remaps.toggle", "and it is the toggle")
+    assert(log:match("chat mode"), "the report says what it became")
 end)
 
 check("a keybind that runs a command comes across switched off", function()

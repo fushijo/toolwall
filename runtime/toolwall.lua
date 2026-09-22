@@ -47,6 +47,7 @@ M.SCHEMA_VERSION = 1
 local rt = {
     doc = nil,      -- parsed toolwall.json
     remaps = nil,   -- { base, menu }, filtered once at setup
+    typing = false, -- chat mode, toggled by hand, reset by a reload
     scene = nil,    -- scene registry (live mirror/image objects)
     modes = nil,    -- mode controller
     hud = nil,      -- hud controller
@@ -140,6 +141,17 @@ end
     rather than erroring on every state change.
 ]]
 local function apply_state_remaps()
+    --[[
+        A manual chat toggle outranks the automatic one.
+
+        Without this, opening a chest while typing would quietly put the game
+        rebinds back and you would be searching for a stronghold with the T
+        key producing a 4.
+    ]]
+    if rt.typing then
+        return
+    end
+
     local ok, state = pcall(waywall.state)
     if not ok or type(state) ~= "table" then
         return
@@ -147,6 +159,40 @@ local function apply_state_remaps()
 
     local playing = state.screen == "inworld" and state.inworld == "unpaused"
     waywall.set_remaps(playing and rt.remaps.base or rt.remaps.menu)
+end
+
+--[[
+    The keymap, with and without whatever the config asked for.
+
+    A search-crafting layout lives in the keymap, not in the rebinds, which is
+    why toggling rebinds alone never fixed typing in chat: the letters were
+    still coming out in the other language. faith raised exactly this in the
+    waywall discord and nml's answer was a hand-written Lua snippet.
+
+    Typing falls back to the layout the custom one is built on, which is what
+    the keyboard did before toolwall touched it.
+]]
+function M.keymap_for(doc, typing)
+    local input = doc.input or {}
+    local custom = input.custom_layout
+
+    if typing then
+        local base = "us"
+        if type(custom) == "table" and type(custom.base) == "string" and custom.base ~= "" then
+            base = custom.base
+        elseif type(input.layout) == "string" and input.layout ~= "" then
+            base = input.layout
+        end
+        return { layout = base, model = "", rules = "", variant = "", options = "" }
+    end
+
+    return {
+        layout = input.layout or "",
+        model = input.model or "",
+        rules = input.rules or "",
+        variant = input.variant or "",
+        options = input.options or "",
+    }
 end
 
 --[[
@@ -378,6 +424,11 @@ function M.setup(opts)
         base = keycodes.sane(input.remaps, "remaps"),
         menu = keycodes.sane(input.remaps_menu, "remaps_menu"),
     }
+
+    -- A reload rebuilds the Lua VM but this table outlives it, so chat mode
+    -- would otherwise survive an edit and leave you wondering why your keys
+    -- stopped working.
+    rt.typing = false
 
     local cfg = build_waywall_config(doc)
     cfg.actions = keybinds.build(doc, rt)

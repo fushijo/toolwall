@@ -474,8 +474,22 @@ local function classify(input)
         return { kind = "command", command = "floating.toggle" }
     end
 
+    --[[
+        gore calls this chat mode. It used to be dropped, because toolwall had
+        no manual toggle and only the automatic one that follows the cursor.
+        It has one now, so the key keeps working.
+
+        The set it swaps to is deliberately not copied across. Empty menu
+        rebinds means "no rebinds while typing", which is what chat mode is
+        for, and guessing wrong here would leave someone typing numbers into
+        chat and wondering why.
+    ]]
     if first_call(log, "set_remaps") then
-        return nil, "toggles a second rebind set; set it up under Input as the menu rebinds"
+        return {
+            kind = "command",
+            command = "remaps.toggle",
+            chat_mode = true,
+        }
     end
 
     if first_call(log, "text") then
@@ -718,6 +732,13 @@ for input, fn in pairs(config.actions or {}) do
                 bind.command = what.command
                 bind.args = what.args
                 if what.jar then ninb_jar = what.jar end
+
+                if what.chat_mode then
+                    note("keybind %q is chat mode; it turns the rebinds off and puts "
+                        .. "the keymap back to its base layout. fill in the menu "
+                        .. "rebinds under Input if you want a set while typing",
+                        tostring(input))
+                end
 
                 if what.needs_exec then
                     note("keybind %q runs a command, which stays switched off until "

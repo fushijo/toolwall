@@ -26,6 +26,7 @@ const COMMANDS: &[(Command, &str)] = &[
     (Command::FloatingHide, "floating.hide"),
     (Command::GuiToggle, "gui.toggle"),
     (Command::ScreenEdit, "screen.edit"),
+    (Command::RemapsToggle, "remaps.toggle"),
     (Command::NinbToggle, "ninb.toggle"),
     (Command::NinbOverlay, "ninb.overlay"),
     (Command::OverlayToggle, "overlay.toggle"),
@@ -314,6 +315,7 @@ fn args_editor(
         | Command::FloatingHide
         | Command::GuiToggle
         | Command::ScreenEdit
+        | Command::RemapsToggle
         | Command::NinbToggle
         | Command::NinbOverlay => {}
     }

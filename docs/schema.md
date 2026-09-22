@@ -54,6 +54,46 @@ what Minecraft is doing, which needs the State Output mod - without the mod
 there is no answer, and no answer is treated as "not in game", so the key does
 nothing at all.
 
+## Anchored overlays
+
+Both ends of an overlay can be measured from an edge instead of from `0, 0`.
+
+`src_anchor` on a mirror measures the capture from a corner of the **game**.
+Minecraft pins its debug HUD to the corners at fixed pixel offsets, so the pie
+chart is the same size and the same distance from the bottom-right corner at
+340x1080 as it is at fullscreen. Without it, a capture is right at exactly one
+resolution.
+
+`dst_anchor` on a mirror or an image measures the destination from a corner of
+the **screen**, which is `gui.screen`. Without it a config written at 1920x1080
+puts the pie chart off the edge of a 1366 wide laptop and halfway across a 3440
+ultrawide.
+
+Both take `topleft`, `topright`, `bottomleft`, `bottomright` or `center`. For
+the corners, `x` and `y` are distances from the anchored edges to the near edge
+of the rectangle. For `center` they are ignored and the rectangle is centred.
+
+The Screen tab converts both ways, so dragging an anchored overlay moves it and
+leaves it anchored. Dragging a centred one stops it being centred, because
+there is no offset that means "the middle".
+
+Sizes are not scaled at runtime. The setup window scales them once when you
+tell it your screen size, and the anchors keep the result correct from then on.
+
+## Chat mode
+
+`remaps.toggle` is one key that makes typing work.
+
+It does two things. The rebinds go to `input.remaps_menu`, which is empty
+unless you filled it in, and the keymap goes back to the layout your custom one
+is built on (`input.custom_layout.base`, or `input.layout`). Swapping rebinds
+alone is not enough if you search-craft in another language: that layout lives
+in the keymap, so the letters would still come out wrong.
+
+While it is on, the automatic switch that follows the cursor leaves the rebinds
+alone. Otherwise opening a chest mid-sentence would put the game rebinds back
+underneath you. A reload turns it off.
+
 ## Rebind names are not keybind names
 
 `input.remaps`, `input.remaps_menu` and the `remaps.set` arguments use a

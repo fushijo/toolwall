@@ -42,6 +42,7 @@ fn sample() -> Document {
         mirrors: vec![Mirror {
             id: "eye".into(),
             src_anchor: None,
+            dst_anchor: None,
             color_keys: Vec::new(),
             label: Some("Boat eye".into()),
             src: Rect { x: 0, y: 0, w: 100, h: 100 },
@@ -54,6 +55,7 @@ fn sample() -> Document {
             id: "grid".into(),
             label: None,
             path: "~/.config/waywall/overlays/nope.png".into(),
+            dst_anchor: None,
             dst: Rect { x: 0, y: 0, w: 10, h: 10 },
             depth: None,
             shader: None,
@@ -380,6 +382,66 @@ fn a_document_edited_through_the_tabs_still_round_trips() {
     assert_eq!(back.keybinds.len(), doc.keybinds.len());
     assert_eq!(back.mirrors[0].color_key.as_ref().unwrap().input, "#fff");
     assert_eq!(problems(&back).len(), problems(&doc).len());
+}
+
+/// Dragging an anchored overlay has to leave it anchored.
+///
+/// The canvas works in screen coordinates. An anchored `dst` stores a
+/// distance from an edge instead, so without a conversion both ways an
+/// anchored overlay is drawn in the wrong place and a drag writes a position
+/// into a field that means a distance. It would look like the overlay jumped
+/// on the next reload, which is a horrible thing to debug.
+#[test]
+fn an_anchored_overlay_survives_being_dragged() {
+    use toolwall_core::schema::{Anchor, Rect};
+    use tabs::screen::{placed, stored};
+
+    let screen = (2560, 1440);
+    let rect = Rect { x: 300, y: 120, w: 400, h: 200 };
+
+    for anchor in [
+        None,
+        Some(Anchor::TopLeft),
+        Some(Anchor::TopRight),
+        Some(Anchor::BottomLeft),
+        Some(Anchor::BottomRight),
+    ] {
+        let on_screen = placed(rect, anchor, screen);
+        let mut kept = anchor;
+        let back = stored(on_screen, &mut kept, screen);
+
+        assert_eq!(back, rect, "{anchor:?} did not round trip");
+        assert_eq!(kept, anchor, "{anchor:?} was not kept");
+    }
+}
+
+#[test]
+fn a_right_anchored_overlay_is_drawn_against_the_right_edge() {
+    use toolwall_core::schema::{Anchor, Rect};
+    use tabs::screen::placed;
+
+    // Stored x is the distance from the right edge to the near edge, which is
+    // how src_anchor already reads, so both ends mean the same thing.
+    let rect = Rect { x: 740, y: 100, w: 400, h: 200 };
+    let on_screen = placed(rect, Some(Anchor::TopRight), (2560, 1440));
+
+    assert_eq!(on_screen.x, 2560 - 740);
+    assert_eq!(on_screen.y, 100, "y is untouched by a top anchor");
+}
+
+#[test]
+fn dragging_a_centred_overlay_stops_it_being_centred() {
+    use toolwall_core::schema::{Anchor, Rect};
+    use tabs::screen::stored;
+
+    // There is no offset that means "the middle", so keeping the anchor would
+    // snap it straight back and the drag would look broken.
+    let mut anchor = Some(Anchor::Center);
+    let dropped = Rect { x: 80, y: 90, w: 100, h: 100 };
+    let back = stored(dropped, &mut anchor, (2560, 1440));
+
+    assert_eq!(anchor, Some(Anchor::TopLeft), "it picked up a real anchor");
+    assert_eq!(back, dropped, "and landed where it was dropped");
 }
 
 /// Every non-ASCII character in the UI has to survive egui's font fallback.

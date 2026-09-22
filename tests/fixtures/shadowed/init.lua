@@ -17,5 +17,9 @@ return {
         ["Shift-P"] = function()
             waywall.exec("java -jar /opt/paceman/paceman-tracker.jar --nogui")
         end,
+        -- gore calls this chat mode: one key that swaps the rebind set.
+        ["Insert"] = function()
+            waywall.set_remaps({})
+        end,
     },
 }

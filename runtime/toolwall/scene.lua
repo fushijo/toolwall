@@ -106,6 +106,77 @@ function Scene:_anchored_rect(spec)
 end
 
 --[[
+    Resolve a destination measured from a corner of the screen.
+
+    The mirror side of this has existed for a while; this is the same idea
+    pointed at the window instead of the game. Without it every dst is
+    absolute, so a config written at 1920x1080 puts the pie chart off the
+    right edge of a 1366 wide laptop and strands it mid-screen on a 3440
+    ultrawide. Three people in the waywall discord hit that in one week.
+
+    gui.screen is the only record of how big waywall's window is. waywall
+    advertises a fixed 8192x8192 output to its clients, so nothing can ask,
+    and active_res() answers for the game rather than the window.
+]]
+function Scene:_screen_rect(spec)
+    local dst = spec.dst or {}
+    local w, h = dst.w or 0, dst.h or 0
+
+    local gui = self.doc.gui or {}
+    local screen = gui.screen or {}
+    local sw = tonumber(screen.w) or 0
+    local sh = tonumber(screen.h) or 0
+
+    if sw <= 0 or sh <= 0 then
+        return nil, "gui.screen is not set, so there is nothing to anchor to"
+    end
+
+    local anchor = spec.dst_anchor
+
+    -- Centred means centred, the same as it does for a capture.
+    if anchor == "center" then
+        return {
+            x = math.floor((sw - w) / 2),
+            y = math.floor((sh - h) / 2),
+            w = w,
+            h = h,
+        }
+    end
+
+    -- x and y are distances from the anchored edges to the near edge of the
+    -- rectangle, matching how src_anchor already reads.
+    local x, y = dst.x or 0, dst.y or 0
+
+    if anchor == "topright" or anchor == "bottomright" then
+        x = sw - x
+    end
+    if anchor == "bottomleft" or anchor == "bottomright" then
+        y = sh - y
+    end
+
+    return { x = x, y = y, w = w, h = h }
+end
+
+--[[
+    Either rectangle, anchored if it asked to be.
+]]
+local function anchored(value)
+    return value ~= nil and value ~= util.NULL and value ~= ""
+end
+
+function Scene:_dst_for(spec)
+    if not anchored(spec.dst_anchor) then
+        return rect(spec.dst)
+    end
+
+    local resolved, err = self:_screen_rect(spec)
+    if not resolved then
+        error("anchored overlay: " .. err, 0)
+    end
+    return resolved
+end
+
+--[[
     Build the waywall objects for one mirror.
 
     Returns a list, because a mirror carrying several colour keys is drawn as
@@ -128,7 +199,7 @@ function Scene:_create_mirror(spec)
 
     local base = {
         src = src,
-        dst = rect(spec.dst),
+        dst = self:_dst_for(spec),
         depth = spec.depth,
         shader = shader_of(spec),
     }
@@ -158,7 +229,7 @@ end
 
 function Scene:_create_image(spec)
     return { waywall.image(util.expand(spec.path), {
-        dst = rect(spec.dst),
+        dst = self:_dst_for(spec),
         depth = spec.depth,
         shader = shader_of(spec),
     }) }

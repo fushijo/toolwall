@@ -24,6 +24,16 @@ const REPORT_NAME: &str = "toolwall-import-report.txt";
 
 const GORE_URL: &str = "https://github.com/arjuncgore/waywall_generic_config";
 
+/// Screens people actually have, so most setups are one click.
+const COMMON_SCREENS: &[(u32, u32, &str)] = &[
+    (1920, 1080, "1920x1080"),
+    (2560, 1440, "2560x1440"),
+    (3840, 2160, "3840x2160"),
+    (3440, 1440, "3440x1440"),
+    (1366, 768, "1366x768"),
+    (1600, 900, "1600x900"),
+];
+
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Step {
     Start,
@@ -63,6 +73,15 @@ pub struct Setup {
     choices: Choices,
     /// Where `base` came from, for saying so on the last step.
     origin: String,
+    /// How big waywall's window is. Everything downstream is placed against
+    /// this, so it is the first question on the first step.
+    screen: (u32, u32),
+    /// Whether the config still needs reshaping for that screen.
+    ///
+    /// Only the preset does. An imported config was already written for the
+    /// machine it was imported on, and scaling it would be inventing a
+    /// problem to solve.
+    fit_preset: bool,
 
     step: Step,
     capture: Option<Capture>,
@@ -97,9 +116,11 @@ impl Setup {
         let choices = preset::choices_for(&base);
         let mut sens = sens::SensState::default();
         sens.seed(
-            base.gui.screen.h.max(1) as u32,
+            base.gui.screen.h.max(1),
             base.modes.iter().map(|m| m.resolution.height).max(),
         );
+
+        let screen = (base.gui.screen.w.max(1), base.gui.screen.h.max(1));
 
         Self {
             report: read_report(&store),
@@ -107,6 +128,8 @@ impl Setup {
             base,
             choices,
             origin,
+            screen,
+            fit_preset: had_config.is_none(),
             step: Step::Start,
             capture: None,
             browser: FileBrowser::default(),
@@ -119,11 +142,25 @@ impl Setup {
     }
 
     /// What the config would be if you finished right now.
+    ///
+    /// The screen fitting happens here and not when a source is picked, so it
+    /// is re-derived from the untouched preset every frame. Choosing a
+    /// different screen size therefore cannot scale an already scaled config
+    /// a second time.
     fn preview(&self) -> Document {
-        preset::build(&self.base, &self.choices)
+        let mut doc = preset::build(&self.base, &self.choices);
+        let (w, h) = self.screen;
+
+        if self.fit_preset {
+            preset::fit_to_screen(&mut doc, w, h);
+        } else {
+            doc.gui.screen = toolwall_core::schema::Size { w, h };
+        }
+        doc
     }
 
     fn adopt(&mut self, doc: Document, origin: &str) {
+        self.fit_preset = origin.contains("preset");
         self.choices = preset::choices_for(&doc);
         self.sens.seed(
             doc.gui.screen.h.max(1) as u32,
@@ -402,6 +439,37 @@ impl Setup {
         }
 
         ui.add_space(10.0);
+        ui.separator();
+        ui.add_space(10.0);
+
+        // Asked first, because every overlay is placed against it.
+        ui.strong("How big is waywall's window?");
+        ui.label(
+            "Usually your monitor. It is the Display line in F3, and getting it \
+             wrong is what puts the pie chart off the side of the screen.",
+        );
+        ui.add_space(6.0);
+
+        ui.horizontal_wrapped(|ui| {
+            for (w, h, name) in COMMON_SCREENS {
+                let picked = self.screen == (*w, *h);
+                if ui.selectable_label(picked, *name).clicked() {
+                    self.screen = (*w, *h);
+                    self.sens.seed(*h, None);
+                }
+            }
+        });
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            ui.add(egui::DragValue::new(&mut self.screen.0).range(320..=16384));
+            ui.label("x");
+            ui.add(egui::DragValue::new(&mut self.screen.1).range(240..=16384));
+            if self.fit_preset {
+                ui.weak("the preset is resized to fit");
+            }
+        });
+
+        ui.add_space(14.0);
         ui.separator();
         ui.add_space(10.0);
 
@@ -759,6 +827,10 @@ impl Setup {
         ui.add_space(8.0);
 
         settings_grid(ui, "setup-summary", |ui| {
+            ui.label("Window");
+            ui.label(format!("{}x{}", self.screen.0, self.screen.1));
+            ui.end_row();
+
             ui.label("Screens");
             ui.label(
                 doc.modes

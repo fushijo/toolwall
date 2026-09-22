@@ -225,6 +225,98 @@ $XDG_RUNTIME_DIR/toolwall-*                     pidfiles, gone on reboot
 
 [gore]: https://github.com/arjuncgore/waywall_generic_config
 
+## When it goes wrong
+
+Most of these are things someone actually hit, not things I imagined.
+
+**Nothing happens when I press Ctrl+I.**
+Three causes, in order of likelihood. Your instance is not running under
+waywall, so check Prism's wrapper command. Or your config has no key bound to
+`gui.toggle`, which is what `~/.config/waywall/toolwall-import-report.txt` will
+tell you. Or `gui.command` points somewhere that does not exist, which you can
+check with `toolwall get gui.command`.
+
+**My overlays are in the wrong place, or off the side of the screen.**
+`gui.screen` does not match your monitor. It is the Display line in F3. Set it
+on the first step of `toolwall-gui --setup`, or with
+`toolwall set gui.screen.w 2560`. If you started from the preset before 0.3,
+run setup again and pick your resolution.
+
+**My mirrors did not come across when I imported my config.**
+Fixed in 0.1.1. Configs that build overlays with `waywall.mirror` rather than
+`helpers.res_mirror` used to import as nothing at all. Update, then
+`./uninstall.sh --all` and `./install.sh`. The `--all` matters: without it your
+existing `toolwall.json` is kept and the import is skipped again.
+
+**I reinstalled and nothing changed.**
+If `toolwall.json` already exists, the install keeps it and imports nothing. It
+says so now. `./uninstall.sh --all` first.
+
+**Typing in chat types the wrong thing.**
+Your rebinds are still on. Bind a key to `remaps.toggle` in the Keybinds tab.
+That turns the rebinds off and puts your keymap back to its base layout, which
+matters if you search-craft in another language.
+
+**A key I bound does nothing.**
+waywall matches modifiers exactly, so `T` does not fire while Shift is held.
+Use `*-T` if you want it to fire regardless. Names come from X11 keysyms, so it
+is `Caps_Lock` and not `capslock`, and `bracketleft` and not `[`.
+
+**My whole config stopped loading after I added a rebind.**
+Rebinds are not keybinds. They use Linux keycode names, so `ESC` and not
+`Escape`, `DOT` and not `period`. One wrong name aborts the entire config.
+toolwall drops bad ones with a warning instead of letting that happen, but a
+config hand-edited outside it can still do this.
+
+**Ninjabrain Bot gets killed on launch, or the log says "X11 minecraft
+detected".**
+Fixed. toolwall waits for Minecraft's window before starting ninb. If ninb
+opens first, waywall decides ninb is the game running under X11 and kills it.
+Nothing is wrong with your GLFW path, whatever the banner says.
+
+**The Ninjabrain readout does not draw in game.**
+It needs a patched waywall. Stock waywall cannot fill a rectangle, so there is
+nothing to draw the panel behind the text. See `patches/`. Do not do this on a
+first setup.
+
+**Ninjabrain Bot disappears a few seconds after F3+C.**
+That is gore's and nml's configs, not this one. They hide it on a timer after
+copying coords.
+
+**My eye measurements are wrong.**
+Check your FOV is at minimum (30) while measuring, and that `gui.screen`
+matches your monitor. The sensitivity step assumes 30 because that is what you
+measure at.
+
+**Fullscreen looks blurry.**
+Your configured resolution does not match your monitor. Launch without waywall
+and read the resolution off F3, then set `gui.screen` to that.
+
+**Where are the logs?**
+`~/.local/state/toolwall.log`. waywall itself only writes to stderr, so if you
+start your instance from a desktop entry that log is the only thing that
+survives. Sending me that plus your `toolwall.json` is everything I need.
+
+**I installed it and now I want my old config back.**
+`./uninstall.sh`. Your original `init.lua` was copied to
+`~/.config/waywall/init.lua.pre-toolwall` when you installed. If that copy is
+gone, `./uninstall.sh --blank` or `./uninstall.sh --gore` will leave you with
+something that starts.
+
+**Everything got slower.**
+Try turning off `experimental.jit`. It is meant to help and sometimes does the
+opposite.
+
+**None of the above.**
+
+```sh
+toolwall validate
+```
+
+lists whatever is wrong with the config without applying it. If that comes back
+clean and it is still broken, send me `~/.local/state/toolwall.log` and your
+`toolwall.json` and I will have the actual reason instead of a guess.
+
 ## Using it
 
 `Ctrl+I` opens the editor over the game. Edits apply about a third of a second
@@ -307,22 +399,6 @@ Adds `waywall.rect` (a solid fill), an outline on scene text, and
 `theme.ninb_hidden`. None of them can be done from Lua. toolwall checks for
 them at runtime and does without if they are missing, so an unpatched waywall
 is fine.
-
-## When something is broken
-
-toolwall writes its complaints to `~/.local/state/toolwall.log`. Keybinds it
-had to drop, files it could not find, commands that failed. waywall itself
-logs to stderr and nowhere else, so if you start your instance from a desktop
-entry that log is the only thing that survives.
-
-If you are reporting a bug, that file plus your `toolwall.json` is everything
-I need.
-
-```sh
-toolwall validate
-```
-
-also lists whatever is wrong with the config without applying it.
 
 ## Planned
 

@@ -8,7 +8,7 @@
 //! ends up containing is the part worth testing, and a test should not have
 //! to open a window to do it.
 
-use crate::schema::{Command, Document, Keybind, Mode};
+use crate::schema::{Anchor, Command, Document, Keybind, Mode, Size};
 use crate::sens::Sens;
 
 /// The prebuilt config, as shipped.
@@ -288,6 +288,72 @@ pub fn build(base: &Document, choices: &Choices) -> Document {
     doc
 }
 
+/// Reshape a config written for one screen so it lands the same way on
+/// another.
+///
+/// The preset is authored at 1920x1080. Left alone on a 1366 wide laptop its
+/// pie chart is off the edge of the screen, and on a 3440 ultrawide it is
+/// stranded somewhere in the middle. Three separate people hit that in one
+/// week in the waywall discord, which is how this came to exist.
+///
+/// Two things happen. Sizes and offsets scale by the height ratio, uniformly,
+/// so nothing changes shape. And every overlay picks up a `dst_anchor` for
+/// whichever side of the screen it was already nearer, so it stays put from
+/// then on even if the screen changes again.
+///
+/// Anchoring by itself would keep things in the right corner at the wrong
+/// size. Scaling by itself would be correct once and wrong after the next
+/// monitor. It wants both.
+pub fn fit_to_screen(doc: &mut Document, width: u32, height: u32) {
+    let from = doc.gui.screen;
+    if width == 0 || height == 0 || from.w == 0 || from.h == 0 {
+        return;
+    }
+
+    let k = height as f64 / from.h as f64;
+    let scale = |v: u32| ((v as f64 * k).round() as u32).max(1);
+    let shift = |v: i32| (v as f64 * k).round() as i32;
+
+    let old_width = from.w as i32;
+
+    for (anchor, rect) in doc
+        .mirrors
+        .iter_mut()
+        .map(|m| (&mut m.dst_anchor, &mut m.dst))
+        .chain(doc.images.iter_mut().map(|i| (&mut i.dst_anchor, &mut i.dst)))
+    {
+        // Already anchored means somebody chose, and this is not the place to
+        // argue with them.
+        if anchor.is_some() {
+            continue;
+        }
+
+        // Which edge it belongs to, decided while x is still a position.
+        let to_right = rect.x + rect.w as i32 / 2 > old_width / 2;
+        let from_right = old_width - rect.x;
+
+        rect.w = scale(rect.w);
+        rect.h = scale(rect.h);
+        rect.y = shift(rect.y);
+
+        // A right hand x becomes a distance from the right edge, which is
+        // what the anchor convention means by x, and matches src_anchor.
+        rect.x = if to_right { shift(from_right) } else { shift(rect.x) };
+        *anchor = Some(if to_right { Anchor::TopRight } else { Anchor::TopLeft });
+    }
+
+    // Text is positioned, not sized, so only its offsets move.
+    for text in &mut doc.text {
+        text.x = shift(text.x);
+        text.y = shift(text.y);
+        if let Some(size) = text.size {
+            text.size = Some(scale(size).max(1));
+        }
+    }
+
+    doc.gui.screen = Size { w: width, h: height };
+}
+
 /// Drop mirrors and images that nothing shows.
 ///
 /// A pie chart in a config with no screen to put it on is just a rectangle
@@ -351,6 +417,125 @@ pub fn tall_modes(doc: &Document, normal_height: u32) -> Vec<&Mode> {
 mod tests {
     use super::*;
     use crate::problems;
+
+    /// Where an anchored rectangle actually lands, the way the runtime works
+    /// it out. Keeps the arithmetic in the tests honest.
+    fn placed(rect: &crate::schema::Rect, anchor: Option<Anchor>, screen: Size) -> (i32, i32) {
+        match anchor {
+            Some(Anchor::TopRight) | Some(Anchor::BottomRight) => {
+                (screen.w as i32 - rect.x, rect.y)
+            }
+            Some(Anchor::Center) => (
+                (screen.w as i32 - rect.w as i32) / 2,
+                (screen.h as i32 - rect.h as i32) / 2,
+            ),
+            _ => (rect.x, rect.y),
+        }
+    }
+
+    #[test]
+    fn fitting_to_a_bigger_screen_keeps_the_layout() {
+        let mut doc = preset();
+
+        // What it looks like at the size it was written for.
+        let before: Vec<(String, i32, i32, u32)> = doc
+            .mirrors
+            .iter()
+            .map(|m| (m.id.clone(), m.dst.x, m.dst.y, m.dst.w))
+            .collect();
+
+        fit_to_screen(&mut doc, 2560, 1440);
+        let screen = Size { w: 2560, h: 1440 };
+        let k = 1440.0 / 1080.0;
+
+        assert_eq!(doc.gui.screen, screen, "the screen size is recorded");
+
+        for (id, was_x, was_y, was_w) in before {
+            let m = doc.mirrors.iter().find(|m| m.id == id).unwrap();
+            let (x, y) = placed(&m.dst, m.dst_anchor, screen);
+
+            assert_eq!(m.dst.w, (was_w as f64 * k).round() as u32, "{id} width scaled");
+            assert_eq!(y, (was_y as f64 * k).round() as i32, "{id} y scaled");
+
+            // The margin to whichever edge it was nearer scales with it.
+            let was_right = was_x + was_w as i32 / 2 > 960;
+            if was_right {
+                let was_gap = 1920 - (was_x + was_w as i32);
+                let gap = 2560 - (x + m.dst.w as i32);
+                assert_eq!(gap, (was_gap as f64 * k).round() as i32, "{id} right margin");
+            } else {
+                assert_eq!(x, (was_x as f64 * k).round() as i32, "{id} left margin");
+            }
+        }
+    }
+
+    #[test]
+    fn nothing_runs_off_the_edge_of_a_small_screen() {
+        // The case that started this: a 1366x768 laptop, where the preset's
+        // pie chart sits at x=1180 and is simply not on the screen.
+        let mut doc = preset();
+        fit_to_screen(&mut doc, 1366, 768);
+        let screen = Size { w: 1366, h: 768 };
+
+        for m in &doc.mirrors {
+            let (x, y) = placed(&m.dst, m.dst_anchor, screen);
+            assert!(x >= 0, "{} starts at {x}", m.id);
+            assert!(
+                x + m.dst.w as i32 <= 1366,
+                "{} ends at {} past the right edge",
+                m.id,
+                x + m.dst.w as i32
+            );
+            assert!(y + m.dst.h as i32 <= 768, "{} runs off the bottom", m.id);
+        }
+
+        assert!(problems(&doc).is_empty(), "{:?}", problems(&doc));
+    }
+
+    #[test]
+    fn everything_comes_out_anchored() {
+        // Anchors are the half that survives the next monitor. Scaling alone
+        // would be right once and wrong afterwards.
+        let mut doc = preset();
+        assert!(doc.mirrors.iter().all(|m| m.dst_anchor.is_none()), "starts absolute");
+
+        fit_to_screen(&mut doc, 2560, 1440);
+
+        assert!(doc.mirrors.iter().all(|m| m.dst_anchor.is_some()), "mirrors anchored");
+        assert!(doc.images.iter().all(|i| i.dst_anchor.is_some()), "images anchored");
+
+        // The pie chart lives on the right, the eye overlay on the left.
+        let pie = doc.mirrors.iter().find(|m| m.id == "pie_chart").unwrap();
+        let eye = doc.mirrors.iter().find(|m| m.id == "eye_zoom").unwrap();
+        assert_eq!(pie.dst_anchor, Some(Anchor::TopRight));
+        assert_eq!(eye.dst_anchor, Some(Anchor::TopLeft));
+    }
+
+    #[test]
+    fn fitting_to_the_same_screen_changes_only_the_anchors() {
+        let mut doc = preset();
+        let before: Vec<_> = doc.mirrors.iter().map(|m| (m.dst.x, m.dst.w)).collect();
+
+        fit_to_screen(&mut doc, 1920, 1080);
+
+        for (m, (was_x, was_w)) in doc.mirrors.iter().zip(before) {
+            assert_eq!(m.dst.w, was_w, "{} width untouched", m.id);
+            let (x, _) = placed(&m.dst, m.dst_anchor, Size { w: 1920, h: 1080 });
+            assert_eq!(x, was_x, "{} did not move", m.id);
+        }
+    }
+
+    #[test]
+    fn an_anchor_somebody_already_set_is_left_alone() {
+        let mut doc = preset();
+        doc.mirrors[0].dst_anchor = Some(Anchor::Center);
+        let was = doc.mirrors[0].dst;
+
+        fit_to_screen(&mut doc, 2560, 1440);
+
+        assert_eq!(doc.mirrors[0].dst_anchor, Some(Anchor::Center), "kept");
+        assert_eq!(doc.mirrors[0].dst.w, was.w, "and not resized either");
+    }
 
     #[test]
     fn the_preset_round_trips_through_its_own_choices() {

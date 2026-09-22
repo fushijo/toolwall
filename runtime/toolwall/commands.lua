@@ -176,6 +176,36 @@ function M.bind(rt)
         waywall.set_remaps(keycodes.sane(args.remaps, "remaps.set"))
     end)
 
+    --[[
+        Chat mode. One key that stops the game rebinds eating what you type.
+
+        Two halves, and every config that tries this only does the first one.
+        The rebinds go back to the menu set, which is empty unless you filled
+        it in, and the keymap goes back to the layout your custom one is built
+        on. A search-crafting layout lives in the keymap, so swapping rebinds
+        alone leaves you typing Norwegian into chat.
+
+        It also pins: while this is on, the automatic switch on the State
+        Output mod leaves the rebinds alone. Otherwise opening a chest
+        mid-sentence would put the game rebinds back underneath you.
+    ]]
+    M.register("remaps.toggle", function(state)
+        local toolwall = require("toolwall")
+
+        state.typing = not state.typing
+
+        if state.typing then
+            waywall.set_remaps(state.remaps and state.remaps.menu or {})
+        else
+            waywall.set_remaps(state.remaps and state.remaps.base or {})
+        end
+
+        local ok, err = pcall(waywall.set_keymap, toolwall.keymap_for(state.doc, state.typing))
+        if not ok then
+            util.warn("chat mode could not change the keymap: " .. tostring(err))
+        end
+    end)
+
     M.register("key.press", function(_, args)
         waywall.press_key(args.key)
     end)

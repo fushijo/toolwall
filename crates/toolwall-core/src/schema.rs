@@ -365,6 +365,18 @@ pub struct Mirror {
     pub src_anchor: Option<Anchor>,
     #[serde(default = "zero_rect")]
     pub src: Rect,
+    /// Corner of the *screen* that `dst.x` / `dst.y` are measured from.
+    ///
+    /// Same idea as `src_anchor`, aimed the other way. Without it a
+    /// destination is absolute, so a config written at 1920x1080 puts the pie
+    /// chart off the edge of a 1366 wide laptop and halfway across a 3440
+    /// ultrawide. With it the overlay stays where you put it relative to the
+    /// corner, whatever the screen is.
+    ///
+    /// Resolved against `gui.screen`, which is the one place that records how
+    /// big waywall's window actually is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dst_anchor: Option<Anchor>,
     pub dst: Rect,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub depth: Option<i32>,
@@ -389,6 +401,18 @@ pub struct Image {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     pub path: String,
+    /// Corner of the *screen* that `dst.x` / `dst.y` are measured from.
+    ///
+    /// Same idea as `src_anchor`, aimed the other way. Without it a
+    /// destination is absolute, so a config written at 1920x1080 puts the pie
+    /// chart off the edge of a 1366 wide laptop and halfway across a 3440
+    /// ultrawide. With it the overlay stays where you put it relative to the
+    /// corner, whatever the screen is.
+    ///
+    /// Resolved against `gui.screen`, which is the one place that records how
+    /// big waywall's window actually is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dst_anchor: Option<Anchor>,
     pub dst: Rect,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub depth: Option<i32>,
@@ -724,6 +748,9 @@ pub enum Command {
     SensSet,
     #[serde(rename = "keymap.set")]
     KeymapSet,
+    /// One key for chat mode: rebinds off, keymap back to its base layout.
+    #[serde(rename = "remaps.toggle")]
+    RemapsToggle,
     #[serde(rename = "remaps.set")]
     RemapsSet,
     #[serde(rename = "key.press")]

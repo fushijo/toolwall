@@ -8,7 +8,7 @@
 //! but where it sits and how big its text is are ordinary config fields that
 //! unpatched waywall reads the same way.
 
-use toolwall_core::schema::Rect;
+use toolwall_core::schema::{Anchor, Rect};
 use toolwall_core::Document;
 
 use crate::canvas::{Canvas, Item, Resize, State};
@@ -97,7 +97,56 @@ fn toolbar(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
 }
 
 /// Everything that can be placed, with the ones outside this mode faded.
+/// Where an anchored rectangle actually lands on the screen.
+///
+/// The canvas draws and drags in screen coordinates. An anchored `dst` is not
+/// stored that way: its x is a distance from an edge. Without converting, an
+/// anchored overlay is drawn in the wrong place, and dragging it writes a
+/// position into a field that means a distance, so it jumps on the next
+/// reload. These two are inverses, and a test holds them to it.
+pub(crate) fn placed(rect: Rect, anchor: Option<Anchor>, screen: (i32, i32)) -> Rect {
+    let (sw, sh) = screen;
+    match anchor {
+        None | Some(Anchor::TopLeft) => rect,
+        Some(Anchor::TopRight) => Rect { x: sw - rect.x, ..rect },
+        Some(Anchor::BottomLeft) => Rect { y: sh - rect.y, ..rect },
+        Some(Anchor::BottomRight) => Rect { x: sw - rect.x, y: sh - rect.y, ..rect },
+        Some(Anchor::Center) => Rect {
+            x: (sw - rect.w as i32) / 2,
+            y: (sh - rect.h as i32) / 2,
+            ..rect
+        },
+    }
+}
+
+/// And back again, so a drag keeps whatever anchor the overlay had.
+///
+/// Centred is the one that cannot come back: its position is decided by the
+/// screen, so there is no offset that means "here". Dragging one therefore
+/// stops it being centred, which is what dragging it meant.
+pub(crate) fn stored(rect: Rect, anchor: &mut Option<Anchor>, screen: (i32, i32)) -> Rect {
+    let (sw, sh) = screen;
+
+    if *anchor == Some(Anchor::Center) {
+        *anchor = Some(Anchor::TopLeft);
+        return rect;
+    }
+
+    match *anchor {
+        None | Some(Anchor::TopLeft) => rect,
+        Some(Anchor::TopRight) => Rect { x: sw - rect.x, ..rect },
+        Some(Anchor::BottomLeft) => Rect { y: sh - rect.y, ..rect },
+        Some(Anchor::BottomRight) => Rect { x: sw - rect.x, y: sh - rect.y, ..rect },
+        Some(Anchor::Center) => unreachable!("handled above"),
+    }
+}
+
+fn screen_of(doc: &Document) -> (i32, i32) {
+    (doc.gui.screen.w.max(1) as i32, doc.gui.screen.h.max(1) as i32)
+}
+
 pub(crate) fn collect(doc: &Document, mode: &str) -> Vec<Item> {
+    let screen = screen_of(doc);
     let active: Vec<&str> = doc
         .modes
         .iter()
@@ -114,7 +163,7 @@ pub(crate) fn collect(doc: &Document, mode: &str) -> Vec<Item> {
         items.push(Item {
             key: format!("mirror:{}", mirror.id),
             label: mirror.label.clone().unwrap_or_else(|| mirror.id.clone()),
-            rect: mirror.dst,
+            rect: placed(mirror.dst, mirror.dst_anchor, screen),
             // A mirrored capture stretched off its own aspect is a lie about
             // what the game looks like, so corners hold the shape.
             resize: Resize::Aspect,
@@ -126,7 +175,7 @@ pub(crate) fn collect(doc: &Document, mode: &str) -> Vec<Item> {
         items.push(Item {
             key: format!("image:{}", image.id),
             label: image.label.clone().unwrap_or_else(|| image.id.clone()),
-            rect: image.dst,
+            rect: placed(image.dst, image.dst_anchor, screen),
             resize: Resize::Free,
             muted: !shown(&image.id),
         });
@@ -195,13 +244,15 @@ pub(crate) fn apply(doc: &mut Document, action: crate::canvas::Action) {
 
     match action {
         Action::Moved { key, rect } => {
+            let screen = screen_of(doc);
+
             if let Some(id) = key.strip_prefix("mirror:") {
                 if let Some(m) = doc.mirrors.iter_mut().find(|m| m.id == id) {
-                    m.dst = rect;
+                    m.dst = stored(rect, &mut m.dst_anchor, screen);
                 }
             } else if let Some(id) = key.strip_prefix("image:") {
                 if let Some(i) = doc.images.iter_mut().find(|i| i.id == id) {
-                    i.dst = rect;
+                    i.dst = stored(rect, &mut i.dst_anchor, screen);
                 }
             } else if key == "readout" {
                 // The box drawn includes the panel padding, so take it back
@@ -316,6 +367,7 @@ mod tests {
             id: "pie".into(),
             label: Some("Pie chart".into()),
             src_anchor: None,
+            dst_anchor: None,
             src: Rect { x: 0, y: 0, w: 10, h: 10 },
             dst: Rect { x: 100, y: 100, w: 200, h: 200 },
             depth: None,
@@ -327,6 +379,7 @@ mod tests {
             id: "grid".into(),
             label: None,
             path: "/tmp/grid.png".into(),
+            dst_anchor: None,
             dst: Rect { x: 30, y: 300, w: 600, h: 338 },
             depth: None,
             shader: None,

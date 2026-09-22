@@ -94,6 +94,7 @@ pub fn show(
                 id: format!("image{}", doc.images.len() + 1),
                 label: None,
                 path: String::new(),
+                dst_anchor: None,
                 dst: Rect { x: 0, y: 0, w: 100, h: 100 },
                 depth: None,
                 shader: None,

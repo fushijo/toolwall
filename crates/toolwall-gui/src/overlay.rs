@@ -228,6 +228,7 @@ mod tests {
                 id: "pie".into(),
                 label: None,
                 src_anchor: None,
+                dst_anchor: None,
                 src: toolwall_core::schema::Rect { x: 0, y: 0, w: 10, h: 10 },
                 dst: toolwall_core::schema::Rect { x: 100, y: 100, w: 200, h: 200 },
                 depth: None,
