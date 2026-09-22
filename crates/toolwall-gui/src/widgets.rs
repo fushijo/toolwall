@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use toolwall_core::schema::Rect;
+use toolwall_core::schema::{Anchor, Rect};
 use toolwall_core::{Problem, Scope};
 
 /// A two column settings grid: the name of a thing on the left, the control
@@ -142,6 +142,36 @@ fn parse_hex(hex: &str) -> Option<[u8; 4]> {
 }
 
 /// An optional free-text field, where empty means absent.
+/// Which edge a rectangle is measured from, or none at all.
+///
+/// The same widget for both ends of a mirror. `src_anchor` is measured from a
+/// corner of the game and `dst_anchor` from a corner of the screen, but the
+/// choice is the same five and so is the meaning of the offsets.
+pub fn anchor_picker(ui: &mut egui::Ui, salt: &str, value: &mut Option<Anchor>) {
+    const CHOICES: &[(Option<Anchor>, &str)] = &[
+        (None, "none"),
+        (Some(Anchor::TopLeft), "top left"),
+        (Some(Anchor::TopRight), "top right"),
+        (Some(Anchor::BottomLeft), "bottom left"),
+        (Some(Anchor::BottomRight), "bottom right"),
+        (Some(Anchor::Center), "centre"),
+    ];
+
+    let label = CHOICES
+        .iter()
+        .find(|(a, _)| a == value)
+        .map(|(_, name)| *name)
+        .unwrap_or("none");
+
+    egui::ComboBox::from_id_salt(salt)
+        .selected_text(label)
+        .show_ui(ui, |ui| {
+            for (choice, name) in CHOICES {
+                ui.selectable_value(value, *choice, *name);
+            }
+        });
+}
+
 pub fn optional_text(ui: &mut egui::Ui, value: &mut Option<String>) {
     let mut text = value.clone().unwrap_or_default();
     if ui.text_edit_singleline(&mut text).changed() {

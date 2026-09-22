@@ -4,6 +4,7 @@ use toolwall_core::schema::{ColorKey, Mirror, Rect};
 use toolwall_core::{Document, Problem, Scope};
 
 use crate::widgets::{
+    anchor_picker,
     depth_editor,
     optional_text,
     problems_for,
@@ -17,6 +18,11 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         let mut remove = None;
+
+        // Taken before the mutable borrow, because the checkbox below needs
+        // to know what is already in there while doc.mirrors is held.
+        let in_base: Vec<String> = doc.base_overlays.clone();
+        let mut toggle_base: Option<String> = None;
 
         for (index, mirror) in doc.mirrors.iter_mut().enumerate() {
             let heading = mirror.label.clone().unwrap_or_else(|| mirror.id.clone());
@@ -37,13 +43,41 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                         optional_text(ui, &mut mirror.label);
                         ui.end_row();
 
+                        ui.label("Show in every mode").on_hover_text(
+                            "Normally an overlay appears only in the modes that \
+                             list it. This puts it on the screen whatever mode \
+                             you are in, including none.",
+                        );
+                        let mut base = in_base.contains(&mirror.id);
+                        if ui.checkbox(&mut base, "").changed() {
+                            toggle_base = Some(mirror.id.clone());
+                        }
+                        ui.end_row();
+
                         ui.label("Capture from")
                             .on_hover_text("Region of the game to copy");
                         rect_editor(ui, "src", &mut mirror.src);
                         ui.end_row();
 
+                        ui.label("Measured from").on_hover_text(
+                            "Which corner of the game the capture offsets start \
+                             at. Minecraft pins its debug HUD to the corners, so \
+                             an unanchored capture is only right at one \
+                             resolution.",
+                        );
+                        anchor_picker(ui, &format!("mirror-src-anchor-{index}"), &mut mirror.src_anchor);
+                        ui.end_row();
+
                         ui.label("Draw at").on_hover_text("Where on screen to draw it");
                         rect_editor(ui, "dst", &mut mirror.dst);
+                        ui.end_row();
+
+                        ui.label("Anchored to").on_hover_text(
+                            "Which corner of the screen the offsets start at. \
+                             Without one, this lands in the wrong place on any \
+                             screen that is not the size you set it up at.",
+                        );
+                        anchor_picker(ui, &format!("mirror-dst-anchor-{index}"), &mut mirror.dst_anchor);
                         ui.end_row();
 
                         if advanced {
@@ -79,6 +113,15 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
 
         if let Some(index) = remove {
             doc.mirrors.remove(index);
+        }
+
+        if let Some(id) = toggle_base {
+            match doc.base_overlays.iter().position(|b| *b == id) {
+                Some(at) => {
+                    doc.base_overlays.remove(at);
+                }
+                None => doc.base_overlays.push(id),
+            }
         }
 
         ui.separator();

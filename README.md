@@ -309,6 +309,30 @@ survives. Sending me that plus your `toolwall.json` is everything I need.
 gone, `./uninstall.sh --blank` or `./uninstall.sh --gore` will leave you with
 something that starts.
 
+**How do I show a mirror in every mode?**
+Tick *Show in every mode* on it in the Mirrors or Images tab. It is not a mode,
+so it does not appear in the Modes tab. That puts it in `base_overlays`, which
+is drawn whatever mode you are in, including none.
+
+**The game looks soft or grainy at a distance.**
+Probably nothing to do with toolwall. waywall does not implement Wayland's
+fractional scaling, so on a desktop scaled to 125% or 150% it renders a buffer
+at the *logical* size and your compositor stretches it to fill the panel. A
+2560x1600 screen at 150% gives waywall a 1707x1067 window, and that is what the
+game renders at.
+
+Set `window.fullscreen_width` and `window.fullscreen_height` to your panel's
+real resolution in the Theme tab and run waywall fullscreen. waywall then
+renders at that size instead of the logical one. Setting your desktop to 100%
+scaling fixes it too. Either way it costs GPU, so it is a trade against frames.
+
+If you do that, tell toolwall as well, because overlay coordinates are in
+render pixels:
+
+```sh
+toolwall screen 2560 1600
+```
+
 **Everything got slower.**
 Try turning off `experimental.jit`. It is meant to help and sometimes does the
 opposite.

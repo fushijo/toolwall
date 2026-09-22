@@ -7,6 +7,7 @@ use toolwall_core::{Document, Problem, Scope};
 use crate::widgets::{
     depth_editor,
     optional_text,
+    anchor_picker,
     path_field,
     problems_for,
     rect_editor,
@@ -27,6 +28,9 @@ pub fn show(
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         let mut remove = None;
+
+        let in_base: Vec<String> = doc.base_overlays.clone();
+        let mut toggle_base: Option<String> = None;
 
         for (index, image) in doc.images.iter_mut().enumerate() {
             let heading = image.label.clone().unwrap_or_else(|| image.id.clone());
@@ -57,8 +61,27 @@ pub fn show(
                         );
                         ui.end_row();
 
+                        ui.label("Show in every mode").on_hover_text(
+                            "Normally an overlay appears only in the modes that \
+                             list it. This puts it on the screen whatever mode \
+                             you are in, including none.",
+                        );
+                        let mut base = in_base.contains(&image.id);
+                        if ui.checkbox(&mut base, "").changed() {
+                            toggle_base = Some(image.id.clone());
+                        }
+                        ui.end_row();
+
                         ui.label("Draw at");
                         rect_editor(ui, "dst", &mut image.dst);
+                        ui.end_row();
+
+                        ui.label("Anchored to").on_hover_text(
+                            "Which corner of the screen the offsets start at. \
+                             Without one, this lands in the wrong place on any \
+                             screen that is not the size you set it up at.",
+                        );
+                        anchor_picker(ui, &format!("image-dst-anchor-{index}"), &mut image.dst_anchor);
                         ui.end_row();
 
                         if advanced {
@@ -85,6 +108,15 @@ pub fn show(
 
         if let Some(index) = remove {
             doc.images.remove(index);
+        }
+
+        if let Some(id) = toggle_base {
+            match doc.base_overlays.iter().position(|b| *b == id) {
+                Some(at) => {
+                    doc.base_overlays.remove(at);
+                }
+                None => doc.base_overlays.push(id),
+            }
         }
 
         ui.separator();

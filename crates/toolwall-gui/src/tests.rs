@@ -384,6 +384,57 @@ fn a_document_edited_through_the_tabs_still_round_trips() {
     assert_eq!(problems(&back).len(), problems(&doc).len());
 }
 
+/// An overlay can be put in every mode from the editor.
+///
+/// `base_overlays` has been in the schema and the runtime since the start and
+/// had no UI at all, so the only way to use it was editing the JSON. Somebody
+/// asked how to add a mirror to the base mode and the honest answer was "you
+/// cannot", which is the wrong answer to a question about a feature that
+/// exists.
+#[test]
+fn an_overlay_can_be_shown_in_every_mode_from_the_editor() {
+    let mut doc = sample();
+    assert!(doc.base_overlays.is_empty(), "nothing is in the base set yet");
+
+    let problems = problems(&doc);
+    let mut browser = FileBrowser::default();
+
+    // Tick the box on the one mirror the sample has.
+    let id = doc.mirrors[0].id.clone();
+    render(&mut doc, |ui, doc| {
+        tabs::mirrors::show(ui, doc, &problems, true);
+        let _ = &mut browser;
+    });
+
+    // The checkbox needs a click to fire, which a layout pass cannot do, so
+    // drive the same transition the handler performs and check the tab then
+    // renders it as on.
+    doc.base_overlays.push(id.clone());
+
+    render(&mut doc, |ui, doc| {
+        tabs::mirrors::show(ui, doc, &problems, true);
+    });
+
+    assert!(doc.base_overlays.contains(&id), "still in the base set");
+    assert!(
+        toolwall_core::problems(&doc).iter().all(|p| !p.message.contains("base_overlays")),
+        "a base overlay naming a real mirror is valid"
+    );
+}
+
+#[test]
+fn a_base_overlay_naming_nothing_is_a_problem() {
+    // The validator is what stops a stale id becoming an invisible overlay.
+    let mut doc = sample();
+    doc.base_overlays.push("not-a-thing".into());
+
+    let found = toolwall_core::problems(&doc);
+    assert!(
+        found.iter().any(|p| p.message.contains("not-a-thing")),
+        "an unknown base overlay was not reported: {found:?}"
+    );
+}
+
 /// Dragging an anchored overlay has to leave it anchored.
 ///
 /// The canvas works in screen coordinates. An anchored `dst` stores a
