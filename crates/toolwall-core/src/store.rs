@@ -273,6 +273,33 @@ fn document_references(
         }
     }
 
+    // A fullscreen render size that does not match gui.screen puts every
+    // overlay in the wrong place, and it is the kind of wrong that looks
+    // like toolwall being broken rather than two numbers disagreeing. Only
+    // checked when fullscreen_on_start is set, because otherwise nobody knows
+    // which of the two sizes you actually play at.
+    let window = &doc.window;
+    if window.fullscreen_on_start
+        && window.fullscreen_width > 0
+        && window.fullscreen_height > 0
+        && (window.fullscreen_width != doc.gui.screen.w
+            || window.fullscreen_height != doc.gui.screen.h)
+    {
+        out.push(Problem {
+            scope: Scope::Document,
+            message: format!(
+                "fullscreen renders at {}x{} but gui.screen is {}x{}, so overlays \
+                 will be misplaced. run: toolwall screen {} {}",
+                window.fullscreen_width,
+                window.fullscreen_height,
+                doc.gui.screen.w,
+                doc.gui.screen.h,
+                window.fullscreen_width,
+                window.fullscreen_height
+            ),
+        });
+    }
+
     if doc.ninb.jar.trim().is_empty()
         && doc.keybinds.iter().any(|b| b.command == Command::NinbToggle)
     {
@@ -413,6 +440,44 @@ mod tests {
         let mut doc = doc_with_mode();
         doc.modes[0].mirrors.push("nope".into());
         assert!(validate(&doc).is_err());
+    }
+
+    #[test]
+    fn a_fullscreen_size_that_disagrees_with_the_screen_is_reported() {
+        // Two numbers disagreeing looks exactly like toolwall being broken,
+        // so it has to say which two and what to type.
+        let mut doc = doc_with_mode();
+        doc.window.fullscreen_width = 2560;
+        doc.window.fullscreen_height = 1600;
+        doc.window.fullscreen_on_start = true;
+        doc.gui.screen = Size { w: 1707, h: 1067 };
+
+        let found = problems(&doc);
+        let message = found
+            .iter()
+            .map(|p| p.message.as_str())
+            .find(|m| m.contains("fullscreen renders at"))
+            .expect("not reported");
+
+        assert!(message.contains("2560x1600"), "{message}");
+        assert!(message.contains("1707x1067"), "{message}");
+        assert!(message.contains("toolwall screen 2560 1600"), "{message}");
+    }
+
+    #[test]
+    fn matching_sizes_are_fine_and_so_is_playing_windowed() {
+        let mut doc = doc_with_mode();
+        doc.window.fullscreen_width = 2560;
+        doc.window.fullscreen_height = 1600;
+        doc.window.fullscreen_on_start = true;
+        doc.gui.screen = Size { w: 2560, h: 1600 };
+        assert!(problems(&doc).is_empty(), "{:?}", problems(&doc));
+
+        // Not starting fullscreen means nobody knows which size you play at,
+        // so complaining would be guessing.
+        doc.window.fullscreen_on_start = false;
+        doc.gui.screen = Size { w: 1707, h: 1067 };
+        assert!(problems(&doc).is_empty(), "{:?}", problems(&doc));
     }
 
     #[test]

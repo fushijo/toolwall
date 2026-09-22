@@ -269,10 +269,27 @@ pub enum NinbAnchor {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Window {
+    /// Render at this size while waywall's window is fullscreen, whatever
+    /// size the compositor says the window is.
+    ///
+    /// This is the way out of a scaled desktop. waywall implements no
+    /// fractional scaling, so at 150% it renders a buffer the logical size
+    /// and the compositor stretches it: a 2560x1600 panel gets a 1707x1067
+    /// game. Setting this to the panel's real resolution makes it render
+    /// native while the rest of your desktop stays scaled.
     #[serde(default)]
     pub fullscreen_width: u32,
     #[serde(default)]
     pub fullscreen_height: u32,
+
+    /// Put waywall's window fullscreen as soon as the game is up.
+    ///
+    /// The size above only applies while fullscreen, so without this it does
+    /// nothing until you remember to press a key. It also settles which size
+    /// `gui.screen` should be, because the render size differs between
+    /// windowed and fullscreen and overlays are placed against one number.
+    #[serde(default)]
+    pub fullscreen_on_start: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

@@ -92,6 +92,13 @@ pub fn show(
             ui.label("Fullscreen height");
             ui.add(egui::DragValue::new(&mut doc.window.fullscreen_height).range(0..=16384));
             ui.end_row();
+
+            ui.label("Go fullscreen on start").on_hover_text(
+                "The size above only applies while fullscreen. Without this it \
+                 does nothing until you press a key for it.",
+            );
+            ui.checkbox(&mut doc.window.fullscreen_on_start, "");
+            ui.end_row();
         });
         }
 

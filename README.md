@@ -331,23 +331,38 @@ so it does not appear in the Modes tab. That puts it in `base_overlays`, which
 is drawn whatever mode you are in, including none.
 
 **The game looks soft or grainy at a distance.**
-Probably nothing to do with toolwall. waywall does not implement Wayland's
-fractional scaling, so on a desktop scaled to 125% or 150% it renders a buffer
-at the *logical* size and your compositor stretches it to fill the panel. A
-2560x1600 screen at 150% gives waywall a 1707x1067 window, and that is what the
-game renders at.
+waywall does not implement Wayland's fractional scaling. On a desktop scaled to
+125% or 150% it renders a buffer at the *logical* size and your compositor
+stretches that to fill the panel, so the game really is drawing fewer pixels
+than your monitor has. A 2560x1600 screen at 150% hands waywall a 1707x1067
+window, and that is what Minecraft renders at.
 
-Set `window.fullscreen_width` and `window.fullscreen_height` to your panel's
-real resolution in the Theme tab and run waywall fullscreen. waywall then
-renders at that size instead of the logical one. Setting your desktop to 100%
-scaling fixes it too. Either way it costs GPU, so it is a trade against frames.
-
-If you do that, tell toolwall as well, because overlay coordinates are in
-render pixels:
+You can fix this without touching your desktop scaling. waywall will render at
+a size you choose while its window is fullscreen, which is what
+`fullscreen_width` is for. Three settings, in this order:
 
 ```sh
 toolwall screen 2560 1600
+toolwall set window.fullscreen_width 2560
+toolwall set window.fullscreen_height 1600
+toolwall set window.fullscreen_on_start true
 ```
+
+Use your panel's real resolution, not the scaled one. `screen` goes first
+because toolwall refuses to write a config where the two disagree, and the
+order matters: overlay coordinates are in render pixels, so they have to move
+with it.
+
+`fullscreen_on_start` is what makes it stick. The render size only applies
+while fullscreen, so without it nothing changes until you remember a keybind.
+
+The cost is real. In base mode you are asking for 2.25x the pixels, so watch
+your frames on a reset. Thin and tall are unaffected, because there the game
+renders at the mode's resolution either way. To undo it, set
+`fullscreen_on_start` to false.
+
+Setting your desktop to 100% scaling fixes it too, if you would rather have
+that than the fullscreen requirement.
 
 **Everything got slower.**
 Try turning off `experimental.jit`. It is meant to help and sometimes does the

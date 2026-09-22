@@ -1038,6 +1038,55 @@ check("the readout starts on its own when it is enabled", function()
     os.remove(path)
 end)
 
+check("fullscreen on start waits for the game, then goes fullscreen once", function()
+    --[[
+        window.fullscreen_width only applies while fullscreen, so on a scaled
+        desktop it does nothing until somebody remembers a keybind. This is
+        the way people actually get a native resolution game while keeping
+        their desktop at 150%.
+
+        toggle_fullscreen is illegal during startup and there is nothing to
+        make fullscreen before the game exists, so it waits first.
+    ]]
+    local path = write_config([[
+      { "version": 1,
+        "window": { "fullscreen_width": 2560, "fullscreen_height": 1600,
+                    "fullscreen_on_start": true },
+        "gui": { "screen": { "w": 2560, "h": 1600 } },
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ] }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.mount_view()
+    waywall.finish_startup()
+
+    local toggles = 0
+    for _, entry in ipairs(waywall.log) do
+        if entry.name == "toggle_fullscreen" then toggles = toggles + 1 end
+    end
+    assert_eq(toggles, 1, "it went fullscreen exactly once")
+
+    os.remove(path)
+end)
+
+check("fullscreen on start stays off unless asked", function()
+    local path = write_config([[
+      { "version": 1,
+        "window": { "fullscreen_width": 2560, "fullscreen_height": 1600 },
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ] }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.mount_view()
+    waywall.finish_startup()
+
+    for _, entry in ipairs(waywall.log) do
+        assert(entry.name ~= "toggle_fullscreen", "it went fullscreen uninvited")
+    end
+
+    os.remove(path)
+end)
+
 check("the readout forks nothing before the game window exists", function()
     --[[
         This one cost two sessions.

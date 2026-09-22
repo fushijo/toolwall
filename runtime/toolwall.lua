@@ -358,6 +358,29 @@ local function register_listeners(doc)
 
         Its own listener, because the wait must not hold anything else up.
     ]]
+    --[[
+        Fullscreen on start, for people on a scaled desktop.
+
+        waywall renders at the logical window size unless it is fullscreen and
+        window.fullscreen_width is set, so on a 150% desktop the game is drawn
+        at two thirds of the panel and stretched back up. That setting is the
+        way out, and it only applies while fullscreen, so without this it does
+        nothing until you remember to press a key.
+
+        After the game window, because toggle_fullscreen is illegal during
+        startup and there is nothing to make fullscreen before then anyway.
+    ]]
+    local window = doc.window or {}
+    if util.bool(window.fullscreen_on_start, false) then
+        waywall.listen("load", function()
+            wait_for_game_window(60000)
+            local ok, err = pcall(waywall.toggle_fullscreen)
+            if not ok then
+                util.warn("could not go fullscreen: " .. tostring(err))
+            end
+        end)
+    end
+
     local ninb = doc.ninb or {}
     local ninb_cmd = launch.ninb_command(ninb)
 
