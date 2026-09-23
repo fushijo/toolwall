@@ -259,9 +259,11 @@ If `toolwall.json` already exists, the install keeps it and imports nothing. It
 says so now. `./uninstall.sh --all` first.
 
 **Typing in chat types the wrong thing.**
-Your rebinds are still on. Bind a key to `remaps.toggle` in the Keybinds tab.
-That turns the rebinds off and puts your keymap back to its base layout, which
-matters if you search-craft in another language.
+Your rebinds are still on. With the State Output mod installed, chat and menus
+turn them off by themselves, along with your custom layout. Without it, set a
+chat key in the setup window, or bind `remaps.toggle` in the Keybinds tab. It
+turns the rebinds off and puts your keymap back to its base layout, which
+matters if you search-craft in another language. Press it again to play.
 
 **A key I bound does nothing.**
 waywall matches modifiers exactly, so `T` does not fire while Shift is held.

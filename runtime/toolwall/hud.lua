@@ -15,10 +15,11 @@ Hud.__index = Hud
 
 local M = {}
 
-function M.new(doc, modes)
+function M.new(doc, modes, rt)
     local self = setmetatable({
         doc = doc,
         modes = modes,
+        rt = rt,
         objects = {},
         banner_obj = nil,
     }, Hud)
@@ -57,6 +58,9 @@ function Hud:_vars()
         sens = mode and mode.sensitivity and tostring(mode.sensitivity)
             or tostring((self.doc.input or {}).sensitivity or 1.0),
         state = state_name,
+        chat = (self.rt and self.rt.typing)
+            and ((self.doc.hud and self.doc.hud.chat_label) or "chat")
+            or "",
     }
 end
 

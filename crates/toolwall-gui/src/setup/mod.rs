@@ -64,6 +64,7 @@ enum Capture {
     Overlay(usize),
     Editor,
     Reset,
+    Chat,
 }
 
 pub struct Setup {
@@ -329,6 +330,7 @@ impl Setup {
                     }
                     Capture::Editor => self.choices.editor_key = input,
                     Capture::Reset => self.choices.reset_key = input,
+                    Capture::Chat => self.choices.chat_key = input,
                 }
                 self.capture = None;
             }
@@ -685,12 +687,30 @@ impl Setup {
                 }
             });
             ui.end_row();
+
+            ui.label("Type in chat").on_hover_text(
+                "Turns your rebinds off and puts your normal keyboard layout \
+                 back, so chat gets what you typed. Press it again to play. \
+                 Menus and chat already do this on their own if the instance \
+                 has the State Output mod, so this is the one to reach for \
+                 when it does not.",
+            );
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(&mut self.choices.chat_key);
+                if ui.button("Capture").clicked() {
+                    capture = Some(Capture::Chat);
+                }
+            });
+            ui.end_row();
         });
 
         if capture.is_some() {
             self.capture = capture;
         }
-        if matches!(self.capture, Some(Capture::Editor) | Some(Capture::Reset)) {
+        if matches!(
+            self.capture,
+            Some(Capture::Editor) | Some(Capture::Reset) | Some(Capture::Chat)
+        ) {
             ui.colored_label(egui::Color32::LIGHT_BLUE, "press a key, or Esc to cancel");
         }
 
@@ -711,6 +731,9 @@ impl Setup {
         let mut wanted: Vec<String> = vec![self.choices.editor_key.clone()];
         if !self.choices.reset_key.trim().is_empty() {
             wanted.push(self.choices.reset_key.clone());
+        }
+        if !self.choices.chat_key.trim().is_empty() {
+            wanted.push(self.choices.chat_key.clone());
         }
         wanted.extend(
             self.choices

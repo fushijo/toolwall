@@ -231,6 +231,14 @@ local CHAT = [[
     "keybinds": [ { "input": "Insert", "command": "remaps.toggle" } ] }
 ]]
 
+local function count_calls(name)
+    local n = 0
+    for _, c in ipairs(waywall.log or {}) do
+        if c.name == name then n = n + 1 end
+    end
+    return n
+end
+
 local function last_call(name)
     local found
     for _, c in ipairs(waywall.log or {}) do
@@ -308,6 +316,104 @@ check("the automatic switch leaves chat mode alone", function()
     local remaps = last_call("set_remaps")
     assert_eq(remaps.args[1]["T"], nil, "the game rebinds stayed off")
     assert_eq(toolwall.rt.typing, true, "and chat mode is still on")
+
+    os.remove(path)
+end)
+
+check("chat and the menus put the base layout back on their own", function()
+    --[[
+        The half every config leaves out. Turning the rebinds off in a menu is
+        no use if the letters are still coming out of a search-crafting
+        layout: you get to chat with your rebinds gone and your keyboard still
+        speaking Norwegian.
+
+        The State Output mod cannot tell chat from a chest, both arrive as
+        gamescreenopen, so this covers both. An inventory does not care which
+        layout it is on.
+    ]]
+    local path = write_config(CHAT)
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.fire("state")
+    assert_eq(last_call("set_keymap").args[1].layout, "no", "playing, so the custom layout is on")
+
+    waywall.state_value = { screen = "inworld", inworld = "menu" }
+    waywall.fire("state")
+    assert_eq(last_call("set_keymap").args[1].layout, "us", "chat, so the base layout is back")
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.fire("state")
+    assert_eq(last_call("set_keymap").args[1].layout, "no", "and closing it puts it back")
+
+    os.remove(path)
+end)
+
+check("the keymap is never set to the one it is already on", function()
+    --[[
+        Not a tidiness point. waywall's use_local_keymap calls
+        reset_keyboard_state, which sends a release for every key currently
+        held, so a redundant set_keymap drops the W you were walking with.
+
+        The state event fires on every screen change, most of which do not
+        change the layout at all.
+    ]]
+    local path = write_config(CHAT)
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    waywall.state_value = { screen = "inworld", inworld = "menu" }
+    waywall.fire("state")
+
+    local before = count_calls("set_keymap")
+    for _ = 1, 5 do
+        waywall.fire("state")
+    end
+
+    assert_eq(count_calls("set_keymap"), before, "the repeats changed nothing")
+
+    os.remove(path)
+end)
+
+check("a config with no custom layout never touches the keymap", function()
+    -- There is nothing to swap away from, and swapping anyway would release
+    -- every held key for no reason at all.
+    local path = write_config(MINIMAL)
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    for _, inworld in ipairs({ "unpaused", "menu", "paused", "unpaused" }) do
+        waywall.state_value = { screen = "inworld", inworld = inworld }
+        waywall.fire("state")
+    end
+
+    assert_eq(count_calls("set_keymap"), 0, "no keymap calls at all")
+
+    os.remove(path)
+end)
+
+check("the automatic switch leaves the chat mode keymap alone too", function()
+    -- Same pinning as the rebinds. Opening a chest while typing must not put
+    -- the search layout back underneath a half-written sentence.
+    local path = write_config(CHAT)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["Insert"]()
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.fire("state")
+
+    assert_eq(last_call("set_keymap").args[1].layout, "us", "still the base layout")
 
     os.remove(path)
 end)

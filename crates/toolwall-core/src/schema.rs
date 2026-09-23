@@ -798,6 +798,10 @@ pub enum Command {
 pub struct Hud {
     #[serde(default = "base_label")]
     pub idle_label: String,
+    /// What `{chat}` reads while chat mode is on. Empty the rest of the time,
+    /// so a text element that is only `{chat}` disappears when it is off.
+    #[serde(default = "chat_label")]
+    pub chat_label: String,
     /// Requires the State Output mod in the instance.
     #[serde(default)]
     pub follow_state: bool,
@@ -807,7 +811,12 @@ pub struct Hud {
 
 impl Default for Hud {
     fn default() -> Self {
-        Self { idle_label: "base".into(), follow_state: false, banner: None }
+        Self {
+            idle_label: "base".into(),
+            chat_label: "chat".into(),
+            follow_state: false,
+            banner: None,
+        }
     }
 }
 
@@ -882,6 +891,7 @@ fn yes() -> bool { true }
 fn is_false(b: &bool) -> bool { !*b }
 fn black() -> String { "#000000ff".into() }
 fn base_label() -> String { "base".into() }
+fn chat_label() -> String { "chat".into() }
 fn gui_command() -> String { "toolwall-gui".into() }
 fn launch_delay() -> u32 { 400 }
 fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }

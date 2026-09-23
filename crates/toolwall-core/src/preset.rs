@@ -63,6 +63,9 @@ pub struct Choices {
     pub editor_key: String,
     /// Back to the normal resolution. Empty removes it.
     pub reset_key: String,
+    /// Chat mode: rebinds off, custom layout off, until you press it again.
+    /// Empty removes it.
+    pub chat_key: String,
     pub background: String,
     pub font_path: String,
     /// Normal and tall waywall sensitivities, once the calculator has run.
@@ -140,6 +143,7 @@ pub fn choices_for(doc: &Document) -> Choices {
         overlays,
         editor_key: key_for(Command::GuiToggle).unwrap_or_else(|| "Ctrl-I".into()),
         reset_key: key_for(Command::ModeReset).unwrap_or_default(),
+        chat_key: key_for(Command::RemapsToggle).unwrap_or_default(),
         background: doc.theme.background.clone(),
         font_path: doc.gui.appearance.font_path.clone(),
         sensitivity: None,
@@ -236,6 +240,19 @@ pub fn build(base: &Document, choices: &Choices) -> Document {
         });
     }
 
+    if !choices.chat_key.trim().is_empty() {
+        binds.push(Keybind {
+            f3_safe: true,
+            // Chat mode off the title screen would leave the rebinds off with
+            // nothing to put them back, since the automatic swap defers to it.
+            ingame_only: false,
+            input: choices.chat_key.clone(),
+            command: Command::RemapsToggle,
+            args: None,
+            label: Some("Type in chat".into()),
+        });
+    }
+
     for overlay in &choices.overlays {
         let OverlayState::Bound(input) = &overlay.state else { continue };
         if input.trim().is_empty() {
@@ -262,7 +279,11 @@ pub fn build(base: &Document, choices: &Choices) -> Document {
     for bind in &base.keybinds {
         let ours = matches!(
             bind.command,
-            Command::GuiToggle | Command::ModeSet | Command::ModeReset | Command::OverlayToggle
+            Command::GuiToggle
+                | Command::ModeSet
+                | Command::ModeReset
+                | Command::OverlayToggle
+                | Command::RemapsToggle
         );
         if !ours {
             binds.push(bind.clone());
@@ -701,6 +722,34 @@ mod tests {
             .unwrap();
         assert_eq!(thin.input, "Alt_L");
         assert!(problems(&built).is_empty(), "{:?}", problems(&built));
+    }
+
+    #[test]
+    fn the_chat_key_is_a_choice_and_survives_a_round_trip() {
+        // Without one, chat mode is a feature you have to know exists and go
+        // and bind by hand, which is how the first tester found it: by not
+        // finding it.
+        let base = preset();
+        let mut choices = choices_for(&base);
+
+        assert!(choices.chat_key.is_empty(), "the preset does not bind one for you");
+
+        choices.chat_key = "Insert".into();
+        let built = build(&base, &choices);
+
+        let chat = built.keybinds.iter().find(|b| b.command == Command::RemapsToggle).unwrap();
+        assert_eq!(chat.input, "Insert");
+        assert!(problems(&built).is_empty(), "{:?}", problems(&built));
+
+        assert_eq!(choices_for(&built).chat_key, "Insert", "and reading it back finds it");
+
+        // Rebuilding drops the binds this window owns and writes them again.
+        // A chat key left blank has to actually go, not turn into a bind on
+        // no key at all.
+        let mut cleared = choices_for(&built);
+        cleared.chat_key = String::new();
+        let built = build(&built, &cleared);
+        assert!(!built.keybinds.iter().any(|b| b.command == Command::RemapsToggle));
     }
 
     #[test]

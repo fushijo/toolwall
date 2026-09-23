@@ -48,6 +48,7 @@ local rt = {
     doc = nil,      -- parsed toolwall.json
     remaps = nil,   -- { base, menu }, filtered once at setup
     typing = false, -- chat mode, toggled by hand, reset by a reload
+    keymap = nil,   -- the keymap waywall is on, so we never set the same one twice
     scene = nil,    -- scene registry (live mirror/image objects)
     modes = nil,    -- mode controller
     hud = nil,      -- hud controller
@@ -79,6 +80,11 @@ end
 
 local function build_waywall_config(doc)
     local input = doc.input or {}
+
+    -- waywall is about to be on this one, so record it before anything asks
+    -- to change it. Getting this wrong only costs a redundant set_keymap.
+    rt.keymap = M.keymap_for(doc, false)
+
     local theme = doc.theme or {}
     local window = doc.window or {}
     local experimental = doc.experimental or {}
@@ -171,28 +177,112 @@ end
 
     Typing falls back to the layout the custom one is built on, which is what
     the keyboard did before toolwall touched it.
+
+    Only a custom layout has anything to fall back from. Without one this
+    returns the same table either way, and every caller below is written to
+    do nothing when the keymap does not change, so chat mode costs a user who
+    never built a layout precisely nothing.
+
+    model, rules and options survive the swap: they describe the keyboard and
+    the session, not the layout. variant does not - it names a variant of the
+    custom layout, which the base does not have.
 ]]
 function M.keymap_for(doc, typing)
     local input = doc.input or {}
     local custom = input.custom_layout
 
-    if typing then
-        local base = "us"
-        if type(custom) == "table" and type(custom.base) == "string" and custom.base ~= "" then
-            base = custom.base
-        elseif type(input.layout) == "string" and input.layout ~= "" then
-            base = input.layout
-        end
-        return { layout = base, model = "", rules = "", variant = "", options = "" }
-    end
-
-    return {
+    local km = {
         layout = input.layout or "",
         model = input.model or "",
         rules = input.rules or "",
         variant = input.variant or "",
         options = input.options or "",
     }
+
+    if typing and type(custom) == "table" then
+        km.layout = (type(custom.base) == "string" and custom.base ~= "") and custom.base or "us"
+        km.variant = ""
+    end
+
+    return km
+end
+
+--[[
+    Is there a keymap for chat mode to swap to?
+]]
+function M.has_chat_keymap(doc)
+    local a, b = M.keymap_for(doc, false), M.keymap_for(doc, true)
+    for _, key in ipairs({ "layout", "model", "rules", "variant", "options" }) do
+        if a[key] ~= b[key] then
+            return true
+        end
+    end
+    return false
+end
+
+--[[
+    Set the keymap, unless it is already the one we want.
+
+    waywall's set_keymap is not free and not quiet. From use_local_keymap:
+
+        seat->config->keymap = keymap;
+        reset_keyboard_state(seat);
+
+    and reset_keyboard_state sends a release for every key currently held.
+    Setting the keymap you are already on would therefore drop the W you were
+    walking with, for nothing. Every path that changes the keymap goes through
+    here so that cannot happen, and so the automatic swap and the manual
+    toggle cannot end up disagreeing about what is on.
+]]
+function M.apply_keymap(km)
+    local live = rt.keymap
+    if live
+        and live.layout == km.layout
+        and live.model == km.model
+        and live.rules == km.rules
+        and live.variant == km.variant
+        and live.options == km.options
+    then
+        return true
+    end
+
+    local ok, err = pcall(waywall.set_keymap, km)
+    if not ok then
+        util.warn("could not change the keymap: " .. tostring(err))
+        return false
+    end
+
+    rt.keymap = km
+    return true
+end
+
+--[[
+    Put the base layout back wherever typing happens.
+
+    The other half of apply_state_remaps, and the half every config that tries
+    this leaves out. Turning the rebinds off in a menu is no use if the
+    letters are still coming out of a search-crafting layout: you get to chat
+    with your rebinds gone and your keyboard still speaking Norwegian.
+
+    Anything that is not inworld/unpaused counts, which is chat, inventories,
+    signs, the pause menu and the title screen. The State Output mod cannot
+    tell chat from a chest - both arrive as "gamescreenopen" - so this covers
+    both, and the inventory does not care which layout it is on.
+
+    A manual toggle outranks it, exactly as it does for the remaps.
+]]
+local function apply_state_keymap()
+    if rt.typing then
+        return
+    end
+
+    local ok, state = pcall(waywall.state)
+    if not ok or type(state) ~= "table" then
+        return
+    end
+
+    local playing = state.screen == "inworld" and state.inworld == "unpaused"
+    M.apply_keymap(M.keymap_for(rt.doc, not playing))
 end
 
 --[[
@@ -260,7 +350,7 @@ end
 local function on_load()
     rt.scene = scene.new(rt.doc)
     rt.modes = modes.new(rt.doc, rt.scene)
-    rt.hud = hud.new(rt.doc, rt.modes)
+    rt.hud = hud.new(rt.doc, rt.modes, rt)
 
     commands.bind(rt)
 
@@ -289,6 +379,10 @@ local function on_load()
 
     if next(rt.remaps.menu) then
         apply_state_remaps()
+    end
+
+    if M.has_chat_keymap(rt.doc) then
+        apply_state_keymap()
     end
 
     if rt.degraded then
@@ -324,6 +418,17 @@ local function register_listeners(doc)
     ]]
     if next(rt.remaps.menu) then
         waywall.listen("state", apply_state_remaps)
+    end
+
+    --[[
+        And swap the layout with it, for the same reason.
+
+        Separate from the remaps listener because the two are configured
+        separately: a custom layout with no menu remaps still wants this, and
+        menu remaps with no custom layout have nothing to swap.
+    ]]
+    if M.has_chat_keymap(doc) then
+        waywall.listen("state", apply_state_keymap)
     end
 
     if doc.hud and doc.hud.follow_state then

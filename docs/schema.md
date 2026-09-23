@@ -86,13 +86,31 @@ tell it your screen size, and the anchors keep the result correct from then on.
 
 It does two things. The rebinds go to `input.remaps_menu`, which is empty
 unless you filled it in, and the keymap goes back to the layout your custom one
-is built on (`input.custom_layout.base`, or `input.layout`). Swapping rebinds
-alone is not enough if you search-craft in another language: that layout lives
-in the keymap, so the letters would still come out wrong.
+is built on (`input.custom_layout.base`). Swapping rebinds alone is not enough
+if you search-craft in another language: that layout lives in the keymap, so
+the letters would still come out wrong.
 
 While it is on, the automatic switch that follows the cursor leaves the rebinds
 alone. Otherwise opening a chest mid-sentence would put the game rebinds back
 underneath you. A reload turns it off.
+
+### The automatic half
+
+With the State Output mod, you mostly do not have to press it. Anything that
+is not `inworld/unpaused` - chat, an inventory, a sign, the pause menu - gets
+the menu rebinds and the base layout on its own, and going back to playing
+puts both back.
+
+The mod reports chat and a chest identically, both are `gamescreenopen`, so
+they are treated the same. An inventory does not care which layout it is on.
+
+Only a config with `input.custom_layout` swaps the keymap at all, and the
+keymap is never set to the one that is already on: waywall's `set_keymap`
+sends a release for every key currently held, so a pointless call drops the W
+you were walking with.
+
+`remaps.toggle` is still worth binding. It is what you have without the mod,
+and it wins over the automatic swap while it is on.
 
 ## Rebind names are not keybind names
 
@@ -236,6 +254,7 @@ writes it on save; `toolwall layout` writes it from the command line, and
 | `{width}` / `{height}` | Individually |
 | `{sens}` | Effective sensitivity |
 | `{state}` | Instance state, e.g. `inworld/paused`, requires State Output |
+| `{chat}` | `hud.chat_label` while chat mode is on, empty otherwise |
 
 A template rendering to an empty string is skipped, so an element can disappear
 conditionally.

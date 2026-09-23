@@ -209,9 +209,11 @@ function M.bind(rt)
             waywall.set_remaps(state.remaps and state.remaps.base or {})
         end
 
-        local ok, err = pcall(waywall.set_keymap, toolwall.keymap_for(state.doc, state.typing))
-        if not ok then
-            util.warn("chat mode could not change the keymap: " .. tostring(err))
+        toolwall.apply_keymap(toolwall.keymap_for(state.doc, state.typing))
+
+        -- so a {chat} in the HUD says which way the key just went.
+        if state.hud then
+            state.hud:refresh()
         end
     end)
 
