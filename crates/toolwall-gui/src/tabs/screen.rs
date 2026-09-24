@@ -49,7 +49,8 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
         // nothing.
         let snapping = state.snapping && !ui.input(|i| i.modifiers.alt);
 
-        let action = Canvas { screen, items: &items, snapping, over_the_real_thing: false }
+        let game = game_rect(doc, &state.mode, screen);
+        let action = Canvas { screen, items: &items, game, snapping, over_the_real_thing: false }
             .show(ui, &mut state.canvas);
         apply(doc, action);
 
@@ -143,6 +144,36 @@ pub(crate) fn stored(rect: Rect, anchor: &mut Option<Anchor>, screen: (i32, i32)
         Some(Anchor::BottomRight) => Rect { x: sw - rect.x, y: sh - rect.y, ..rect },
         Some(Anchor::Center) => unreachable!("handled above"),
     }
+}
+
+/// Where Minecraft sits inside waywall's window in this mode.
+///
+/// waywall centres the instance and letterboxes whatever is left, so in Thin
+/// BT the game is a 340-wide strip down the middle of a 1920-wide window.
+/// Without it on the canvas there is no way to tell an overlay that lands on
+/// the game from one that lands in the black.
+///
+/// A 0 in either direction means "stretch to the window", and the base mode
+/// has no resolution at all, so both come back as None: the game is the whole
+/// window and an outline around everything says nothing.
+fn game_rect(doc: &Document, mode: &str, screen: (i32, i32)) -> Option<Rect> {
+    let mode = doc.modes.iter().find(|m| m.id == mode)?;
+    let (w, h) = (mode.resolution.width as i32, mode.resolution.height as i32);
+    if w <= 0 || h <= 0 {
+        return None;
+    }
+
+    // Taller than the window is the eye-measure case: it is scaled down to
+    // fit, keeping its shape, exactly as waywall does.
+    let scale = (screen.0 as f32 / w as f32).min(screen.1 as f32 / h as f32).min(1.0);
+    let (w, h) = ((w as f32 * scale) as i32, (h as f32 * scale) as i32);
+
+    Some(Rect {
+        x: (screen.0 - w) / 2,
+        y: (screen.1 - h) / 2,
+        w: w.max(1) as u32,
+        h: h.max(1) as u32,
+    })
 }
 
 fn screen_of(doc: &Document) -> (i32, i32) {
@@ -357,6 +388,9 @@ fn inspector(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
                 );
             }
         }
+
+        // Room under the last row, so the status bar never cuts one in half.
+        ui.add_space(24.0);
     });
 }
 

@@ -148,5 +148,8 @@ fn attach_list(ui: &mut egui::Ui, available: &[String], attached: &mut Vec<Strin
                 }
             });
         }
+
+        // Room under the last row, so the status bar never cuts one in half.
+        ui.add_space(24.0);
     });
 }

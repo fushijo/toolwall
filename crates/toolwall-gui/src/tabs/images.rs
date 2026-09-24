@@ -133,5 +133,8 @@ pub fn show(
                 shader: None,
             });
         }
+
+        // Room under the last row, so the status bar never cuts one in half.
+        ui.add_space(24.0);
     });
 }

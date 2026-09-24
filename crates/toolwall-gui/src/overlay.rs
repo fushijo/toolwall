@@ -170,7 +170,7 @@ impl eframe::App for Overlay {
                 );
                 let snapping = self.snapping && !ui.input(|i| i.modifiers.alt);
 
-                let action = Canvas { screen, items: &items, snapping, over_the_real_thing: true }
+                let action = Canvas { screen, items: &items, game: None, snapping, over_the_real_thing: true }
                     .show(ui, &mut self.canvas);
                 apply(&mut self.doc, action);
             });
@@ -255,6 +255,7 @@ mod tests {
                         Canvas {
                             screen,
                             items: &items,
+                            game: None,
                             snapping: true,
                             over_the_real_thing: true,
                         }

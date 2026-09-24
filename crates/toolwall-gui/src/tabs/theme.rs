@@ -122,6 +122,9 @@ pub fn show(
             path_field(ui, &mut look.font_path, browser, PickTarget::Font, "ttf");
             ui.end_row();
         });
+
+        // Room under the last row, so the status bar never cuts one in half.
+        ui.add_space(24.0);
     });
 }
 

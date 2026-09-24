@@ -171,6 +171,11 @@ fn snap(value: i32, targets: &[i32], slack: i32) -> (i32, Option<i32>) {
 pub struct Canvas<'a> {
     pub screen: (i32, i32),
     pub items: &'a [Item],
+    /// Where Minecraft itself lands in this mode, if it is not the whole
+    /// window. In Thin BT the game is 340 of 1920 pixels wide, and without
+    /// this you cannot tell an overlay on the game from one in the black
+    /// beside it.
+    pub game: Option<Rect>,
     /// Held to move without snapping.
     pub snapping: bool,
     /// Drawn over the real overlays rather than over a picture of them.
@@ -181,11 +186,40 @@ pub struct Canvas<'a> {
     pub over_the_real_thing: bool,
 }
 
+/// How big to draw the picture of the screen.
+///
+/// Sized on width alone, a 16:10 screen came out taller than the panel, so the
+/// bottom of your own screen sat behind the status bar and the numbers under
+/// the canvas were never reachable. The default readout position is bottom
+/// right, which is exactly the corner that went missing.
+///
+/// Shared with the drag tests, which have to click where the canvas actually
+/// is rather than where they assume it would be.
+pub(crate) fn canvas_size(
+    available: egui::Vec2,
+    screen: (i32, i32),
+    over_the_real_thing: bool,
+) -> egui::Vec2 {
+    let aspect = screen.1.max(1) as f32 / screen.0.max(1) as f32;
+
+    let room = if over_the_real_thing {
+        available.y
+    } else {
+        // Leave the inspector below it on screen.
+        (available.y - 120.0).max(180.0)
+    };
+
+    let width = available.x.max(200.0).min(room / aspect.max(0.01));
+    egui::vec2(width, width * aspect)
+}
+
 impl Canvas<'_> {
     pub fn show(&self, ui: &mut egui::Ui, state: &mut State) -> Action {
-        let aspect = self.screen.1.max(1) as f32 / self.screen.0.max(1) as f32;
-        let width = ui.available_width().max(200.0);
-        let size = egui::vec2(width, width * aspect);
+        let size = canvas_size(
+            egui::vec2(ui.available_width(), ui.available_height()),
+            self.screen,
+            self.over_the_real_thing,
+        );
 
         let (area, response) = ui.allocate_exact_size(size, egui::Sense::click());
         let painter = ui.painter_at(area);
@@ -198,6 +232,19 @@ impl Canvas<'_> {
             // a stand-in for the screen
             painter.rect_filled(area, 6.0, visuals.extreme_bg_color);
             self.grid(&painter, area, faint);
+
+            if let Some(game) = self.game {
+                let r = lerp_rect(game, self.screen, area);
+                painter.rect_filled(r, 2.0, faint.gamma_multiply(0.10));
+                painter.rect_stroke(r, 2.0, egui::Stroke::new(1.0, faint));
+                painter.text(
+                    egui::pos2(r.center().x, r.max.y - 4.0),
+                    egui::Align2::CENTER_BOTTOM,
+                    "Minecraft",
+                    egui::FontId::proportional(11.0),
+                    faint,
+                );
+            }
             painter.rect_stroke(area, 6.0, egui::Stroke::new(1.0, faint));
         }
 
@@ -761,6 +808,10 @@ mod drag_tests {
     /// actually push the mouse.
     struct Harness {
         snapping: bool,
+        /// The window the canvas is laid out in. Tall enough matters: the
+        /// canvas is fitted to the panel height, so a short window makes one
+        /// screen pixel smaller than one canvas pixel.
+        viewport: egui::Vec2,
         ctx: egui::Context,
         items: Vec<Item>,
         state: State,
@@ -773,6 +824,7 @@ mod drag_tests {
         fn new(items: Vec<Item>) -> Self {
             let mut h = Harness {
                 snapping: false,
+                viewport: egui::vec2(900.0, 700.0),
                 ctx: egui::Context::default(),
                 items,
                 state: State::default(),
@@ -788,10 +840,7 @@ mod drag_tests {
             // A window the size someone would actually have, so the canvas
             // scale in these tests resembles the real one.
             let input = egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(900.0, 700.0),
-                )),
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, self.viewport)),
                 events,
                 ..Default::default()
             };
@@ -805,12 +854,16 @@ mod drag_tests {
             self.ctx.run(input, |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let before = ui.next_widget_position();
-                    let width = ui.available_width().max(200.0);
-                    let aspect = screen.1 as f32 / screen.0 as f32;
-                    area = egui::Rect::from_min_size(before, egui::vec2(width, width * aspect));
+                    let size = canvas_size(
+                        egui::vec2(ui.available_width(), ui.available_height()),
+                        screen,
+                        false,
+                    );
+                    area = egui::Rect::from_min_size(before, size);
 
                     let action =
-                        Canvas { screen, items: &items, snapping, over_the_real_thing: false }.show(ui, &mut state);
+                        Canvas { screen, items: &items, game: None, snapping, over_the_real_thing: false }
+                            .show(ui, &mut state);
                     if let Action::Moved { key, rect } = action {
                         moved = Some((key, rect));
                     }
@@ -874,8 +927,34 @@ mod drag_tests {
     /// Several small drags in a row must add up. Converting each frame's delta
     /// to whole pixels on its own rounds a slow drag to nothing.
     #[test]
+    fn the_canvas_never_outgrows_the_panel_it_is_in() {
+        // Sized on width alone it drew past the bottom of the window, so the
+        // bottom of your own screen sat behind the status bar and the numbers
+        // under the canvas could not be reached. The default readout position
+        // is bottom right, which is the corner that went missing.
+        let available = egui::vec2(900.0, 700.0);
+
+        for screen in [(1920, 1080), (2560, 1600), (1080, 1920), (3440, 1440)] {
+            let size = canvas_size(available, screen, false);
+            assert!(
+                size.y <= available.y - 120.0 + 0.5,
+                "{screen:?} drew {size:?} into {available:?}, leaving nothing for the numbers"
+            );
+            assert!(size.x <= available.x + 0.5, "{screen:?} drew wider than the panel");
+            assert!(size.x > 0.0 && size.y > 0.0, "{screen:?} drew nothing");
+        }
+    }
+
+    #[test]
     fn a_slow_drag_does_not_get_lost_to_rounding() {
         let mut h = Harness::new(one_item(Resize::Free));
+
+        // Tall enough that the canvas is not shrunk to fit the panel, so one
+        // screen pixel is at least one canvas pixel and a one-pixel step is a
+        // thing the mouse can express at all. That is the case this is about.
+        h.viewport = egui::vec2(900.0, 1300.0);
+        h.frame(vec![]);
+
         h.press(h.at(200, 200));
 
         let mut last = None;

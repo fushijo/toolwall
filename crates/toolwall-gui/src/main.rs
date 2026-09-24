@@ -265,11 +265,21 @@ impl App {
         // 2.5:1. This floats over a bright game on a laptop screen, so it has
         // to be readable at a glance rather than merely present.
         if look.dark {
-            visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::from_gray(200);
-            visuals.widgets.inactive.fg_stroke.color = egui::Color32::from_gray(210);
+            visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::from_gray(205);
+            visuals.widgets.inactive.fg_stroke.color = egui::Color32::from_gray(215);
+            // ui.weak() is this blended halfway to the panel, and it carries
+            // load-bearing text: column headers, "Drag to move", every hint.
+            // Left at egui's default it landed at 4.0:1, under AA.
+            visuals.widgets.noninteractive.weak_bg_fill = egui::Color32::from_gray(110);
+            // A checkbox you cannot see the edge of is not a control. 1.86:1
+            // against the panel, measured.
+            visuals.widgets.inactive.bg_fill = egui::Color32::from_gray(58);
+            // The selected tab and the accent, which were 2.65:1 on the bar.
+            visuals.selection.bg_fill = egui::Color32::from_rgb(0, 122, 168);
         } else {
             visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::from_gray(30);
             visuals.widgets.inactive.fg_stroke.color = egui::Color32::from_gray(20);
+            visuals.widgets.noninteractive.weak_bg_fill = egui::Color32::from_gray(150);
         }
 
         // A field has to look like a field.
@@ -278,7 +288,7 @@ impl App {
         // border, so "Cursor icon" and "Model" and "Rules" read as gaps in the
         // panel rather than as somewhere you can type.
         let edge = if look.dark {
-            egui::Color32::from_gray(78)
+            egui::Color32::from_gray(106)
         } else {
             egui::Color32::from_gray(160)
         };

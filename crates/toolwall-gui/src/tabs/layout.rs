@@ -358,6 +358,9 @@ fn install(ui: &mut egui::Ui, doc: &mut Document) {
                 .desired_width(f32::INFINITY)
                 .desired_rows(8),
         );
+
+        // Room under the last row, so the status bar never cuts one in half.
+        ui.add_space(24.0);
     });
 }
 

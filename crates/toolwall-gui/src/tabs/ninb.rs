@@ -333,6 +333,9 @@ pub fn show(
             "The face is waywall's bundled 8x16 terminus and cannot be changed: \
              scene text has no font parameter.",
         );
+
+        // Room under the last row, so the status bar never cuts one in half.
+        ui.add_space(24.0);
     });
 }
 

@@ -247,5 +247,8 @@ fn outline_editor(ui: &mut egui::Ui, outline: &mut Option<Outline>) {
             .on_hover_text("Thickness");
             color_field(ui, &mut outline.color);
         }
+
+        // Room under the last row, so the status bar never cuts one in half.
+        ui.add_space(24.0);
     });
 }

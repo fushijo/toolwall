@@ -12,25 +12,31 @@ use toolwall_core::{Document, Problem, Scope};
 use crate::keys;
 use crate::widgets::{optional_text, problems_for, settings_grid};
 
-const COMMANDS: &[(Command, &str)] = &[
-    (Command::ModeSet, "mode.set"),
-    (Command::ModeReset, "mode.reset"),
-    (Command::ModeCycle, "mode.cycle"),
-    (Command::SensSet, "sens.set"),
-    (Command::KeymapSet, "keymap.set"),
-    (Command::RemapsSet, "remaps.set"),
-    (Command::KeyPress, "key.press"),
-    (Command::FullscreenToggle, "fullscreen.toggle"),
-    (Command::FloatingToggle, "floating.toggle"),
-    (Command::FloatingShow, "floating.show"),
-    (Command::FloatingHide, "floating.hide"),
-    (Command::GuiToggle, "gui.toggle"),
-    (Command::ScreenEdit, "screen.edit"),
-    (Command::RemapsToggle, "remaps.toggle"),
-    (Command::NinbToggle, "ninb.toggle"),
-    (Command::NinbOverlay, "ninb.overlay"),
-    (Command::OverlayToggle, "overlay.toggle"),
-    (Command::Exec, "exec"),
+/// Every command, as what it does and as what it is called in the file.
+///
+/// The identifier is what waywall and `docs/schema.md` use, and it is the only
+/// thing anyone reading the JSON will see, so it stays: as hover text, and in
+/// Advanced. But `floating.toggle` in a dropdown labelled Basic asks a runner
+/// to know the waywall Lua API before they can bind a key.
+const COMMANDS: &[(Command, &str, &str)] = &[
+    (Command::ModeSet, "Switch to a mode", "mode.set"),
+    (Command::ModeReset, "Back to the normal size", "mode.reset"),
+    (Command::ModeCycle, "Step through the modes", "mode.cycle"),
+    (Command::SensSet, "Set the mouse sensitivity", "sens.set"),
+    (Command::KeymapSet, "Switch keyboard layout", "keymap.set"),
+    (Command::RemapsSet, "Switch to a set of rebinds", "remaps.set"),
+    (Command::KeyPress, "Press a key in the game", "key.press"),
+    (Command::FullscreenToggle, "Fullscreen on and off", "fullscreen.toggle"),
+    (Command::FloatingToggle, "Floating windows on and off", "floating.toggle"),
+    (Command::FloatingShow, "Show the floating windows", "floating.show"),
+    (Command::FloatingHide, "Hide the floating windows", "floating.hide"),
+    (Command::GuiToggle, "Open this editor", "gui.toggle"),
+    (Command::ScreenEdit, "Place overlays over the game", "screen.edit"),
+    (Command::RemapsToggle, "Type in chat", "remaps.toggle"),
+    (Command::NinbToggle, "Ninjabrain Bot's window", "ninb.toggle"),
+    (Command::NinbOverlay, "Ninjabrain readout on and off", "ninb.overlay"),
+    (Command::OverlayToggle, "Show or hide overlays", "overlay.toggle"),
+    (Command::Exec, "Run a command", "exec"),
 ];
 
 /// The overlays a bind toggles, from either shape the config can be in.
@@ -57,8 +63,27 @@ fn clear_arg(args: &mut Option<Value>, key: &str) {
 /// about as long as a real bind gets.
 const KEY_COLUMN: f32 = 120.0;
 
+/// The Capture / Set / List buttons, in both states.
+///
+/// Filled with the selection colour while it is swallowing the next key, so
+/// "this is listening" is a fill and a word rather than a shade of grey.
+pub(crate) fn listen_button(ui: &egui::Ui, listening: bool, idle: &str) -> egui::Button<'static> {
+    if listening {
+        egui::Button::new(egui::RichText::new("press a key…").strong())
+            .fill(ui.visuals().selection.bg_fill)
+    } else {
+        egui::Button::new(idle.to_string())
+    }
+}
+
+/// What it does, for anywhere a person reads it.
 fn command_name(command: Command) -> &'static str {
-    COMMANDS.iter().find(|(c, _)| *c == command).map(|(_, n)| *n).unwrap_or("?")
+    COMMANDS.iter().find(|(c, ..)| *c == command).map(|(_, name, _)| *name).unwrap_or("?")
+}
+
+/// What it is called in the file, for the hover and for Advanced.
+fn command_id(command: Command) -> &'static str {
+    COMMANDS.iter().find(|(c, ..)| *c == command).map(|(.., id)| *id).unwrap_or("?")
 }
 
 pub fn show(
@@ -89,6 +114,21 @@ pub fn show(
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         suspend_switch(ui, doc);
+
+        // Above the list. Below it, a config with ten binds put it off the
+        // bottom of the panel behind a scrollbar.
+        if ui.button("Add keybind").clicked() {
+            doc.keybinds.push(Keybind {
+                f3_safe: true,
+                ingame_only: false,
+                input: String::new(),
+                command: Command::ModeReset,
+                args: None,
+                label: None,
+            });
+            *capturing = Some(doc.keybinds.len() - 1);
+        }
+        ui.add_space(4.0);
 
         let mut remove = None;
 
@@ -121,13 +161,11 @@ pub fn show(
                         ui.horizontal(|ui| {
                             ui.text_edit_singleline(&mut bind.input);
 
+                            // A frame, so it reads as something you press.
+                            // selectable_label put it at the same weight and
+                            // the same colour as the row's own label.
                             let capturing_this = *capturing == Some(index);
-                            let button = if capturing_this {
-                                "press a key…"
-                            } else {
-                                "Capture"
-                            };
-                            if ui.selectable_label(capturing_this, button).clicked() {
+                            if ui.add(listen_button(ui, capturing_this, "Capture")).clicked() {
                                 *capturing = if capturing_this { None } else { Some(index) };
                             }
                         });
@@ -153,20 +191,28 @@ pub fn show(
                         ui.end_row();
 
                         ui.label("Does");
-                        egui::ComboBox::from_id_salt(("command", index))
-                            .selected_text(command_name(bind.command))
-                            .show_ui(ui, |ui| {
-                                for (command, name) in COMMANDS {
-                                    if ui
-                                        .selectable_label(bind.command == *command, *name)
-                                        .clicked()
-                                        && bind.command != *command
-                                    {
-                                        bind.command = *command;
-                                        bind.args = None;
+                        ui.horizontal(|ui| {
+                            egui::ComboBox::from_id_salt(("command", index))
+                                .selected_text(command_name(bind.command))
+                                .width(230.0)
+                                .show_ui(ui, |ui| {
+                                    for (command, name, id) in COMMANDS {
+                                        if ui
+                                            .selectable_label(bind.command == *command, *name)
+                                            .on_hover_text(*id)
+                                            .clicked()
+                                            && bind.command != *command
+                                        {
+                                            bind.command = *command;
+                                            bind.args = None;
+                                        }
                                     }
-                                }
-                            });
+                                });
+
+                            if advanced {
+                                ui.weak(command_id(bind.command));
+                            }
+                        });
                         ui.end_row();
 
                         args_editor(ui, index, bind, &mode_ids, &overlay_ids, allow_exec);
@@ -185,19 +231,8 @@ pub fn show(
             }
         }
 
-        ui.separator();
-
-        if ui.button("Add keybind").clicked() {
-            doc.keybinds.push(Keybind {
-                f3_safe: true,
-                ingame_only: false,
-                input: String::new(),
-                command: Command::ModeReset,
-                args: None,
-                label: None,
-            });
-            *capturing = Some(doc.keybinds.len() - 1);
-        }
+        // Room under the last row, so the status bar never cuts one in half.
+        ui.add_space(24.0);
     });
 }
 

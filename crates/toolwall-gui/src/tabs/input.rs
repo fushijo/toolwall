@@ -131,6 +131,9 @@ pub fn show(
                 ui.end_row();
             });
         }
+
+        // Room under the last row, so the status bar never cuts one in half.
+        ui.add_space(24.0);
     });
 }
 
@@ -347,10 +350,9 @@ fn capture_field(
         .changed();
 
     let listening = active == Some(RemapEntry::Listening);
-    let label = if listening { "press a key…" } else { "Set" };
 
     if ui
-        .selectable_label(listening, label)
+        .add(crate::tabs::keybinds::listen_button(ui, listening, "Set"))
         .on_hover_text(
             "Press this, then press the key. A modifier on its own cannot be \
              read this way, so use List for those.",
@@ -366,8 +368,13 @@ fn capture_field(
     }
 
     let picking = active == Some(RemapEntry::Picking);
+    let list = egui::Button::new("List…").fill(if picking {
+        ui.visuals().selection.bg_fill
+    } else {
+        ui.visuals().widgets.inactive.bg_fill
+    });
     let picker = ui
-        .selectable_label(picking, "List…")
+        .add(list)
         .on_hover_text("Every key waywall knows, including Left Alt, Right Shift and the rest");
 
     let popup_id = ui.make_persistent_id(("remap-picker", table as u8, row, to_side));
