@@ -129,6 +129,18 @@ pub struct Input {
     #[serde(default)]
     pub remaps_menu: std::collections::BTreeMap<String, String>,
 
+    /// Keys that open chat, as X11 keysyms.
+    ///
+    /// The State Output mod reports chat and a crafting table identically, so
+    /// `remaps_menu` lands in both. Watching the key that opens chat is what
+    /// separates them: a crafting table is a right-click, chat is a keypress.
+    ///
+    /// These are watched, never consumed, and only while unpaused in a world.
+    /// Set this to match whatever you actually have chat bound to in
+    /// Minecraft. Empty turns the whole thing off.
+    #[serde(default = "chat_keys")]
+    pub chat_keys: Vec<String>,
+
     /// -1 inherits the host Wayland session.
     #[serde(default = "minus_one")]
     pub repeat_rate: i32,
@@ -208,6 +220,7 @@ impl Default for Input {
             options: String::new(),
             remaps: Default::default(),
             remaps_menu: Default::default(),
+            chat_keys: chat_keys(),
             custom_layout: None,
             repeat_rate: -1,
             repeat_delay: -1,
@@ -892,6 +905,7 @@ fn is_false(b: &bool) -> bool { !*b }
 fn black() -> String { "#000000ff".into() }
 fn base_label() -> String { "base".into() }
 fn chat_label() -> String { "chat".into() }
+fn chat_keys() -> Vec<String> { vec!["T".into(), "slash".into()] }
 fn gui_command() -> String { "toolwall-gui".into() }
 fn launch_delay() -> u32 { 400 }
 fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }

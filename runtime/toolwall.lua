@@ -48,6 +48,7 @@ local rt = {
     doc = nil,      -- parsed toolwall.json
     remaps = nil,   -- { base, menu }, filtered once at setup
     typing = false, -- chat mode, toggled by hand, reset by a reload
+    chat = false,   -- chat is open, because we saw the key that opens it
     keymap = nil,   -- the keymap waywall is on, so we never set the same one twice
     scene = nil,    -- scene registry (live mirror/image objects)
     modes = nil,    -- mode controller
@@ -146,25 +147,47 @@ end
     that opts in on an instance without the mod degrades to the base remaps
     rather than erroring on every state change.
 ]]
-local function apply_state_remaps()
-    --[[
-        A manual chat toggle outranks the automatic one.
+local function read_state()
+    local ok, st = pcall(waywall.state)
+    if not ok or type(st) ~= "table" then
+        return nil
+    end
 
-        Without this, opening a chest while typing would quietly put the game
-        rebinds back and you would be searching for a stronghold with the T
-        key producing a 4.
-    ]]
+    -- Back in the world with the cursor gone: whatever was open is closed.
+    if st.screen == "inworld" and st.inworld == "unpaused" then
+        rt.chat = false
+    end
+
+    return st
+end
+
+local function playing(st)
+    return st.screen == "inworld" and st.inworld == "unpaused"
+end
+
+local function apply_state_remaps()
     if rt.typing then
         return
     end
 
-    local ok, state = pcall(waywall.state)
-    if not ok or type(state) ~= "table" then
+    local st = read_state()
+    if not st then
         return
     end
 
-    local playing = state.screen == "inworld" and state.inworld == "unpaused"
-    waywall.set_remaps(playing and rt.remaps.base or rt.remaps.menu)
+    if playing(st) then
+        waywall.set_remaps(rt.remaps.base)
+    elseif rt.chat then
+        --[[
+            Not the menu set. The menu set is where searchcrafting lives, and
+            a rebind that turns D into O is exactly as wrong in chat as it is
+            right in a recipe search. Nothing at all is the only thing that
+            reliably types what you pressed.
+        ]]
+        waywall.set_remaps({})
+    else
+        waywall.set_remaps(rt.remaps.menu)
+    end
 end
 
 --[[
@@ -276,13 +299,21 @@ local function apply_state_keymap()
         return
     end
 
-    local ok, state = pcall(waywall.state)
-    if not ok or type(state) ~= "table" then
+    local st = read_state()
+    if not st then
         return
     end
 
-    local playing = state.screen == "inworld" and state.inworld == "unpaused"
-    M.apply_keymap(M.keymap_for(rt.doc, not playing))
+    --[[
+        Chat, and anywhere outside a world: naming a world, an address, a
+        search on the multiplayer screen.
+
+        Deliberately NOT every in-world menu. A custom layout is usually there
+        so you can searchcraft in it, and the recipe search is a menu, so
+        turning the layout off in menus would take away the one place it was
+        built for.
+    ]]
+    M.apply_keymap(M.keymap_for(rt.doc, rt.chat or st.screen ~= "inworld"))
 end
 
 --[[
@@ -589,6 +620,7 @@ function M.setup(opts)
     -- would otherwise survive an edit and leave you wondering why your keys
     -- stopped working.
     rt.typing = false
+    rt.chat = false
 
     local cfg = build_waywall_config(doc)
     cfg.actions = keybinds.build(doc, rt)

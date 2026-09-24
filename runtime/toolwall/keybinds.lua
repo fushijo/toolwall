@@ -24,6 +24,70 @@ local M = {}
 local ESCAPE_COMMAND = "gui.toggle"
 
 --[[
+    Keys that open chat. Watched, not bound.
+
+    The State Output mod cannot tell chat from a crafting table. Both arrive
+    as "inworld,gamescreenopen", so the menu rebinds that make searchcrafting
+    work are also on in chat, and D types O at the person you were talking to.
+
+    Nothing in the state separates them, but how you got there does. A
+    crafting table is a right-click on a block. Chat is a key you press. So
+    watch that key.
+
+    The watcher returns false, which waywall reads as "not handled" and passes
+    the key straight through. From config_vm_try_action:
+
+        consumed = (!lua_isboolean(coro, -1) || lua_toboolean(coro, -1));
+
+    and on_key only fires on press, so the release is delivered either way and
+    nothing can stick. Chat still opens. We just know it is about to.
+]]
+local CHAT_KEYS = { "T", "slash" }
+
+--[[
+    Register the chat watchers, if there is anything for them to protect.
+
+    A config with no menu rebinds and no custom layout has nothing that chat
+    could get wrong, so it gets no extra binds at all.
+
+    A key you have already bound to something is left alone. Yours outranks
+    ours, and a bind on T that opens the eye overlay never opens chat anyway.
+
+    Only fires while unpaused in a world: pressing T inside the search box
+    types a t, and must not convince us a chat window just opened.
+]]
+local function watch_chat_keys(doc, rt, actions)
+    local input = doc.input or {}
+
+    local menu = rt.remaps and rt.remaps.menu or {}
+    if not next(menu) and type(input.custom_layout) ~= "table" then
+        return
+    end
+
+    local keys = input.chat_keys
+    if type(keys) ~= "table" then
+        keys = CHAT_KEYS
+    end
+
+    for _, key in ipairs(keys) do
+        if type(key) == "string" and key ~= "" and not actions[key] then
+            actions[key] = function()
+                local ok, st = pcall(waywall.state)
+                if ok and type(st) == "table"
+                    and st.screen == "inworld"
+                    and st.inworld == "unpaused"
+                then
+                    rt.chat = true
+                end
+
+                -- never consumed. this is a watcher, not a keybind.
+                return false
+            end
+        end
+    end
+end
+
+--[[
     doc: parsed config document
     rt:  the runtime state table (populated on "load")
 ]]
@@ -116,6 +180,8 @@ function M.build(doc, rt)
             end
         end
     end
+
+    watch_chat_keys(doc, rt, actions)
 
     if suspended then
         if escape then

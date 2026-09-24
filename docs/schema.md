@@ -96,21 +96,45 @@ underneath you. A reload turns it off.
 
 ### The automatic half
 
-With the State Output mod, you mostly do not have to press it. Anything that
-is not `inworld/unpaused` - chat, an inventory, a sign, the pause menu - gets
-the menu rebinds and the base layout on its own, and going back to playing
-puts both back.
+With the State Output mod you mostly do not have to press it.
 
-The mod reports chat and a chest identically, both are `gamescreenopen`, so
-they are treated the same. An inventory does not care which layout it is on.
+Three situations, not two, which is the part every config gets wrong:
 
-Only a config with `input.custom_layout` swaps the keymap at all, and the
-keymap is never set to the one that is already on: waywall's `set_keymap`
+| Where you are | Rebinds | Layout |
+| --- | --- | --- |
+| Playing | `input.remaps` | your custom one |
+| A recipe search, a chest, the pause menu | `input.remaps_menu` | your custom one |
+| Chat, or anywhere outside a world | none at all | its base |
+
+The middle row is why this is not just "cursor visible or not". `remaps_menu`
+and a custom layout are usually *for* searchcrafting, and the recipe search is
+a menu, so switching them off in menus would take them away from the one place
+they were built for.
+
+### Telling chat from a crafting table
+
+The mod cannot. Both report as `inworld,gamescreenopen`, and nothing else in
+the state separates them.
+
+How you got there does. A crafting table is a right-click on a block. Chat is
+a key you press. So `input.chat_keys` is watched: press one while unpaused in
+a world and the next screen that opens is treated as chat.
+
+They are watched, never consumed. The handler returns false, waywall reads
+that as "not handled" and passes the key through, so chat still opens
+normally. Set them to whatever you actually have chat and the command key
+bound to in Minecraft. Empty turns the whole thing off, and a key you have
+already bound to something is left alone.
+
+Nothing is registered at all unless `remaps_menu` or `custom_layout` is set,
+since a config with neither has nothing chat could get wrong.
+
+The keymap is never set to the one already in use: waywall's `set_keymap`
 sends a release for every key currently held, so a pointless call drops the W
 you were walking with.
 
 `remaps.toggle` is still worth binding. It is what you have without the mod,
-and it wins over the automatic swap while it is on.
+and it wins over all of the above while it is on.
 
 ## Rebind names are not keybind names
 

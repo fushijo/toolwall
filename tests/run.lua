@@ -320,34 +320,110 @@ check("the automatic switch leaves chat mode alone", function()
     os.remove(path)
 end)
 
-check("chat and the menus put the base layout back on their own", function()
+check("chat gets the base layout, a recipe search keeps the custom one", function()
     --[[
-        The half every config leaves out. Turning the rebinds off in a menu is
-        no use if the letters are still coming out of a search-crafting
-        layout: you get to chat with your rebinds gone and your keyboard still
-        speaking Norwegian.
+        The reason both halves of this are needed at once.
 
-        The State Output mod cannot tell chat from a chest, both arrive as
-        gamescreenopen, so this covers both. An inventory does not care which
-        layout it is on.
+        A custom layout is usually there so you can searchcraft in it, and the
+        recipe search is a menu. Turning the layout off in every menu would
+        take it away from the one place it was built for. Chat is the only
+        screen that wants it gone.
+
+        The State Output mod reports both as gamescreenopen, so the screen
+        alone cannot tell them apart. The key that opened it can.
     ]]
     local path = write_config(CHAT)
     local toolwall = require("toolwall")
-    toolwall.setup({ path = path })
+    local cfg = toolwall.setup({ path = path })
     waywall.finish_startup()
     waywall.mount_view()
 
     waywall.state_value = { screen = "inworld", inworld = "unpaused" }
     waywall.fire("state")
-    assert_eq(last_call("set_keymap").args[1].layout, "no", "playing, so the custom layout is on")
+    assert_eq(last_call("set_keymap").args[1].layout, "no", "playing, custom layout on")
+
+    -- Right-clicking a crafting table. No key involved.
+    waywall.state_value = { screen = "inworld", inworld = "menu" }
+    waywall.fire("state")
+    assert_eq(last_call("set_keymap").args[1].layout, "no", "a recipe search keeps it")
+    assert_eq(last_call("set_remaps").args[1]["MB4"], "ESC", "and keeps the menu rebinds")
+
+    -- Back out, then open chat with the key that opens chat.
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.fire("state")
+
+    assert(cfg.actions["T"], "T is watched")
+    assert_eq(cfg.actions["T"](), false, "and passed through, so chat still opens")
 
     waywall.state_value = { screen = "inworld", inworld = "menu" }
     waywall.fire("state")
-    assert_eq(last_call("set_keymap").args[1].layout, "us", "chat, so the base layout is back")
+    assert_eq(last_call("set_keymap").args[1].layout, "us", "chat gets the base layout")
+    assert_eq(next(last_call("set_remaps").args[1]), nil, "and no rebinds at all")
 
+    -- And closing it is the end of it.
     waywall.state_value = { screen = "inworld", inworld = "unpaused" }
     waywall.fire("state")
-    assert_eq(last_call("set_keymap").args[1].layout, "no", "and closing it puts it back")
+    assert_eq(toolwall.rt.chat, false, "chat is forgotten once you are playing")
+
+    waywall.state_value = { screen = "inworld", inworld = "menu" }
+    waywall.fire("state")
+    assert_eq(last_call("set_remaps").args[1]["MB4"], "ESC", "the next menu is a menu again")
+
+    os.remove(path)
+end)
+
+check("the chat key only counts while you are playing", function()
+    -- Typing a t into the recipe search must not convince us chat opened,
+    -- which would pull the searchcraft rebinds out from under it.
+    local path = write_config(CHAT)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    waywall.state_value = { screen = "inworld", inworld = "menu" }
+    waywall.fire("state")
+
+    cfg.actions["T"]()
+    waywall.fire("state")
+
+    assert_eq(toolwall.rt.chat, false, "not treated as chat")
+    assert_eq(last_call("set_remaps").args[1]["MB4"], "ESC", "the menu rebinds stayed")
+
+    os.remove(path)
+end)
+
+check("nothing to protect means no chat watchers", function()
+    -- A config with no menu rebinds and no custom layout has nothing chat
+    -- could get wrong, so it does not get extra binds it never asked for.
+    local path = write_config(MINIMAL)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+
+    assert_eq(cfg.actions["T"], nil, "T is left alone")
+    assert_eq(cfg.actions["slash"], nil, "and so is slash")
+
+    os.remove(path)
+end)
+
+check("a key you already bound is not turned into a chat watcher", function()
+    local path = write_config([[
+      { "version": 1,
+        "input": { "remaps_menu": { "MB4": "ESC" } },
+        "modes": [ { "id": "thin", "resolution": {"width":340,"height":1080} } ],
+        "keybinds": [ { "input": "T", "command": "mode.set", "args": {"mode":"thin"} } ] }
+    ]])
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    cfg.actions["T"]()
+
+    assert_eq(toolwall.rt.modes.current, "thin", "yours ran")
+    assert_eq(toolwall.rt.chat, false, "and it is not a chat watcher")
 
     os.remove(path)
 end)
