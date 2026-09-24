@@ -80,6 +80,8 @@ pub struct Setup {
     monitor_hint: Option<String>,
     /// What the monitors report, offered as a first chip.
     detected: Vec<(u32, u32)>,
+    /// The download button has been pressed once and is waiting for a yes.
+    confirm_gore: bool,
     /// Whether the config still needs reshaping for that screen.
     ///
     /// Only the preset does. An imported config was already written for the
@@ -135,6 +137,7 @@ impl Setup {
             screen,
             monitor_hint: toolwall_core::screen::hint(),
             detected: toolwall_core::screen::detected(),
+            confirm_gore: false,
             fit_preset: had_config.is_none(),
             step: Step::Start,
             capture: None,
@@ -534,8 +537,24 @@ impl Setup {
                 self.status = Some((true, "Started from the preset".into()));
             }
 
-            let gore = ui.button("Download gore's generic config").on_hover_text(GORE_URL);
+            // Named, because "gore" means nothing until someone tells you, and
+            // this is the one button on the screen that goes to the network
+            // and replaces what you have.
+            let gore = ui
+                .button("Download the community config (gore's)")
+                .on_hover_text(format!("git clone {GORE_URL}, then convert it"));
+
             if gore.clicked() {
+                self.confirm_gore = true;
+            }
+
+            if self.confirm_gore
+                && ui
+                    .button(egui::RichText::new("Yes, download it").strong())
+                    .on_hover_text("Replaces what this window is holding, not the file on disk")
+                    .clicked()
+            {
+                self.confirm_gore = false;
                 self.busy = Some("Downloading...".into());
                 match import_gore(&self.config_dir()) {
                     Ok((doc, log)) => {

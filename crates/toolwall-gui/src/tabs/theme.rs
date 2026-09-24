@@ -75,28 +75,8 @@ pub fn show(
         // to be here as well, worded the other way round, so the same switch
         // read as two settings that contradicted each other.
 
-        if advanced {
-        ui.separator();
-        ui.heading("Window size");
-        ui.weak("0 x 0 follows the monitor.");
-
-        settings_grid(ui, "window-grid", |ui| {
-            ui.label("Fullscreen width");
-            ui.add(egui::DragValue::new(&mut doc.window.fullscreen_width).range(0..=16384));
-            ui.end_row();
-
-            ui.label("Fullscreen height");
-            ui.add(egui::DragValue::new(&mut doc.window.fullscreen_height).range(0..=16384));
-            ui.end_row();
-
-            ui.label("Go fullscreen on start").on_hover_text(
-                "The size above only applies while fullscreen. Without this it \
-                 does nothing until you press a key for it.",
-            );
-            ui.checkbox(&mut doc.window.fullscreen_on_start, "");
-            ui.end_row();
-        });
-        }
+        // waywall's own window size lives on the Modes tab, next to the
+        // sizes it is the backdrop for.
 
         ui.separator();
         ui.heading("This editor");

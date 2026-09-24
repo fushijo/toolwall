@@ -170,9 +170,14 @@ pub fn show(
                     problems_for(ui, problems, &Scope::Keybind(bind.input.clone()));
 
                     settings_grid(ui, ("keybind-grid", index), |ui| {
-                        ui.label("Key");
+                        ui.label("Key").on_hover_text(
+                            "Spelled the way waywall reads it, which is not \
+                             always the way it is printed on the key.",
+                        );
                         ui.horizontal(|ui| {
-                            ui.text_edit_singleline(&mut bind.input);
+                            ui.add(
+                                egui::TextEdit::singleline(&mut bind.input).desired_width(150.0),
+                            );
 
                             // A frame, so it reads as something you press.
                             // selectable_label put it at the same weight and
@@ -180,6 +185,13 @@ pub fn show(
                             let capturing_this = *capturing == Some(index);
                             if ui.add(listen_button(ui, capturing_this, "Capture")).clicked() {
                                 *capturing = if capturing_this { None } else { Some(index) };
+                            }
+
+                            // The same key as the list above spells it, when
+                            // the two differ.
+                            let printed = keys::pretty(&bind.input);
+                            if printed != bind.input {
+                                ui.weak(format!("the {printed} key"));
                             }
                         });
                         ui.end_row();

@@ -350,12 +350,6 @@ pub fn path_field(
             }
         });
 
-        // A long path still will not fit, so say which file it is.
-        if let Some(name) = Path::new(value.as_str()).file_name() {
-            if value.len() > 48 {
-                ui.weak(name.to_string_lossy().to_string());
-            }
-        }
 
         if !value.is_empty() && !Path::new(&expand_tilde(value)).is_file() {
             ui.colored_label(

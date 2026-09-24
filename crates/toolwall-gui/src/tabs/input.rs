@@ -105,14 +105,11 @@ pub fn show(
             // The Layout tab is also about the keyboard layout. This half is
             // the xkb names waywall is handed; that half builds one.
             ui.heading("Keyboard language");
-            ui.weak(
-                "The layout your system already has, by name. To build one of \
-                 your own instead, use the Layout tab.",
-            );
+            ui.weak("A layout your system already has, by name: us, de, no.");
 
             settings_grid(ui, "layout-grid", |ui| {
                 for (label, field) in [
-                    ("Layout", &mut doc.input.layout),
+                    ("System layout", &mut doc.input.layout),
                     ("Model", &mut doc.input.model),
                     ("Rules", &mut doc.input.rules),
                     ("Variant", &mut doc.input.variant),

@@ -35,6 +35,34 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
         .collect();
 
     scroll_body(ui, |ui| {
+        // waywall's own window, above the sizes it is the backdrop for. It
+        // used to be on the Theme tab under the cursor settings, which split
+        // window sizing across three tabs.
+        if advanced {
+            ui.collapsing("waywall's own window", |ui| {
+                ui.weak("0 x 0 follows the monitor.");
+                settings_grid(ui, "window-grid", |ui| {
+                    ui.label("Fullscreen width");
+                    ui.add(egui::DragValue::new(&mut doc.window.fullscreen_width).range(0..=16384));
+                    ui.end_row();
+
+                    ui.label("Fullscreen height");
+                    ui.add(
+                        egui::DragValue::new(&mut doc.window.fullscreen_height).range(0..=16384),
+                    );
+                    ui.end_row();
+
+                    ui.label("Go fullscreen on start").on_hover_text(
+                        "The size above only applies while fullscreen. Without \
+                         this it does nothing until you press a key for it.",
+                    );
+                    ui.checkbox(&mut doc.window.fullscreen_on_start, "");
+                    ui.end_row();
+                });
+            });
+            ui.add_space(6.0);
+        }
+
         if !doc.modes.is_empty() {
             ui.horizontal(|ui| {
                 ui.add_space(20.0);
