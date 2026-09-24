@@ -599,7 +599,7 @@ impl Setup {
 
         for (index, screen) in self.choices.screens.iter_mut().enumerate() {
             egui::Frame::group(ui.style()).show(ui, |ui| {
-                ui.set_width(card_width - ui.spacing().item_spacing.x * 4.0);
+                ui.set_width((card_width - ui.spacing().item_spacing.x * 4.0).max(0.0));
                 ui.horizontal(|ui| {
                     ui.checkbox(&mut screen.enabled, "");
                     ui.strong(&screen.label);
@@ -668,7 +668,7 @@ impl Setup {
 
         for (index, overlay) in self.choices.overlays.iter_mut().enumerate() {
             egui::Frame::group(ui.style()).show(ui, |ui| {
-                ui.set_width(card_width - ui.spacing().item_spacing.x * 4.0);
+                ui.set_width((card_width - ui.spacing().item_spacing.x * 4.0).max(0.0));
                 ui.strong(&overlay.label);
                 if overlay.modes.is_empty() {
                     ui.weak("not on any screen");

@@ -113,7 +113,10 @@ impl eframe::App for Shooter {
         let name = match frame_spec {
             Frame::Tab(tab, name, advanced) => {
                 self.app.tab = *tab;
+                // Both, or the editor sees the toggle change every frame and
+                // spends the run saving instead of settling.
                 self.app.advanced = *advanced;
+                self.app.doc.gui.appearance.advanced = *advanced;
                 self.app.update(ctx, frame);
                 format!("{name}-{}", if *advanced { "advanced" } else { "basic" })
             }

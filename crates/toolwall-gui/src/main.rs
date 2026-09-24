@@ -158,7 +158,7 @@ pub(crate) enum Tab {
 
 pub(crate) struct App {
     store: Store,
-    doc: Document,
+    pub(crate) doc: Document,
     load_error: Option<String>,
     status: Option<(bool, String)>,
     pub(crate) tab: Tab,
