@@ -73,9 +73,7 @@ pub fn show(
         ui.separator();
         ui.heading("Key rebinds");
         ui.weak(
-            "Press Set, then press the key. A modifier on its own needs List: \
-             left and right arrive here already merged, so listening cannot \
-             tell them apart.",
+            "Press Set, then press the key. For a bare Shift or Ctrl, use List.",
         );
         remap_table(ui, RemapTable::Playing, &mut doc.input.remaps, capture);
 

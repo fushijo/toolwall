@@ -555,14 +555,22 @@ impl eframe::App for App {
                     // Everything most people need is in Basic; Advanced adds
                     // ids, layering and the things that break a setup.
                     //
-                    // Hidden on the two tabs that do not read it. A switch
-                    // that visibly does nothing teaches you it is broken.
-                    if !matches!(self.tab, Tab::Screen | Tab::Layout) {
-                        ui.separator();
-                        ui.add_space(6.0);
-                        ui.selectable_value(&mut self.advanced, true, "Advanced");
-                        ui.selectable_value(&mut self.advanced, false, "Basic");
-                    }
+                    // Greyed out on the two tabs that do not read it, rather
+                    // than gone: a control that disappears looks like the bar
+                    // moved, and a control that does nothing looks broken.
+                    let reads_it = !matches!(self.tab, Tab::Screen | Tab::Layout);
+
+                    ui.separator();
+                    ui.add_space(6.0);
+                    ui.add_enabled_ui(reads_it, |ui| {
+                        let response = ui
+                            .selectable_value(&mut self.advanced, true, "Advanced")
+                            .union(ui.selectable_value(&mut self.advanced, false, "Basic"));
+
+                        if !reads_it {
+                            response.on_hover_text("This tab has nothing extra to show");
+                        }
+                    });
 
                     // Remembered, so it is not a click every time the editor
                     // opens. Written with the document like any other edit.
@@ -578,13 +586,10 @@ impl eframe::App for App {
             ui.horizontal(|ui| {
                 let blocked = !problems.is_empty();
 
-                ui.label(if blocked {
-                    "Not applied"
-                } else if self.pending_since.is_some() {
-                    "Applying…"
-                } else {
-                    "Changes apply as you make them"
-                });
+                // The hint never changes and the state is only ever in one
+                // place. These used to be two slots that could read
+                // "Applying…" and "Applied" at the same time.
+                ui.weak("Changes apply as you make them");
 
                 if ui.button("Revert").clicked() {
                     self.revert();
@@ -605,6 +610,8 @@ impl eframe::App for App {
                             format!("⚠ {} problems, see the highlighted items", problems.len())
                         },
                     );
+                } else if self.pending_since.is_some() {
+                    ui.weak("Applying…");
                 } else if let Some((ok, message)) = &self.status {
                     let (color, mark) = if *ok {
                         (egui::Color32::LIGHT_GREEN, "•")

@@ -77,7 +77,7 @@ pub fn show(
                         rect_editor(ui, "dst", &mut image.dst);
                         ui.end_row();
 
-                        ui.label("Anchored to").on_hover_text(
+                        ui.label("Pin to screen corner").on_hover_text(
                             "Which corner of the screen the offsets start at. \
                              Without one, this lands in the wrong place on any \
                              screen that is not the size you set it up at.",
@@ -90,14 +90,16 @@ pub fn show(
                             depth_editor(ui, &mut image.depth);
                             ui.end_row();
 
-                            ui.label("Shader");
-                            shader_picker(
-                                ui,
-                                &format!("image-shader-{index}"),
-                                &mut image.shader,
-                                &shaders,
-                            );
-                            ui.end_row();
+                            if !shaders.is_empty() {
+                                ui.label("Shader");
+                                shader_picker(
+                                    ui,
+                                    &format!("image-shader-{index}"),
+                                    &mut image.shader,
+                                    &shaders,
+                                );
+                                ui.end_row();
+                            }
                         }
                     });
 

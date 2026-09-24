@@ -185,14 +185,17 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState, doc: &Document) -> Option<
         }
         ui.end_row();
 
-        ui.label("Mouse was scaled by").on_hover_text(
-            "Your sensitivity means something different once the pointer \
-             acceleration you had is gone, so it gets converted first.",
+        ui.label("Pointer speed you were on").on_hover_text(
+            "waywall turns pointer acceleration off, so a sensitivity set with \
+             it on means something different afterwards and gets converted.",
         );
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut state.kind, PointerKind::Flat, "Nothing");
-            ui.selectable_value(&mut state.kind, PointerKind::Windows, "Windows");
-            ui.selectable_value(&mut state.kind, PointerKind::Linux, "Linux");
+            ui.selectable_value(&mut state.kind, PointerKind::Flat, "None, raw input")
+                .on_hover_text("Acceleration already off, or a raw-input mouse");
+            ui.selectable_value(&mut state.kind, PointerKind::Windows, "Windows slider")
+                .on_hover_text("The 1 to 11 pointer speed slider in Windows");
+            ui.selectable_value(&mut state.kind, PointerKind::Linux, "Linux slider")
+                .on_hover_text("libinput's acceleration speed, what your desktop's mouse slider sets");
         });
         ui.end_row();
 
@@ -260,7 +263,9 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState, doc: &Document) -> Option<
     });
 
     ui.add_space(8.0);
-    if ui.button("Calculate").clicked() {
+    let calculate = egui::Button::new(egui::RichText::new("Calculate").strong())
+        .fill(ui.visuals().selection.bg_fill);
+    if ui.add_sized([150.0, 28.0], calculate).clicked() {
         state.calculate();
     }
 

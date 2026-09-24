@@ -76,14 +76,15 @@ pub fn rect_editor(ui: &mut egui::Ui, _salt: &str, rect: &mut Rect) {
 /// selects a different layer in waywall's ordering.
 pub fn depth_editor(ui: &mut egui::Ui, depth: &mut Option<i32>) {
     ui.horizontal(|ui| {
-        let mut set = depth.is_some();
-        if ui.checkbox(&mut set, "set").changed() {
-            *depth = set.then_some(1);
+        // "set" said nothing about what setting it would do.
+        let mut chosen = depth.is_some();
+        if ui.checkbox(&mut chosen, "pick one").changed() {
+            *depth = chosen.then_some(1);
         }
         if let Some(value) = depth {
             ui.add(egui::DragValue::new(value).speed(1.0));
         } else {
-            ui.weak("auto");
+            ui.weak("decided for you");
         }
     });
 }
@@ -309,11 +310,23 @@ pub fn path_field(
 ) {
     ui.vertical(|ui| {
         ui.horizontal(|ui| {
-            ui.text_edit_singleline(value);
+            // Take the rest of the row. At a fixed width a path clipped mid
+            // word while half the row sat empty, and the half that survived
+            // was the directory rather than the file name.
+            let room = (ui.available_width() - 100.0).max(160.0);
+            ui.add(egui::TextEdit::singleline(value).desired_width(room));
+
             if ui.button("Browse…").clicked() {
                 browser.open(target, value, extension);
             }
         });
+
+        // A long path still will not fit, so say which file it is.
+        if let Some(name) = Path::new(value.as_str()).file_name() {
+            if value.len() > 48 {
+                ui.weak(name.to_string_lossy().to_string());
+            }
+        }
 
         if !value.is_empty() && !Path::new(&expand_tilde(value)).is_file() {
             ui.colored_label(

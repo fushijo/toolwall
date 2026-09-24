@@ -47,7 +47,7 @@ pub(crate) enum Step {
 
 pub(crate) const STEPS: &[(Step, &str)] = &[
     (Step::Start, "Where to start"),
-    (Step::Screens, "Screens"),
+    (Step::Screens, "Modes"),
     (Step::Overlays, "Overlays"),
     (Step::Keys, "Keys"),
     (Step::Sens, "Sensitivity"),
@@ -181,7 +181,7 @@ impl Setup {
     }
 }
 
-/// "1 screen", "3 screens". Not "3 screen(s)".
+/// "1 mode", "3 modes". Not "3 mode(s)".
 fn plural(count: usize, noun: &str) -> String {
     if count == 1 {
         format!("1 {noun}")
@@ -448,7 +448,7 @@ impl Setup {
                 "There is already a config here, with {} and {}. The steps \
                  after this one let you change it, or start over from one of \
                  these.",
-                plural(screens, "screen"),
+                plural(screens, "mode"),
                 plural(keys, "key"),
             ));
         } else {
@@ -587,10 +587,10 @@ impl Setup {
     }
 
     fn screens(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Screens");
+        ui.heading("Modes");
         ui.label(
-            "The resolutions you switch between. Each one needs a key, and the key \
-             puts you in it until you press it again or reset.",
+            "The window sizes you switch between. Each one needs a key, and the \
+             key puts you in it until you press it again or reset.",
         );
         ui.add_space(10.0);
 
@@ -733,7 +733,7 @@ impl Setup {
             });
             ui.end_row();
 
-            ui.label("Back to normal").on_hover_text("Leave whichever screen you are in.");
+            ui.label("Reset").on_hover_text("Leave whichever mode you are in.");
             ui.horizontal(|ui| {
                 ui.text_edit_singleline(&mut self.choices.reset_key);
                 if ui.button("Capture").clicked() {
@@ -858,12 +858,15 @@ impl Setup {
                      needs a patched waywall.",
                 );
                 ui.add_space(6.0);
-                ui.label(
-                    "Stock waywall cannot fill a rectangle, so there is nothing to \
-                     draw the panel behind the text. The patch adds one. It is in \
-                     patches/ in the repository, and applying it means building \
-                     waywall yourself.",
-                );
+                ui.label("The readout itself works. Its panel and outline need the patch.");
+                ui.collapsing("Why", |ui| {
+                    ui.label(
+                        "Stock waywall cannot fill a rectangle, so there is \
+                         nothing to draw behind the text. The patch is in \
+                         patches/ in the repository, and applying it means \
+                         building waywall yourself.",
+                    );
+                });
                 ui.add_space(6.0);
                 ui.strong(
                     "Do not do this on your first setup. Everything else works without \
@@ -884,11 +887,11 @@ impl Setup {
         ui.add_space(8.0);
 
         settings_grid(ui, "setup-summary", |ui| {
-            ui.label("Window");
+            ui.label("waywall's window");
             ui.label(format!("{}x{}", self.screen.0, self.screen.1));
             ui.end_row();
 
-            ui.label("Screens");
+            ui.label("Modes");
             ui.label(
                 doc.modes
                     .iter()
@@ -984,9 +987,11 @@ impl Setup {
 
             // The only thing here that destroys anything, in the same box the
             // merely informational notes get.
+            let room = (ui.available_width() - 24.0).max(200.0);
             egui::Frame::group(ui.style())
                 .fill(egui::Color32::from_rgb(60, 40, 10))
                 .show(ui, |ui| {
+                    ui.set_width(room);
                     ui.horizontal(|ui| {
                         ui.colored_label(egui::Color32::from_rgb(255, 200, 100), "⚠");
                         ui.colored_label(
@@ -995,10 +1000,10 @@ impl Setup {
                         );
                     });
                     ui.add_space(4.0);
-                    ui.horizontal(|ui| {
-                        ui.strong(&name);
-                        ui.weak(format!("in {dir}"));
-                    });
+                    ui.strong(&name);
+                    // Wrapped, not cut: a directory that runs off the right
+                    // edge mid-word looks like part of the warning.
+                    ui.add(egui::Label::new(egui::RichText::new(format!("in {dir}")).weak()).wrap());
                 });
             ui.add_space(10.0);
         }

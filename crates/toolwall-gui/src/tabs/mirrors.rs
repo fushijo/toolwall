@@ -71,7 +71,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                         rect_editor(ui, "src", &mut mirror.src);
                         ui.end_row();
 
-                        ui.label("Measured from").on_hover_text(
+                        ui.label("Capture corner").on_hover_text(
                             "Which corner of the game the capture offsets start \
                              at. Minecraft pins its debug HUD to the corners, so \
                              an unanchored capture is only right at one \
@@ -84,7 +84,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                         rect_editor(ui, "dst", &mut mirror.dst);
                         ui.end_row();
 
-                        ui.label("Anchored to").on_hover_text(
+                        ui.label("Pin to screen corner").on_hover_text(
                             "Which corner of the screen the offsets start at. \
                              Without one, this lands in the wrong place on any \
                              screen that is not the size you set it up at.",
@@ -100,14 +100,19 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                             depth_editor(ui, &mut mirror.depth);
                             ui.end_row();
 
-                            ui.label("Shader");
-                            shader_picker(
-                                ui,
-                                &format!("mirror-shader-{index}"),
-                                &mut mirror.shader,
-                                &shaders,
-                            );
-                            ui.end_row();
+                            // Only when there is one to pick. With none
+                            // configured this was a row saying "no shaders
+                            // defined" and no way to add one.
+                            if !shaders.is_empty() {
+                                ui.label("Shader");
+                                shader_picker(
+                                    ui,
+                                    &format!("mirror-shader-{index}"),
+                                    &mut mirror.shader,
+                                    &shaders,
+                                );
+                                ui.end_row();
+                            }
 
                             ui.label("Border").on_hover_text(
                                 "Needs the rect patch (patches/apply.sh). \

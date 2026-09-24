@@ -9,23 +9,61 @@ use toolwall_core::{Document, Problem, Scope};
 
 use crate::widgets::{optional_text, problems_for, settings_grid};
 
+/// Columns of the collapsed row, so the list reads down.
+const NAME_COLUMN: f32 = 150.0;
+const SIZE_COLUMN: f32 = 150.0;
+
 pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advanced: bool) {
     // Collected up front: the attach lists need these while `doc.modes` is
     // borrowed mutably below.
     let mirror_ids: Vec<String> = doc.mirrors.iter().map(|m| m.id.clone()).collect();
     let image_ids: Vec<String> = doc.images.iter().map(|i| i.id.clone()).collect();
 
+    // The key that puts you in each mode, taken before doc.modes is borrowed.
+    // It is the first thing you want to know about a mode and the row used to
+    // be three collapsed words with none of it.
+    let keys_for: Vec<(String, String)> = doc
+        .keybinds
+        .iter()
+        .filter(|b| b.command == toolwall_core::schema::Command::ModeSet)
+        .filter_map(|b| {
+            let mode = b.args.as_ref()?.get("mode")?.as_str()?.to_string();
+            Some((mode, crate::keys::pretty(&b.input)))
+        })
+        .collect();
+
     egui::ScrollArea::vertical().show(ui, |ui| {
         let mut remove: Option<usize> = None;
 
         for (index, mode) in doc.modes.iter_mut().enumerate() {
             let heading = mode.label.clone().unwrap_or_else(|| mode.id.clone());
+            let size = if mode.resolution.width == 0 || mode.resolution.height == 0 {
+                "stretched to the window".to_string()
+            } else {
+                format!("{} x {}", mode.resolution.width, mode.resolution.height)
+            };
+            let key = keys_for
+                .iter()
+                .find(|(id, _)| *id == mode.id)
+                .map(|(_, k)| k.clone());
 
-            egui::CollapsingHeader::new(heading)
-                .id_salt(index)
-                .default_open(index == 0)
-                .default_open(false)
-                .show(ui, |ui| {
+            let id = ui.make_persistent_id(("mode", index));
+            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                .show_header(ui, |ui| {
+                    ui.scope(|ui| {
+                        ui.set_min_width(NAME_COLUMN);
+                        ui.label(heading);
+                    });
+                    ui.scope(|ui| {
+                        ui.set_min_width(SIZE_COLUMN);
+                        ui.weak(size);
+                    });
+                    match key {
+                        Some(key) => ui.monospace(key),
+                        None => ui.weak("no key"),
+                    };
+                })
+                .body(|ui| {
                     problems_for(ui, problems, &Scope::Mode(mode.id.clone()));
 
                     settings_grid(ui, format!("mode-{index}"), |ui| {
