@@ -4,7 +4,9 @@ use toolwall_core::ninb_prefs::ACTIONS;
 use toolwall_core::{Document, Problem, Scope, NINB_PRESETS};
 
 use crate::ninb_keys::{self, NinbKeys};
-use crate::widgets::{color_field, path_field, problems_for, settings_grid, FileBrowser, PickTarget};
+use crate::widgets::{color_field, path_field, problems_for, settings_grid, FileBrowser, PickTarget,
+    scroll_body,
+};
 
 const COORDS: &[(&str, &str, &str)] = &[
     ("block", "Block", "the block at the centre of the stronghold chunk"),
@@ -34,7 +36,7 @@ pub fn show(
         }
     }
 
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    scroll_body(ui, |ui| {
         problems_for(ui, problems, &Scope::Ninb);
 
         ui.heading("Ninjabrain Bot");
@@ -81,7 +83,7 @@ pub fn show(
         // These set everything below at once; Style only picks the arrangement.
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            ui.label("Start from");
+            ui.label("Reset the readout to");
             for (id, label, hint) in NINB_PRESETS {
                 if ui.button(format!("{label} defaults")).on_hover_text(*hint).clicked() {
                     o.apply_preset(id);
@@ -334,8 +336,6 @@ pub fn show(
              scene text has no font parameter.",
         );
 
-        // Room under the last row, so the status bar never cuts one in half.
-        ui.add_space(24.0);
     });
 }
 
@@ -350,7 +350,7 @@ const PLACEHOLDERS: &str = "{x} {z} {certainty} {distance} {netherX} {netherZ} \
 /// once that window is hidden, so they are edited here and written straight
 /// into ninb's preferences.
 fn hotkeys(ui: &mut egui::Ui, doc: &mut Document, keys: &mut NinbKeys) {
-    ui.heading("Its hotkeys");
+    ui.heading("Its window and its own keys");
     ui.weak(
         "Ninjabrain Bot watches the keyboard itself, so these are its own \
          keys, not toolwall's.",
@@ -366,7 +366,7 @@ fn hotkeys(ui: &mut egui::Ui, doc: &mut Document, keys: &mut NinbKeys) {
         doc.theme.ninb_hidden = !shown;
     }
     if shown {
-        ui.weak("Reveal floating windows to see it, the same key that opens this editor.");
+        ui.weak("Press the key that opens this editor to reveal it.");
     }
 
     if keys.hotkeys.is_none() {

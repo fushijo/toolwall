@@ -76,15 +76,13 @@ pub fn rect_editor(ui: &mut egui::Ui, _salt: &str, rect: &mut Rect) {
 /// selects a different layer in waywall's ordering.
 pub fn depth_editor(ui: &mut egui::Ui, depth: &mut Option<i32>) {
     ui.horizontal(|ui| {
-        // "set" said nothing about what setting it would do.
         let mut chosen = depth.is_some();
-        if ui.checkbox(&mut chosen, "pick one").changed() {
+        if ui.checkbox(&mut chosen, "Choose the layer myself").changed() {
             *depth = chosen.then_some(1);
         }
         if let Some(value) = depth {
-            ui.add(egui::DragValue::new(value).speed(1.0));
-        } else {
-            ui.weak("decided for you");
+            ui.add(egui::DragValue::new(value).speed(1.0).range(-100..=100));
+            ui.weak("higher draws in front");
         }
     });
 }
@@ -124,9 +122,40 @@ pub fn color_field(ui: &mut egui::Ui, hex: &mut String) {
     let mut rgba = parse_hex(hex).unwrap_or([0, 0, 0, 255]);
 
     ui.horizontal(|ui| {
-        if ui.color_edit_button_srgba_unmultiplied(&mut rgba).changed() {
+        let swatch = ui.color_edit_button_srgba_unmultiplied(&mut rgba);
+        if swatch.changed() {
             *hex = format!("#{:02x}{:02x}{:02x}{:02x}", rgba[0], rgba[1], rgba[2], rgba[3]);
         }
+
+        // A border, because the usual value here is black and a black square
+        // on a black panel is indistinguishable from nothing at all. A
+        // chequer behind it so a transparent colour reads as transparent.
+        let rect = swatch.rect;
+        let painter = ui.painter_at(rect);
+        if rgba[3] < 255 {
+            let step = rect.height() / 2.0;
+            for row in 0..2 {
+                for column in 0..((rect.width() / step).ceil() as usize) {
+                    if (row + column) % 2 == 0 {
+                        continue;
+                    }
+                    let at = rect.min + egui::vec2(column as f32 * step, row as f32 * step);
+                    painter.rect_filled(
+                        egui::Rect::from_min_size(at, egui::vec2(step, step))
+                            .intersect(rect),
+                        0.0,
+                        egui::Color32::from_gray(90),
+                    );
+                }
+            }
+            painter.rect_filled(
+                rect,
+                2.0,
+                egui::Color32::from_rgba_unmultiplied(rgba[0], rgba[1], rgba[2], rgba[3]),
+            );
+        }
+        painter.rect_stroke(rect, 2.0, egui::Stroke::new(1.0, egui::Color32::from_gray(150)));
+
         ui.add(egui::TextEdit::singleline(hex).desired_width(110.0));
     });
 }
@@ -335,4 +364,45 @@ pub fn path_field(
             );
         }
     });
+}
+
+/// A tab's scrolling body, with a fade at the bottom when there is more.
+///
+/// A row half-cut by the status bar reads as a crash rather than as "scroll
+/// down", and the scrollbar alone was not saying it loudly enough. The fade
+/// only appears while there is something below, so a tab that fits looks
+/// exactly as it did.
+pub fn scroll_body<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let out = egui::ScrollArea::vertical().show(ui, |ui| {
+        let value = add(ui);
+        // Room under the last row so it is never flush against the edge.
+        ui.add_space(24.0);
+        value
+    });
+
+    let hidden = out.content_size.y - out.inner_rect.height();
+    let left = hidden - out.state.offset.y;
+
+    if left > 1.0 {
+        let rect = out.inner_rect;
+        let ground = ui.visuals().panel_fill;
+        let painter = ui.painter_at(rect);
+
+        // Four bands instead of a gradient mesh: the same effect, and it
+        // cannot be off by a colour space.
+        for step in 0..4 {
+            let height = 5.0;
+            let y = rect.max.y - height * (step as f32 + 1.0);
+            painter.rect_filled(
+                egui::Rect::from_min_max(
+                    egui::pos2(rect.min.x, y),
+                    egui::pos2(rect.max.x, y + height),
+                ),
+                0.0,
+                ground.gamma_multiply(0.22 * (step as f32 + 1.0)),
+            );
+        }
+    }
+
+    out.inner
 }

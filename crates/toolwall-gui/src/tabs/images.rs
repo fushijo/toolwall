@@ -15,6 +15,7 @@ use crate::widgets::{
     shader_picker,
     FileBrowser,
     PickTarget,
+    scroll_body,
 };
 
 pub fn show(
@@ -26,7 +27,7 @@ pub fn show(
 ) {
     let shaders: Vec<String> = doc.shaders.keys().cloned().collect();
 
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    scroll_body(ui, |ui| {
         let mut remove = None;
 
         let in_base: Vec<String> = doc.base_overlays.clone();
@@ -103,7 +104,7 @@ pub fn show(
                         }
                     });
 
-                    if advanced && ui.button("Remove image").clicked() {
+                    if ui.button("Remove image").clicked() {
                         remove = Some(index);
                     }
                 });
@@ -136,7 +137,5 @@ pub fn show(
             });
         }
 
-        // Room under the last row, so the status bar never cuts one in half.
-        ui.add_space(24.0);
     });
 }

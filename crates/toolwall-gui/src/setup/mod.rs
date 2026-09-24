@@ -17,7 +17,7 @@ use toolwall_core::preset::{self, Choices, OverlayState};
 use toolwall_core::{problems, Document, Store};
 
 use crate::keys;
-use crate::widgets::{color_field, path_field, settings_grid, FileBrowser, PickTarget};
+use crate::widgets::{path_field, settings_grid, FileBrowser, PickTarget};
 
 /// Where the import leaves its notes, next to the config.
 const REPORT_NAME: &str = "toolwall-import-report.txt";
@@ -479,7 +479,6 @@ impl Setup {
                 let picked = self.screen == (*w, *h);
                 if ui
                     .selectable_label(picked, format!("Your screen, {w}x{h}"))
-                    .on_hover_text("Right unless your desktop is scaled. Check F3.")
                     .clicked()
                 {
                     self.screen = (*w, *h);
@@ -636,18 +635,6 @@ impl Setup {
             ui.colored_label(egui::Color32::LIGHT_BLUE, "press a key, or Esc to cancel");
         }
 
-        // Here rather than in a step of its own: it is what you see beside a
-        // screen narrower than your monitor, so it belongs next to the widths.
-        ui.add_space(12.0);
-        ui.separator();
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
-            ui.label("Background").on_hover_text(
-                "What fills the window around the game in a screen narrower \
-                 than your monitor.",
-            );
-            color_field(ui, &mut self.choices.background);
-        });
     }
 
     fn overlays(&mut self, ui: &mut egui::Ui) {
@@ -848,7 +835,7 @@ impl Setup {
         ui.add_space(10.0);
 
         settings_grid(ui, "setup-ninb", |ui| {
-            ui.label("Jar");
+            ui.label("Jar file");
             path_field(
                 ui,
                 &mut self.choices.ninb_jar,

@@ -8,6 +8,7 @@
 //! but where it sits and how big its text is are ordinary config fields that
 //! unpatched waywall reads the same way.
 
+use crate::widgets::scroll_body;
 use toolwall_core::schema::{Anchor, Rect};
 use toolwall_core::Document;
 
@@ -26,6 +27,9 @@ pub struct ScreenEdit {
     seeded: bool,
 }
 
+/// The numbers column beside the picture.
+const INSPECTOR_WIDTH: f32 = 205.0;
+
 pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
     if !state.seeded {
         state.snapping = true;
@@ -33,7 +37,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
         state.seeded = true;
     }
 
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    scroll_body(ui, |ui| {
         toolbar(ui, doc, state);
         ui.add_space(8.0);
 
@@ -50,12 +54,27 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
         let snapping = state.snapping && !ui.input(|i| i.modifiers.alt);
 
         let game = game_rect(doc, &state.mode, screen);
-        let action = Canvas { screen, items: &items, game, snapping, over_the_real_thing: false }
-            .show(ui, &mut state.canvas);
-        apply(doc, action);
 
-        ui.add_space(8.0);
-        inspector(ui, doc, state);
+        // The numbers beside the picture, not under it.
+        //
+        // Under it, the canvas had to be shortened to leave room and the
+        // numbers only appeared once you clicked, so the tab was a small
+        // picture with a wide empty margin and a line of grey text.
+        ui.horizontal_top(|ui| {
+            let room = (ui.available_width() - INSPECTOR_WIDTH - 16.0).max(240.0);
+
+            ui.allocate_ui(egui::vec2(room, ui.available_height()), |ui| {
+                let action =
+                    Canvas { screen, items: &items, game, snapping, over_the_real_thing: false }
+                        .show(ui, &mut state.canvas);
+                apply(doc, action);
+            });
+
+            ui.separator();
+            ui.allocate_ui(egui::vec2(INSPECTOR_WIDTH, ui.available_height()), |ui| {
+                ui.vertical(|ui| inspector(ui, doc, state));
+            });
+        });
     });
 }
 
@@ -389,8 +408,6 @@ fn inspector(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
             }
         }
 
-        // Room under the last row, so the status bar never cuts one in half.
-        ui.add_space(24.0);
     });
 }
 

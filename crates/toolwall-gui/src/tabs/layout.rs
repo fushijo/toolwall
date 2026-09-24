@@ -8,6 +8,7 @@
 //! Rebinds are on the Input tab and are a different thing. This changes what a
 //! key *types*; a rebind changes which key it *is*. See `toolwall_core::xkb`.
 
+use crate::widgets::scroll_body;
 use toolwall_core::schema::CustomLayout;
 use toolwall_core::{xkb, Document};
 
@@ -20,7 +21,7 @@ pub struct LayoutEdit {
 }
 
 pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut LayoutEdit) {
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    scroll_body(ui, |ui| {
         ui.heading("Keyboard layout");
         ui.weak(
             "Changes what a key types without changing which key it is, so a \
@@ -48,8 +49,9 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut LayoutEdit) {
             );
             ui.add_space(4.0);
             ui.weak(
-                "To pick a different system layout by name instead of building \
-                 one, use Keyboard language on the Input tab.",
+                "To use a layout your system already has instead of building \
+                 one, turn on Advanced and look under Keyboard language on the \
+                 Input tab.",
             );
             return;
         }
@@ -59,8 +61,9 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut LayoutEdit) {
             ui.weak("Using your desktop's keyboard layout.");
             ui.add_space(4.0);
             ui.weak(
-                "To pick a different system layout by name instead of building \
-                 one, use Keyboard language on the Input tab.",
+                "To use a layout your system already has instead of building \
+                 one, turn on Advanced and look under Keyboard language on the \
+                 Input tab.",
             );
             return;
         };
@@ -359,8 +362,6 @@ fn install(ui: &mut egui::Ui, doc: &mut Document) {
                 .desired_rows(8),
         );
 
-        // Room under the last row, so the status bar never cuts one in half.
-        ui.add_space(24.0);
     });
 }
 

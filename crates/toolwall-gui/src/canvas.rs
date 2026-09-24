@@ -202,12 +202,10 @@ pub(crate) fn canvas_size(
 ) -> egui::Vec2 {
     let aspect = screen.1.max(1) as f32 / screen.0.max(1) as f32;
 
-    let room = if over_the_real_thing {
-        available.y
-    } else {
-        // Leave the inspector below it on screen.
-        (available.y - 120.0).max(180.0)
-    };
+    // The numbers sit beside the picture now, so the only thing the height
+    // has to clear is the panel itself. Over the game there is no panel and
+    // no numbers, so it takes what it is given.
+    let room = if over_the_real_thing { available.y } else { (available.y - 8.0).max(180.0) };
 
     let width = available.x.max(200.0).min(room / aspect.max(0.01));
     egui::vec2(width, width * aspect)
@@ -413,10 +411,13 @@ impl Canvas<'_> {
             }
             taken.push(at);
 
+            // The chip does not fade with the item. A see-through chip on a
+            // dimmed overlay is the same as no chip, which is how two names
+            // in the same corner became unreadable in the first place.
             painter.rect_filled(
                 egui::Rect::from_min_size(at, galley.size()).expand2(egui::vec2(3.0, 1.0)),
                 2.0,
-                visuals.panel_fill.gamma_multiply(0.85 * dim),
+                visuals.panel_fill.gamma_multiply(0.92),
             );
             painter.galley(at, galley, base);
         }
@@ -961,8 +962,8 @@ mod drag_tests {
         for screen in [(1920, 1080), (2560, 1600), (1080, 1920), (3440, 1440)] {
             let size = canvas_size(available, screen, false);
             assert!(
-                size.y <= available.y - 120.0 + 0.5,
-                "{screen:?} drew {size:?} into {available:?}, leaving nothing for the numbers"
+                size.y <= available.y + 0.5,
+                "{screen:?} drew {size:?} into {available:?}, past the bottom of the panel"
             );
             assert!(size.x <= available.x + 0.5, "{screen:?} drew wider than the panel");
             assert!(size.x > 0.0 && size.y > 0.0, "{screen:?} drew nothing");

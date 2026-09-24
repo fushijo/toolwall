@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use toolwall_core::{Document, Problem};
 
 use crate::keys;
+use crate::widgets::scroll_body;
 use crate::widgets::settings_grid;
 
 
@@ -41,6 +42,8 @@ pub enum RemapTable {
 
 /// Width of one half of a rebind row: the field, Set and List.
 const REMAP_COLUMN: f32 = 218.0;
+/// The word between the two halves, so the second header clears it.
+const BECOMES_COLUMN: f32 = 74.0;
 
 pub fn show(
     ui: &mut egui::Ui,
@@ -49,7 +52,7 @@ pub fn show(
     advanced: bool,
     capture: &mut Option<RemapCapture>,
 ) {
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    scroll_body(ui, |ui| {
         ui.heading("Mouse");
         settings_grid(ui, "input-grid", |ui| {
             ui.label("Sensitivity").on_hover_text(
@@ -130,8 +133,6 @@ pub fn show(
             });
         }
 
-        // Room under the last row, so the status bar never cuts one in half.
-        ui.add_space(24.0);
     });
 }
 
@@ -233,10 +234,11 @@ fn remap_table(
 
     if !draft.rows.is_empty() {
         // Which half is which was only said in a paragraph further up.
+        // Each header over the field it names. The second one used to land
+        // over the word between the two halves.
         ui.horizontal(|ui| {
-            ui.add_space(2.0);
             ui.scope(|ui| {
-                ui.set_min_width(REMAP_COLUMN);
+                ui.set_min_width(REMAP_COLUMN + BECOMES_COLUMN);
                 ui.weak("You press");
             });
             ui.weak("Minecraft gets");
@@ -246,7 +248,10 @@ fn remap_table(
     for (index, row) in draft.rows.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             changed |= capture_field(ui, table, index, false, &mut row.0, capture);
-            ui.weak("becomes");
+            ui.scope(|ui| {
+                ui.set_min_width(BECOMES_COLUMN);
+                ui.weak("becomes");
+            });
             changed |= capture_field(ui, table, index, true, &mut row.1, capture);
 
             ui.add_space(8.0);
@@ -282,7 +287,12 @@ fn remap_table(
         *capture = None;
     }
 
-    if ui.button("Add rebind").clicked() {
+    if ui.button(match table {
+        RemapTable::Playing => "Add rebind",
+        RemapTable::Menu => "Add menu rebind",
+    })
+    .clicked()
+    {
         draft.add();
         changed = true;
         *capture = Some(RemapCapture {

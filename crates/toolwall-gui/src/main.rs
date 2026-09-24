@@ -298,6 +298,15 @@ impl App {
         ] {
             widget.bg_stroke = egui::Stroke::new(1.0, edge);
         }
+
+        // An unselected segment of a segmented control had no fill and no
+        // border at all, so "Light" and "2560x1440" and "Always on" read as
+        // captions sitting next to the one that happened to be filled.
+        visuals.widgets.inactive.weak_bg_fill = if look.dark {
+            egui::Color32::from_gray(38)
+        } else {
+            egui::Color32::from_gray(228)
+        };
         visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, edge.gamma_multiply(1.4));
         visuals.selection.stroke = egui::Stroke::new(1.0, visuals.selection.stroke.color);
 

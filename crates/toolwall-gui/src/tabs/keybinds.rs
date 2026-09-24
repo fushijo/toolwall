@@ -10,7 +10,9 @@ use toolwall_core::schema::{Command, Keybind};
 use toolwall_core::{Document, Problem, Scope};
 
 use crate::keys;
-use crate::widgets::{optional_text, problems_for, settings_grid};
+use crate::widgets::{optional_text, problems_for, settings_grid,
+    scroll_body,
+};
 
 /// Every command, as what it does and as what it is called in the file.
 ///
@@ -112,7 +114,7 @@ pub fn show(
         }
     }
 
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    scroll_body(ui, |ui| {
         suspend_switch(ui, doc);
 
         // Above the list. Below it, a config with ten binds put it off the
@@ -129,6 +131,17 @@ pub fn show(
             *capturing = Some(doc.keybinds.len() - 1);
         }
         ui.add_space(4.0);
+
+        if !doc.keybinds.is_empty() {
+            ui.horizontal(|ui| {
+                ui.add_space(20.0);
+                ui.scope(|ui| {
+                    ui.set_min_width(KEY_COLUMN);
+                    ui.weak("Key");
+                });
+                ui.weak("Does");
+            });
+        }
 
         let mut remove = None;
 
@@ -218,7 +231,7 @@ pub fn show(
                         args_editor(ui, index, bind, &mode_ids, &overlay_ids, allow_exec);
                     });
 
-                    if advanced && ui.button("Remove keybind").clicked() {
+                    if ui.button("Remove keybind").clicked() {
                         remove = Some(index);
                     }
                 });
@@ -231,8 +244,6 @@ pub fn show(
             }
         }
 
-        // Room under the last row, so the status bar never cuts one in half.
-        ui.add_space(24.0);
     });
 }
 

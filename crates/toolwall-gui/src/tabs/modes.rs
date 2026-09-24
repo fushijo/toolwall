@@ -7,7 +7,9 @@
 use toolwall_core::schema::{Mode, Resolution};
 use toolwall_core::{Document, Problem, Scope};
 
-use crate::widgets::{optional_text, problems_for, settings_grid};
+use crate::widgets::{optional_text, problems_for, settings_grid,
+    scroll_body,
+};
 
 /// Columns of the collapsed row, so the list reads down.
 const NAME_COLUMN: f32 = 150.0;
@@ -32,7 +34,22 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
         })
         .collect();
 
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    scroll_body(ui, |ui| {
+        if !doc.modes.is_empty() {
+            ui.horizontal(|ui| {
+                ui.add_space(20.0);
+                ui.scope(|ui| {
+                    ui.set_min_width(NAME_COLUMN);
+                    ui.weak("Mode");
+                });
+                ui.scope(|ui| {
+                    ui.set_min_width(SIZE_COLUMN);
+                    ui.weak("Size");
+                });
+                ui.weak("Key");
+            });
+        }
+
         let mut remove: Option<usize> = None;
 
         for (index, mode) in doc.modes.iter_mut().enumerate() {
@@ -122,7 +139,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                         ui.end_row();
                     });
 
-                    if advanced && ui.button("Remove mode").clicked() {
+                    if ui.button("Remove mode").clicked() {
                         remove = Some(index);
                     }
                 });
@@ -187,7 +204,5 @@ fn attach_list(ui: &mut egui::Ui, available: &[String], attached: &mut Vec<Strin
             });
         }
 
-        // Room under the last row, so the status bar never cuts one in half.
-        ui.add_space(24.0);
     });
 }

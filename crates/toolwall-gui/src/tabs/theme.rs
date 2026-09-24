@@ -3,7 +3,9 @@
 use toolwall_core::schema::NinbAnchor;
 use toolwall_core::Document;
 
-use crate::widgets::{color_field, path_field, settings_grid, FileBrowser, PickTarget};
+use crate::widgets::{color_field, path_field, settings_grid, FileBrowser, PickTarget,
+    scroll_body,
+};
 
 const ANCHORS: &[&str] = &[
     "topleft", "top", "topright",
@@ -17,7 +19,7 @@ pub fn show(
     advanced: bool,
     browser: &mut FileBrowser,
 ) {
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    scroll_body(ui, |ui| {
         ui.heading("Around the game");
 
         settings_grid(ui, "theme-grid", |ui| {
@@ -123,8 +125,6 @@ pub fn show(
             ui.end_row();
         });
 
-        // Room under the last row, so the status bar never cuts one in half.
-        ui.add_space(24.0);
     });
 }
 

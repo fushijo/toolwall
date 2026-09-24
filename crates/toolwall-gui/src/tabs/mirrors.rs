@@ -12,12 +12,13 @@ use crate::widgets::{
     rect_editor,
     settings_grid,
     shader_picker,
+    scroll_body,
 };
 
 pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advanced: bool) {
     let shaders: Vec<String> = doc.shaders.keys().cloned().collect();
 
-    egui::ScrollArea::vertical().show(ui, |ui| {
+    scroll_body(ui, |ui| {
         let mut remove = None;
 
         // Taken before the mutable borrow, because the checkbox below needs
@@ -125,7 +126,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
 
                     colors_section(ui, index, &mut mirror.color_keys);
 
-                    if advanced && ui.button("Remove mirror").clicked() {
+                    if ui.button("Remove mirror").clicked() {
                         remove = Some(index);
                     }
                 });
@@ -253,7 +254,5 @@ fn outline_editor(ui: &mut egui::Ui, outline: &mut Option<Outline>) {
             color_field(ui, &mut outline.color);
         }
 
-        // Room under the last row, so the status bar never cuts one in half.
-        ui.add_space(24.0);
     });
 }
