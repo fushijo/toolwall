@@ -445,6 +445,26 @@ Set the screen size to match waywall's window before you start. Overlay
 coordinates are window pixels rather than monitor pixels, and nothing reports
 the size, so read it off the `Display:` line in F3.
 
+### Keeping one colour
+
+A mirror can keep only the colours you list and make everything else in that
+capture see-through. That is how you get the pie chart's slices without the
+grey box around them. The Mirrors tab takes a list, one row per colour, with a
+tolerance slider for each: raise it when the edges are soft, lower it when
+colours you did not ask for get through.
+
+waywall only does one colour per mirror and compiles its tolerance into its own
+shader, so toolwall stacks a layer per colour and generates a shader when you
+move the slider. You do not have to care, it just reloads like everything else.
+
+There is a border option too, but it needs the rect patch, so it does nothing
+on stock waywall.
+
+### One key, several overlays
+
+If your pie chart is four keyed layers, tick all four on one keybind instead of
+making four keys. They come up and go down together.
+
 ## Keyboard layouts
 
 The Layout tab is [xkbedit](https://xkbedit.github.io/) built into the editor,

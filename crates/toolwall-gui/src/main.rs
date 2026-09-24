@@ -414,7 +414,11 @@ impl App {
         let current = serde_json::to_string(&self.doc).unwrap_or_default();
 
         if current != self.saved {
-            self.pending_since.get_or_insert_with(Instant::now);
+            if self.pending_since.is_none() {
+                self.pending_since = Some(Instant::now());
+                // The last result is about the last write, not this one.
+                self.status = None;
+            }
         }
 
         let Some(since) = self.pending_since else { return };
@@ -578,24 +582,26 @@ impl eframe::App for App {
 
                 ui.separator();
 
+                // Every one of these carries a word as well as a colour, so
+                // the bar still says what happened in greyscale.
                 if let Some(err) = &self.load_error {
-                    ui.colored_label(egui::Color32::LIGHT_RED, format!("load failed: {err}"));
+                    ui.colored_label(egui::Color32::LIGHT_RED, format!("⚠ load failed: {err}"));
                 } else if blocked {
                     ui.colored_label(
                         egui::Color32::from_rgb(255, 120, 120),
                         if problems.len() == 1 {
-                            "1 problem, see the highlighted item".to_string()
+                            "⚠ 1 problem, see the highlighted item".to_string()
                         } else {
-                            format!("{} problems, see the highlighted items", problems.len())
+                            format!("⚠ {} problems, see the highlighted items", problems.len())
                         },
                     );
                 } else if let Some((ok, message)) = &self.status {
-                    let color = if *ok {
-                        egui::Color32::LIGHT_GREEN
+                    let (color, mark) = if *ok {
+                        (egui::Color32::LIGHT_GREEN, "•")
                     } else {
-                        egui::Color32::LIGHT_RED
+                        (egui::Color32::LIGHT_RED, "⚠")
                     };
-                    ui.colored_label(color, message);
+                    ui.colored_label(color, format!("{mark} {message}"));
                 } else {
                     // The full path is longer than the bar and used to run off
                     // the end mid-word. The file name is the part that says

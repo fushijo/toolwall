@@ -19,7 +19,7 @@ covers the parts that need prose.
 | `gui.toggle` | none | Launches `gui.command` on first use, then toggles visibility. |
 | `screen.edit` | none | Opens the placement overlay: the editor sized to waywall's window with nothing behind it, for dragging overlays over the real thing. Esc closes it. |
 | `ninb.toggle` | none | Launches Ninjabrain Bot from `ninb.jar` on first use, then toggles visibility. |
-| `overlay.toggle` | `{ "overlay": "<id>" }` | Pins one mirror or image on top of the current mode until toggled off. |
+| `overlay.toggle` | `{ "overlays": ["a","b"] }` | Pins mirrors and images on top of the current mode until toggled off. Several move together: if any is up, they all go down. `{ "overlay": "<id>" }` is the older single-id form and still works. |
 | `exec` | `{ "command": "..." }` | Requires `gui.allow_exec: true`. |
 
 An unknown command logs a warning and returns `false`, which passes the keypress
@@ -268,6 +268,43 @@ produce a keyboard that compiles fine and then misbehaves:
 The file is generated from the document, never the other way round. The editor
 writes it on save; `toolwall layout` writes it from the command line, and
 `toolwall layout --print` shows it without writing.
+
+## Keeping one colour out of a capture
+
+`mirror.color_keys` is a list. Each entry keeps one colour and makes every
+other pixel in that capture see-through, so isolating something many-coloured,
+the pie chart being the reason this exists, means one entry per colour.
+
+```json
+"color_keys": [
+  { "input": "#ff0000ff", "output": "#ff0000ff" },
+  { "input": "#00ff00ff", "output": "#00ff00ff", "threshold": 0.08 }
+]
+```
+
+waywall takes one colour key per mirror, so toolwall draws one mirror per
+entry over the same rectangle.
+
+`threshold` is how far a pixel may be from `input` and still count, per
+channel, out of 1.0. waywall's own shader compiles `0.01` in, which is about 2
+of 255 and too strict for anything with a soft edge, so any other value makes
+toolwall generate a shader with that number in it. Two entries asking for the
+same tolerance share one program. Shaders compile at startup, and saving
+reloads, so this is live like everything else.
+
+`color_key` (singular, no list) is the older form and still loads.
+
+## Borders
+
+`mirror.outline` draws four bars around `dst`:
+
+```json
+"outline": { "width": 2, "color": "#ffffffff" }
+```
+
+Needs `waywall.rect`, which comes from `patches/0001`. Stock waywall has no
+fill primitive at all, so without the patch the border is skipped with one
+warning and the mirror still appears.
 
 ## Text templates
 
