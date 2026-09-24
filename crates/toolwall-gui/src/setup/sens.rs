@@ -10,6 +10,7 @@ use toolwall_core::preset;
 use toolwall_core::Document;
 use toolwall_core::sens::{self, Pointer, Sens};
 
+use crate::widgets::{segment_value};
 use crate::widgets::settings_grid;
 
 /// What was scaling the mouse before. One radio, three fields would be worse.
@@ -190,11 +191,11 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState, doc: &Document) -> Option<
              it on means something different afterwards and gets converted.",
         );
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut state.kind, PointerKind::Flat, "None, raw input")
+            segment_value(ui, &mut state.kind, PointerKind::Flat, "None, raw input")
                 .on_hover_text("Acceleration already off, or a raw-input mouse");
-            ui.selectable_value(&mut state.kind, PointerKind::Windows, "Windows slider")
+            segment_value(ui, &mut state.kind, PointerKind::Windows, "Windows slider")
                 .on_hover_text("The 1 to 11 pointer speed slider in Windows");
-            ui.selectable_value(&mut state.kind, PointerKind::Linux, "Linux slider")
+            segment_value(ui, &mut state.kind, PointerKind::Linux, "Linux slider")
                 .on_hover_text("libinput's acceleration speed, what your desktop's mouse slider sets");
         });
         ui.end_row();

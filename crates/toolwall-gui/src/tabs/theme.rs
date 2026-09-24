@@ -4,8 +4,7 @@ use toolwall_core::schema::NinbAnchor;
 use toolwall_core::Document;
 
 use crate::widgets::{color_field, path_field, settings_grid, FileBrowser, PickTarget,
-    scroll_body,
-};
+    scroll_body, segment_value};
 
 const ANCHORS: &[&str] = &[
     "topleft", "top", "topright",
@@ -52,31 +51,9 @@ pub fn show(
             }
         });
 
-        ui.separator();
-        ui.heading("Ninjabrain Bot position");
-        ui.horizontal(|ui| {
-            ui.checkbox(&mut doc.ninb.autostart, "Open Ninjabrain Bot on startup");
-        });
-        ui.add_space(4.0);
-
-        anchor_editor(ui, doc);
-
-        ui.add_space(4.0);
-        settings_grid(ui, "ninb-grid", |ui| {
-            ui.label("Opacity");
-            ui.add(
-                egui::Slider::new(&mut doc.theme.ninb_opacity, 0.1..=1.0).fixed_decimals(2),
-            );
-            ui.end_row();
-
-        });
-
-        // Showing or hiding ninb's window lives on the Ninjabrain tab. It used
-        // to be here as well, worded the other way round, so the same switch
-        // read as two settings that contradicted each other.
-
-        // waywall's own window size lives on the Modes tab, next to the
-        // sizes it is the backdrop for.
+        // waywall's own window size lives on the Modes tab, next to the sizes
+        // it is the backdrop for, and Ninjabrain Bot's position lives on the
+        // Ninjabrain tab with the rest of it.
 
         ui.separator();
         ui.heading("This editor");
@@ -91,8 +68,8 @@ pub fn show(
 
             ui.label("Theme");
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut look.dark, true, "Dark");
-                ui.selectable_value(&mut look.dark, false, "Light");
+                segment_value(ui, &mut look.dark, true, "Dark");
+                segment_value(ui, &mut look.dark, false, "Light");
             });
             ui.end_row();
 
@@ -110,7 +87,7 @@ pub fn show(
 
 /// `ninb_anchor` is either a bare position name or a position with offsets.
 /// Editing an offset promotes the bare form, so the two shapes stay one control.
-fn anchor_editor(ui: &mut egui::Ui, doc: &mut Document) {
+pub(crate) fn anchor_editor(ui: &mut egui::Ui, doc: &mut Document) {
     let (mut position, mut x, mut y) = match &doc.theme.ninb_anchor {
         Some(NinbAnchor::Named(name)) => (name.clone(), 0, 0),
         Some(NinbAnchor::Offset { position, x, y }) => {

@@ -17,7 +17,7 @@ use toolwall_core::preset::{self, Choices, OverlayState};
 use toolwall_core::{problems, Document, Store};
 
 use crate::keys;
-use crate::widgets::{path_field, settings_grid, FileBrowser, PickTarget};
+use crate::widgets::{path_field, settings_grid, FileBrowser, PickTarget, segment, segment_button};
 
 /// Where the import leaves its notes, next to the config.
 const REPORT_NAME: &str = "toolwall-import-report.txt";
@@ -481,7 +481,7 @@ impl Setup {
             for (w, h) in &self.detected {
                 let picked = self.screen == (*w, *h);
                 if ui
-                    .selectable_label(picked, format!("Your screen, {w}x{h}"))
+                    .add(segment_button(ui, picked, &format!("Your screen, {w}x{h}")))
                     .clicked()
                 {
                     self.screen = (*w, *h);
@@ -494,7 +494,7 @@ impl Setup {
                     continue;
                 }
                 let picked = self.screen == (*w, *h);
-                if ui.selectable_label(picked, *name).clicked() {
+                if segment(ui, picked, name).clicked() {
                     self.screen = (*w, *h);
                     self.sens.seed(*h, None);
                 }
@@ -686,16 +686,16 @@ impl Setup {
                 ui.horizontal(|ui| {
                     let bound = matches!(overlay.state, OverlayState::Bound(_));
 
-                    if ui.selectable_label(bound, "On a key").clicked() && !bound {
+                    if segment(ui, bound, "On a key").clicked() && !bound {
                         overlay.state = OverlayState::Bound(String::new());
                     }
                     if ui
-                        .selectable_label(overlay.state == OverlayState::AlwaysOn, "Always on")
+                        .add(segment_button(ui, overlay.state == OverlayState::AlwaysOn, "Always on"))
                         .clicked()
                     {
                         overlay.state = OverlayState::AlwaysOn;
                     }
-                    if ui.selectable_label(overlay.state == OverlayState::Off, "Off").clicked() {
+                    if segment(ui, overlay.state == OverlayState::Off, "Off").clicked() {
                         overlay.state = OverlayState::Off;
                     }
                 });

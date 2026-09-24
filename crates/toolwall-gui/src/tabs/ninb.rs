@@ -5,8 +5,7 @@ use toolwall_core::{Document, Problem, Scope, NINB_PRESETS};
 
 use crate::ninb_keys::{self, NinbKeys};
 use crate::widgets::{color_field, path_field, problems_for, settings_grid, FileBrowser, PickTarget,
-    scroll_body,
-};
+    scroll_body, segment, segment_button};
 
 const COORDS: &[(&str, &str, &str)] = &[
     ("block", "Block", "the block at the centre of the stronghold chunk"),
@@ -70,6 +69,25 @@ pub fn show(
         });
 
         ui.separator();
+        ui.heading("Where its window sits");
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut doc.ninb.autostart, "Open Ninjabrain Bot on startup");
+        });
+        ui.add_space(4.0);
+
+        crate::tabs::theme::anchor_editor(ui, doc);
+
+        ui.add_space(4.0);
+        settings_grid(ui, "ninb-grid", |ui| {
+            ui.label("Opacity");
+            ui.add(
+                egui::Slider::new(&mut doc.theme.ninb_opacity, 0.1..=1.0).fixed_decimals(2),
+            );
+            ui.end_row();
+
+        });
+
+        ui.separator();
         hotkeys(ui, doc, keys);
 
         ui.separator();
@@ -100,7 +118,7 @@ pub fn show(
             ui.label("Arrangement");
             ui.horizontal(|ui| {
                 for (value, label) in LAYOUTS {
-                    if ui.selectable_label(o.layout == *value, *label).clicked() {
+                    if segment(ui, o.layout == *value, label).clicked() {
                         o.layout = (*value).to_string();
                     }
                 }
@@ -127,7 +145,7 @@ pub fn show(
             ui.horizontal(|ui| {
                 for (value, label, hint) in COORDS {
                     if ui
-                        .selectable_label(o.coords == *value, *label)
+                        .add(segment_button(ui, o.coords == *value, label))
                         .on_hover_text(*hint)
                         .clicked()
                     {

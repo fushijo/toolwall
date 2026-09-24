@@ -400,3 +400,55 @@ pub fn scroll_body<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -
 
     out.inner
 }
+
+/// One option of a segmented control, with chrome whether it is picked or not.
+///
+/// egui's `selectable_label` paints nothing at all when it is neither selected
+/// nor hovered, so "Light" next to a filled "Dark" read as a caption sitting
+/// beside a button rather than as the other half of a switch. This gives the
+/// unpicked side a fill and a border, and the picked side the accent plus a
+/// tick, so the state is not carried by colour alone.
+pub fn segment(ui: &mut egui::Ui, selected: bool, text: &str) -> egui::Response {
+    let visuals = ui.visuals();
+
+    let button = if selected {
+        egui::Button::new(egui::RichText::new(format!("• {text}")).strong())
+            .fill(visuals.selection.bg_fill)
+            .stroke(egui::Stroke::new(1.0, visuals.selection.bg_fill))
+    } else {
+        egui::Button::new(text)
+            .fill(visuals.widgets.inactive.weak_bg_fill)
+            .stroke(visuals.widgets.inactive.bg_stroke)
+    };
+
+    ui.add(button)
+}
+
+/// `segment`, for the common case of picking one value out of several.
+pub fn segment_value<T: PartialEq>(
+    ui: &mut egui::Ui,
+    current: &mut T,
+    value: T,
+    text: &str,
+) -> egui::Response {
+    let response = segment(ui, *current == value, text);
+    if response.clicked() {
+        *current = value;
+    }
+    response
+}
+
+/// `segment` as a widget, for the call sites that want the Response chained.
+pub fn segment_button(ui: &egui::Ui, selected: bool, text: &str) -> egui::Button<'static> {
+    let visuals = ui.visuals();
+
+    if selected {
+        egui::Button::new(egui::RichText::new(format!("• {text}")).strong())
+            .fill(visuals.selection.bg_fill)
+            .stroke(egui::Stroke::new(1.0, visuals.selection.bg_fill))
+    } else {
+        egui::Button::new(text.to_string())
+            .fill(visuals.widgets.inactive.weak_bg_fill)
+            .stroke(visuals.widgets.inactive.bg_stroke)
+    }
+}
