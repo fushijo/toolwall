@@ -23,10 +23,9 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut LayoutEdit) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Keyboard layout");
         ui.weak(
-            "Click a key, then say what it should type. This changes the \
-             character a key produces, not which key it is - so a key can type \
-             something new in chat and the crafting book and still do its job \
-             in game.",
+            "Changes what a key types without changing which key it is, so a \
+             key can type something new in chat and the crafting book and \
+             still do its job in game.",
         );
 
         // Turning it off must not throw the keys away. Someone unticked this
@@ -44,15 +43,15 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut LayoutEdit) {
         if doc.input.custom_layout.as_ref().is_some_and(|l| !l.enabled) {
             ui.add_space(6.0);
             ui.weak(
-                "Off. waywall uses your desktop layout. Your keys are kept, so \
-                 ticking the box puts them back.",
+                "Using your desktop's keyboard layout. The keys you set here \
+                 are kept, so ticking the box puts them back.",
             );
             return;
         }
 
         let Some(layout) = doc.input.custom_layout.as_mut() else {
             ui.add_space(6.0);
-            ui.weak("Off. waywall uses the keyboard layout your desktop session has.");
+            ui.weak("Using your desktop's keyboard layout.");
             return;
         };
 

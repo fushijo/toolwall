@@ -37,6 +37,7 @@ pub fn show(
 
             egui::CollapsingHeader::new(heading)
                 .id_salt(("image", index))
+                .default_open(index == 0)
                 .show(ui, |ui| {
                     problems_for(ui, problems, &Scope::Image(image.id.clone()));
 
@@ -121,7 +122,7 @@ pub fn show(
 
         ui.separator();
 
-        if advanced && ui.button("Add image").clicked() {
+        if ui.button("Add image").clicked() {
             doc.images.push(Image {
                 id: format!("image{}", doc.images.len() + 1),
                 label: None,

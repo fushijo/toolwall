@@ -62,11 +62,15 @@ fn toolbar(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
     ui.horizontal(|ui| {
         ui.label("Mode");
         egui::ComboBox::from_id_salt("screen-mode")
-            .selected_text(if state.mode.is_empty() {
-                "Base".to_string()
-            } else {
-                state.mode.clone()
-            })
+            // The name, not the id. The Modes tab calls this one "Thin BT"
+            // and showing "thin" here made it look like a different thing.
+            .selected_text(
+                doc.modes
+                    .iter()
+                    .find(|m| m.id == state.mode)
+                    .map(|m| m.label.clone().unwrap_or_else(|| m.id.clone()))
+                    .unwrap_or_else(|| "Base".to_string()),
+            )
             .show_ui(ui, |ui| {
                 ui.selectable_value(&mut state.mode, String::new(), "Base");
                 for mode in &doc.modes {

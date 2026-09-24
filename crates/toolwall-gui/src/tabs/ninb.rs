@@ -76,11 +76,14 @@ pub fn show(
 
         let o = &mut doc.ninb.overlay;
 
+        // "Preset: [Ninjabrain Bot] [Compact]" sat two rows above
+        // "Style: [Ninjabrain Bot] [Compact]" and neither said which was which.
+        // These set everything below at once; Style only picks the arrangement.
         ui.add_space(4.0);
         ui.horizontal(|ui| {
-            ui.label("Preset");
+            ui.label("Start from");
             for (id, label, hint) in NINB_PRESETS {
-                if ui.button(*label).on_hover_text(*hint).clicked() {
+                if ui.button(format!("{label} defaults")).on_hover_text(*hint).clicked() {
                     o.apply_preset(id);
                 }
             }
@@ -92,7 +95,7 @@ pub fn show(
             ui.checkbox(&mut o.enabled, "");
             ui.end_row();
 
-            ui.label("Style");
+            ui.label("Arrangement");
             ui.horizontal(|ui| {
                 for (value, label) in LAYOUTS {
                     if ui.selectable_label(o.layout == *value, *label).clicked() {

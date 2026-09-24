@@ -23,6 +23,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
 
             egui::CollapsingHeader::new(heading)
                 .id_salt(index)
+                .default_open(index == 0)
                 .default_open(false)
                 .show(ui, |ui| {
                     problems_for(ui, problems, &Scope::Mode(mode.id.clone()));

@@ -40,7 +40,6 @@ pub(crate) enum Step {
     Screens,
     Overlays,
     Keys,
-    Look,
     Sens,
     Ninb,
     Finish,
@@ -51,7 +50,6 @@ pub(crate) const STEPS: &[(Step, &str)] = &[
     (Step::Screens, "Screens"),
     (Step::Overlays, "Overlays"),
     (Step::Keys, "Keys"),
-    (Step::Look, "Look"),
     (Step::Sens, "Sensitivity"),
     (Step::Ninb, "Ninjabrain Bot"),
     (Step::Finish, "Finish"),
@@ -80,6 +78,8 @@ pub struct Setup {
     /// What the monitors say they are, as a line of text to show. A hint
     /// only: see where it is drawn for why it is never filled in.
     monitor_hint: Option<String>,
+    /// What the monitors report, offered as a first chip.
+    detected: Vec<(u32, u32)>,
     /// Whether the config still needs reshaping for that screen.
     ///
     /// Only the preset does. An imported config was already written for the
@@ -134,6 +134,7 @@ impl Setup {
             origin,
             screen,
             monitor_hint: toolwall_core::screen::hint(),
+            detected: toolwall_core::screen::detected(),
             fit_preset: had_config.is_none(),
             step: Step::Start,
             capture: None,
@@ -177,6 +178,15 @@ impl Setup {
 
     fn config_dir(&self) -> PathBuf {
         self.store.path().parent().map(Path::to_path_buf).unwrap_or_default()
+    }
+}
+
+/// "1 screen", "3 screens". Not "3 screen(s)".
+fn plural(count: usize, noun: &str) -> String {
+    if count == 1 {
+        format!("1 {noun}")
+    } else {
+        format!("{count} {noun}s")
     }
 }
 
@@ -404,13 +414,15 @@ impl Setup {
             ui.add_space(4.0);
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        let frame = egui::Frame::central_panel(&ctx.style())
+            .inner_margin(egui::Margin { left: 10.0, right: 10.0, top: 10.0, bottom: 14.0 });
+
+        egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| match self.step {
                 Step::Start => self.start(ui),
                 Step::Screens => self.screens(ui),
                 Step::Overlays => self.overlays(ui),
                 Step::Keys => self.keys(ui),
-                Step::Look => self.look(ui),
                 Step::Sens => {
                     if let Some(result) = sens::show(ui, &mut self.sens, &self.base) {
                         self.choices.sensitivity = Some(result);
@@ -433,9 +445,11 @@ impl Setup {
 
         if let Some((screens, keys)) = self.had_config {
             ui.label(format!(
-                "There is already a config here, with {screens} screen(s) and \
-                 {keys} keybind(s). The steps after this one let you change it, \
-                 or start over from one of these."
+                "There is already a config here, with {} and {}. The steps \
+                 after this one let you change it, or start over from one of \
+                 these.",
+                plural(screens, "screen"),
+                plural(keys, "key"),
             ));
         } else {
             ui.label(
@@ -457,7 +471,26 @@ impl Setup {
         ui.add_space(6.0);
 
         ui.horizontal_wrapped(|ui| {
+            // What the monitors say, first, because it is usually the answer.
+            // Offered rather than chosen: on a scaled desktop waywall's window
+            // is smaller than the monitor, and taking this would put every
+            // overlay off the side of the screen.
+            for (w, h) in &self.detected {
+                let picked = self.screen == (*w, *h);
+                if ui
+                    .selectable_label(picked, format!("Your screen, {w}x{h}"))
+                    .on_hover_text("Right unless your desktop is scaled. Check F3.")
+                    .clicked()
+                {
+                    self.screen = (*w, *h);
+                    self.sens.seed(*h, None);
+                }
+            }
+
             for (w, h, name) in COMMON_SCREENS {
+                if self.detected.contains(&(*w, *h)) {
+                    continue;
+                }
                 let picked = self.screen == (*w, *h);
                 if ui.selectable_label(picked, *name).clicked() {
                     self.screen = (*w, *h);
@@ -562,9 +595,11 @@ impl Setup {
         ui.add_space(10.0);
 
         let mut capture = None;
+        let card_width = ui.available_width();
 
         for (index, screen) in self.choices.screens.iter_mut().enumerate() {
             egui::Frame::group(ui.style()).show(ui, |ui| {
+                ui.set_width(card_width - ui.spacing().item_spacing.x * 4.0);
                 ui.horizontal(|ui| {
                     ui.checkbox(&mut screen.enabled, "");
                     ui.strong(&screen.label);
@@ -600,6 +635,19 @@ impl Setup {
         if matches!(self.capture, Some(Capture::Screen(_))) {
             ui.colored_label(egui::Color32::LIGHT_BLUE, "press a key, or Esc to cancel");
         }
+
+        // Here rather than in a step of its own: it is what you see beside a
+        // screen narrower than your monitor, so it belongs next to the widths.
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.label("Background").on_hover_text(
+                "What fills the window around the game in a screen narrower \
+                 than your monitor.",
+            );
+            color_field(ui, &mut self.choices.background);
+        });
     }
 
     fn overlays(&mut self, ui: &mut egui::Ui) {
@@ -613,8 +661,14 @@ impl Setup {
 
         let mut capture = None;
 
+        // Every card the full width. Left to themselves they shrank to their
+        // contents, so a card with no Capture row stopped short and the right
+        // edge of the list zigzagged.
+        let card_width = ui.available_width();
+
         for (index, overlay) in self.choices.overlays.iter_mut().enumerate() {
             egui::Frame::group(ui.style()).show(ui, |ui| {
+                ui.set_width(card_width - ui.spacing().item_spacing.x * 4.0);
                 ui.strong(&overlay.label);
                 if overlay.modes.is_empty() {
                     ui.weak("not on any screen");
@@ -766,37 +820,6 @@ impl Setup {
         }
     }
 
-    fn look(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Look");
-        ui.add_space(6.0);
-
-        settings_grid(ui, "setup-look", |ui| {
-            ui.label("Background").on_hover_text(
-                "What fills the window around the game when you are in a screen \
-                 narrower than your monitor.",
-            );
-            color_field(ui, &mut self.choices.background);
-            ui.end_row();
-
-            ui.label("Editor font").on_hover_text(
-                "A .ttf or .otf to use in the editor. Leave it empty for the built-in one.",
-            );
-            ui.vertical(|ui| {
-                path_field(
-                    ui,
-                    &mut self.choices.font_path,
-                    &mut self.browser,
-                    PickTarget::Font,
-                    "ttf",
-                );
-                if !self.choices.font_path.is_empty() && ui.small_button("Clear").clicked() {
-                    self.choices.font_path.clear();
-                }
-            });
-            ui.end_row();
-        });
-    }
-
     fn ninb(&mut self, ui: &mut egui::Ui) {
         ui.heading("Ninjabrain Bot");
         ui.label(
@@ -883,7 +906,11 @@ impl Setup {
             ui.end_row();
 
             ui.label("Overlays");
-            ui.label(format!("{} mirror(s), {} image(s)", doc.mirrors.len(), doc.images.len()));
+            ui.label(format!(
+                "{}, {}",
+                plural(doc.mirrors.len(), "mirror"),
+                plural(doc.images.len(), "image"),
+            ));
             ui.end_row();
 
             ui.label("Keys");
@@ -948,14 +975,38 @@ impl Setup {
         }
 
         if self.had_config.is_some() {
-            ui.colored_label(
-                egui::Color32::from_rgb(255, 170, 80),
-                format!("This replaces {}.", self.store.path().display()),
-            );
-            ui.add_space(6.0);
+            let path = self.store.path().to_path_buf();
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let dir = path.parent().map(|d| d.display().to_string()).unwrap_or_default();
+
+            // The only thing here that destroys anything, in the same box the
+            // merely informational notes get.
+            egui::Frame::group(ui.style())
+                .fill(egui::Color32::from_rgb(60, 40, 10))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(egui::Color32::from_rgb(255, 200, 100), "⚠");
+                        ui.colored_label(
+                            egui::Color32::from_rgb(255, 200, 100),
+                            "This overwrites the config you already have",
+                        );
+                    });
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        ui.strong(&name);
+                        ui.weak(format!("in {dir}"));
+                    });
+                });
+            ui.add_space(10.0);
         }
 
-        if ui.button("Write the config").clicked() {
+        let write = egui::Button::new(egui::RichText::new("Write the config").strong())
+            .fill(ui.visuals().selection.bg_fill);
+
+        if ui.add_sized([180.0, 30.0], write).clicked() {
             self.status = Some(match self.store.save(&doc) {
                 Ok(()) => {
                     self.written = true;
@@ -1000,7 +1051,6 @@ mod tests {
                         Step::Screens => setup.screens(ui),
                         Step::Overlays => setup.overlays(ui),
                         Step::Keys => setup.keys(ui),
-                        Step::Look => setup.look(ui),
                         Step::Sens => {
                             sens::show(ui, &mut setup.sens, &setup.base);
                         }

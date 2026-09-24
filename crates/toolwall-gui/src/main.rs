@@ -258,6 +258,42 @@ impl App {
             egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), alpha)
         };
 
+        // Raise the ordinary and the dim text a step.
+        //
+        // egui's dark defaults put body text at #8c8c8c on a near-black panel,
+        // which is under 5:1, and the weak text it derives from that is around
+        // 2.5:1. This floats over a bright game on a laptop screen, so it has
+        // to be readable at a glance rather than merely present.
+        if look.dark {
+            visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::from_gray(200);
+            visuals.widgets.inactive.fg_stroke.color = egui::Color32::from_gray(210);
+        } else {
+            visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::from_gray(30);
+            visuals.widgets.inactive.fg_stroke.color = egui::Color32::from_gray(20);
+        }
+
+        // A field has to look like a field.
+        //
+        // egui's dark theme fills a text box at near-panel-black with no
+        // border, so "Cursor icon" and "Model" and "Rules" read as gaps in the
+        // panel rather than as somewhere you can type.
+        let edge = if look.dark {
+            egui::Color32::from_gray(78)
+        } else {
+            egui::Color32::from_gray(160)
+        };
+        for widget in [
+            &mut visuals.widgets.noninteractive,
+            &mut visuals.widgets.inactive,
+        ] {
+            widget.bg_stroke = egui::Stroke::new(1.0, edge);
+        }
+        visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, edge.gamma_multiply(1.4));
+        visuals.selection.stroke = egui::Stroke::new(1.0, visuals.selection.stroke.color);
+
+        // ui.weak() is this colour blended halfway to weak_bg_fill, so the
+        // bump above is what carries the hints too.
+
         visuals.panel_fill = tint(if look.dark {
             egui::Color32::from_rgb(12, 12, 14)
         } else {
@@ -268,6 +304,19 @@ impl App {
         visuals.faint_bg_color = tint(visuals.faint_bg_color);
 
         ctx.set_visuals(visuals);
+
+        ctx.style_mut(|style| {
+            // Solid, always there. A floating bar on a dark panel is invisible
+            // until you are already scrolling, so a control row cut in half by
+            // the status bar read as a crash rather than as "there is more".
+            style.spacing.scroll = egui::style::ScrollStyle::solid();
+
+            // A checkbox at egui's default 14px is both hard to see and hard
+            // to hit. 24 is the smallest target worth shipping.
+            style.spacing.icon_width = 18.0;
+            style.spacing.icon_width_inner = 10.0;
+            style.spacing.interact_size.y = style.spacing.interact_size.y.max(24.0);
+        });
 
         // Zoom scales the whole UI with the text, which keeps hit targets and
         // spacing proportional - setting a font size alone does not.
@@ -491,10 +540,15 @@ impl eframe::App for App {
 
                     // Everything most people need is in Basic; Advanced adds
                     // ids, layering and the things that break a setup.
-                    ui.separator();
-                    ui.add_space(6.0);
-                    ui.selectable_value(&mut self.advanced, true, "Advanced");
-                    ui.selectable_value(&mut self.advanced, false, "Basic");
+                    //
+                    // Hidden on the two tabs that do not read it. A switch
+                    // that visibly does nothing teaches you it is broken.
+                    if !matches!(self.tab, Tab::Screen | Tab::Layout) {
+                        ui.separator();
+                        ui.add_space(6.0);
+                        ui.selectable_value(&mut self.advanced, true, "Advanced");
+                        ui.selectable_value(&mut self.advanced, false, "Basic");
+                    }
 
                     // Remembered, so it is not a click every time the editor
                     // opens. Written with the document like any other edit.
@@ -529,7 +583,11 @@ impl eframe::App for App {
                 } else if blocked {
                     ui.colored_label(
                         egui::Color32::from_rgb(255, 120, 120),
-                        format!("{} problem(s), see the highlighted items", problems.len()),
+                        if problems.len() == 1 {
+                            "1 problem, see the highlighted item".to_string()
+                        } else {
+                            format!("{} problems, see the highlighted items", problems.len())
+                        },
                     );
                 } else if let Some((ok, message)) = &self.status {
                     let color = if *ok {
@@ -553,7 +611,11 @@ impl eframe::App for App {
             ui.add_space(2.0);
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        // Room under the last row, so the status bar never slices one in half.
+        let frame = egui::Frame::central_panel(&ctx.style())
+            .inner_margin(egui::Margin { left: 8.0, right: 8.0, top: 8.0, bottom: 14.0 });
+
+        egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
             // Document-wide problems have no item to sit next to.
             for problem in problems.iter().filter(|p| p.scope == Scope::Document) {
                 ui.colored_label(

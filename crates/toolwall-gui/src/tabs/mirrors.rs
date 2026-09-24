@@ -40,6 +40,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
 
             egui::CollapsingHeader::new(heading)
                 .id_salt(("mirror", index))
+                .default_open(index == 0)
                 .show(ui, |ui| {
                     problems_for(ui, problems, &Scope::Mirror(mirror.id.clone()));
 
@@ -140,7 +141,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
 
         ui.separator();
 
-        if advanced && ui.button("Add mirror").clicked() {
+        if ui.button("Add mirror").clicked() {
             doc.mirrors.push(Mirror {
                 id: format!("mirror{}", doc.mirrors.len() + 1),
                 label: None,

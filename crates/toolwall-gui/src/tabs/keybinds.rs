@@ -99,7 +99,11 @@ pub fn show(
                 _ => command_name(bind.command).to_string(),
             };
 
-            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
+            egui::collapsing_header::CollapsingState::load_with_default_open(
+                ui.ctx(),
+                id,
+                index == 0,
+            )
                 .show_header(ui, |ui| {
                     // A column of keys, so the list can be read down rather
                     // than word by word. The key is what you are looking for.

@@ -39,6 +39,9 @@ pub enum RemapTable {
     Menu,
 }
 
+/// Width of one half of a rebind row: the field, Set and List.
+const REMAP_COLUMN: f32 = 218.0;
+
 pub fn show(
     ui: &mut egui::Ui,
     doc: &mut Document,
@@ -70,31 +73,41 @@ pub fn show(
         ui.separator();
         ui.heading("Key rebinds");
         ui.weak(
-            "Press Set, then press the key you want. Left is the key you press. \
-             Modifiers need the browse button: they reach the editor already \
-             merged, so listening cannot tell them apart.",
+            "Press Set, then press the key. A modifier on its own needs List: \
+             left and right arrive here already merged, so listening cannot \
+             tell them apart.",
         );
         remap_table(ui, RemapTable::Playing, &mut doc.input.remaps, capture);
 
         ui.add_space(10.0);
         ui.label("While the cursor is visible");
-        ui.weak(
-            "Used instead of the rebinds above in inventories, menus and while \
-             paused. Replaces the set above, it does not add to it. Leave it \
-             empty to use one set everywhere. Needs the State Output mod.",
-        );
-        ui.weak(
-            "Chat and your inventory look the same to Minecraft. toolwall \
-             watches the key that opens chat so it can tell them apart, which \
-             is input.chat_keys. To change what a key types without losing \
-             what it does, use the Layout tab.",
-        );
+        ui.weak("Used in inventories, menus and while paused. Needs the State Output mod.");
+        ui.collapsing("When these apply", |ui| {
+            ui.weak(
+                "They replace the set above, they do not add to it, and an \
+                 empty list means one set everywhere.",
+            );
+            ui.weak(
+                "Chat counts as a menu to Minecraft, so toolwall watches the \
+                 key that opens chat and leaves your rebinds off there. Set \
+                 that key on the Keybinds tab if chat is not on T.",
+            );
+            ui.weak(
+                "To change what a key types without losing what it does, use \
+                 the Layout tab.",
+            );
+        });
         remap_table(ui, RemapTable::Menu, &mut doc.input.remaps_menu, capture);
 
         if advanced {
             ui.separator();
-            ui.heading("Keyboard layout");
-            ui.weak("Leave blank to inherit. For search crafting in another language.");
+            // The Layout tab is also about the keyboard layout. This half is
+            // the xkb names waywall is handed; that half builds one.
+            ui.heading("Keyboard language");
+            ui.weak(
+                "The layout your system already has, by name. To build one of \
+                 your own instead, use the Layout tab.",
+            );
 
             settings_grid(ui, "layout-grid", |ui| {
                 for (label, field) in [
@@ -217,13 +230,30 @@ fn remap_table(
         }
     }
 
+    if !draft.rows.is_empty() {
+        // Which half is which was only said in a paragraph further up.
+        ui.horizontal(|ui| {
+            ui.add_space(2.0);
+            ui.scope(|ui| {
+                ui.set_min_width(REMAP_COLUMN);
+                ui.weak("You press");
+            });
+            ui.weak("Minecraft gets");
+        });
+    }
+
     for (index, row) in draft.rows.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             changed |= capture_field(ui, table, index, false, &mut row.0, capture);
-            ui.label("->");
+            ui.weak("becomes");
             changed |= capture_field(ui, table, index, true, &mut row.1, capture);
 
-            if ui.small_button("×").on_hover_text("Remove").clicked() {
+            ui.add_space(8.0);
+            if ui
+                .add_sized([26.0, 24.0], egui::Button::new("×"))
+                .on_hover_text("Remove this rebind")
+                .clicked()
+            {
                 remove = Some(index);
             }
 
@@ -321,7 +351,10 @@ fn capture_field(
 
     if ui
         .selectable_label(listening, label)
-        .on_hover_text("Press this, then press the key. Modifiers on their own cannot be read this way - use the list.")
+        .on_hover_text(
+            "Press this, then press the key. A modifier on its own cannot be \
+             read this way, so use List for those.",
+        )
         .clicked()
     {
         *capture = if listening {
@@ -334,8 +367,8 @@ fn capture_field(
 
     let picking = active == Some(RemapEntry::Picking);
     let picker = ui
-        .selectable_label(picking, "…")
-        .on_hover_text("Browse waywall's key list, including Left Alt, Right Shift and the rest");
+        .selectable_label(picking, "List…")
+        .on_hover_text("Every key waywall knows, including Left Alt, Right Shift and the rest");
 
     let popup_id = ui.make_persistent_id(("remap-picker", table as u8, row, to_side));
 

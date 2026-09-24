@@ -65,6 +65,17 @@ pub fn monitors() -> Vec<Monitor> {
     found
 }
 
+/// The sizes the monitors report, for offering as a starting point.
+///
+/// Offered, never chosen for you: see `hint` for why a scaled desktop makes
+/// this the wrong number.
+pub fn detected() -> Vec<(u32, u32)> {
+    let mut sizes: Vec<(u32, u32)> = monitors().iter().map(|m| (m.width, m.height)).collect();
+    sizes.sort_unstable();
+    sizes.dedup();
+    sizes
+}
+
 /// A one-line hint for a human, or nothing if there is nothing useful to say.
 ///
 /// Deliberately hedged. Being wrong here costs somebody an afternoon.
@@ -74,15 +85,25 @@ pub fn hint() -> Option<String> {
         return None;
     }
 
-    let list = found
-        .iter()
-        .map(|m| format!("{} is {}x{}", m.name, m.width, m.height))
-        .collect::<Vec<_>>()
-        .join(", ");
+    // eDP-1 and DP-3 are connector names, not something anyone calls a
+    // screen. With one monitor there is nothing to disambiguate, so it goes
+    // unnamed; with several, the name is the only way to tell them apart.
+    let list = if found.len() == 1 {
+        format!("Your screen is {}x{}", found[0].width, found[0].height)
+    } else {
+        format!(
+            "Your screens are {}",
+            found
+                .iter()
+                .map(|m| format!("{}x{} ({})", m.width, m.height, m.name))
+                .collect::<Vec<_>>()
+                .join(" and ")
+        )
+    };
 
     Some(format!(
-        "Your {list}. If your desktop is scaled, waywall's window is smaller \
-         than that, and the Display line in F3 is the number you want."
+        "{list}. If your desktop is scaled, waywall's window is smaller than \
+         that, and the Display line in F3 is the number you want."
     ))
 }
 
