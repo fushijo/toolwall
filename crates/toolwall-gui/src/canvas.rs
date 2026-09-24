@@ -243,9 +243,13 @@ impl Canvas<'_> {
         }
 
         // Painted after interaction so the selected item is on top of the rest.
+        //
+        // taken: where a name has already been drawn, so two overlays in the
+        // same corner do not print their names over each other.
+        let mut taken: Vec<egui::Pos2> = Vec::new();
         for item in self.items {
             let selected = state.selected.as_deref() == Some(item.key.as_str());
-            self.paint_item(&painter, item, area, selected, &visuals, accent);
+            self.paint_item(&painter, item, area, selected, &visuals, accent, &mut taken);
         }
 
         self.paint_guides(&painter, area, guides, accent);
@@ -280,6 +284,7 @@ impl Canvas<'_> {
         selected: bool,
         visuals: &egui::Visuals,
         accent: egui::Color32,
+        taken: &mut Vec<egui::Pos2>,
     ) {
         let r = lerp_rect(item.rect, self.screen, area);
 
@@ -309,14 +314,40 @@ impl Canvas<'_> {
             egui::Stroke::new(if selected { 2.0 } else { 1.0 }, base.gamma_multiply(dim)),
         );
 
+        // The name, cut off at the edge of its own box and sitting on a chip.
+        //
+        // Without the chip two overlays in the same place drew their names on
+        // top of each other and neither could be read. Without the truncation
+        // a long name ran out past the box it belongs to and looked like it
+        // belonged to the one next door.
         if r.width() > 36.0 && r.height() > 14.0 {
-            painter.text(
-                r.min + egui::vec2(4.0, 3.0),
-                egui::Align2::LEFT_TOP,
-                &item.label,
+            let mut job = egui::text::LayoutJob::simple_singleline(
+                item.label.clone(),
                 egui::FontId::proportional(11.0),
                 base.gamma_multiply(dim),
             );
+            job.wrap = egui::text::TextWrapping::truncate_at_width(r.width() - 8.0);
+
+            let galley = painter.layout_job(job);
+
+            // Drop below anything already written here. Two overlays pinned to
+            // the same corner is normal, and it used to print one name on top
+            // of the other so neither could be read.
+            let mut at = r.min + egui::vec2(4.0, 3.0);
+            let step = galley.size().y + 2.0;
+            while taken.iter().any(|p| (p.x - at.x).abs() < 40.0 && (p.y - at.y).abs() < step - 1.0)
+                && at.y + step * 2.0 < r.max.y
+            {
+                at.y += step;
+            }
+            taken.push(at);
+
+            painter.rect_filled(
+                egui::Rect::from_min_size(at, galley.size()).expand2(egui::vec2(3.0, 1.0)),
+                2.0,
+                visuals.panel_fill.gamma_multiply(0.85 * dim),
+            );
+            painter.galley(at, galley, base);
         }
 
         if selected {
