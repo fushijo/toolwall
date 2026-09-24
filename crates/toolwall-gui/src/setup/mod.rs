@@ -772,10 +772,29 @@ impl Setup {
         ui.heading("Everything on a key");
 
         let doc = self.preview();
+        let clashing: Vec<String> = doc
+            .keybinds
+            .iter()
+            .filter(|b| {
+                doc.keybinds.iter().filter(|o| o.input.eq_ignore_ascii_case(&b.input)).count() > 1
+            })
+            .map(|b| b.input.clone())
+            .collect();
+
         for bind in &doc.keybinds {
             ui.horizontal(|ui| {
-                ui.monospace(&bind.input);
+                // The same spelling the editor uses. This list showed
+                // "backslash" while the editor showed "\\".
+                ui.scope(|ui| {
+                    ui.set_min_width(120.0);
+                    ui.monospace(crate::keys::pretty(&bind.input));
+                });
                 ui.label(bind.label.clone().unwrap_or_else(|| format!("{:?}", bind.command)));
+
+                // This page exists to catch a clash, so it has to say so.
+                if clashing.iter().any(|c| c.eq_ignore_ascii_case(&bind.input)) {
+                    ui.colored_label(egui::Color32::from_rgb(255, 170, 80), "⚠ shared");
+                }
             });
         }
 
@@ -921,7 +940,7 @@ impl Setup {
             ui.end_row();
 
             ui.label("Opens the editor");
-            ui.monospace(&self.choices.editor_key);
+            ui.monospace(crate::keys::pretty(&self.choices.editor_key));
             ui.end_row();
 
             ui.label("Sensitivity");
