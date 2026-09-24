@@ -6,6 +6,8 @@
 //! hand is a step people get wrong and then never notice.
 
 use toolwall_core::minecraft::{self, Instance};
+use toolwall_core::preset;
+use toolwall_core::Document;
 use toolwall_core::sens::{self, Pointer, Sens};
 
 use crate::widgets::settings_grid;
@@ -100,7 +102,7 @@ impl SensState {
 }
 
 /// Draws the step. Returns the sensitivities if the user accepted them.
-pub fn show(ui: &mut egui::Ui, state: &mut SensState) -> Option<Sens> {
+pub fn show(ui: &mut egui::Ui, state: &mut SensState, doc: &Document) -> Option<Sens> {
     let mut accepted = None;
 
     ui.heading("Sensitivity");
@@ -174,8 +176,8 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState) -> Option<Sens> {
 
     settings_grid(ui, "sens-inputs", |ui| {
         ui.label("Minecraft sensitivity").on_hover_text(
-            "The mouseSensitivity line in options.txt, which is 0 to 1 rather \
-             than the percentage the slider shows you.",
+            "The mouseSensitivity line in options.txt. That is 0 to 1, not the \
+             percentage the slider shows you.",
         );
         if ui.text_edit_singleline(&mut state.mc_sens).changed() {
             state.result = None;
@@ -213,6 +215,24 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState) -> Option<Sens> {
             }
         }
 
+    });
+
+    // Which of your screens the tall number lands on. Without this it is a
+    // second sensitivity with nothing saying where it applies.
+    let tall = preset::tall_modes(doc, state.normal_height.parse().unwrap_or(1080));
+    ui.add_space(4.0);
+    ui.weak(if tall.is_empty() {
+        "No screen here is taller than your monitor, so only the first number \
+         gets used."
+            .to_string()
+    } else {
+        format!(
+            "The tall number goes on: {}",
+            tall.iter()
+                .map(|m| m.label.clone().unwrap_or_else(|| m.id.clone()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     });
 
     ui.add_space(4.0);

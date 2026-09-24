@@ -71,24 +71,23 @@ pub fn show(
         ui.heading("Key rebinds");
         ui.weak(
             "Press Set, then press the key you want. Left is the key you press. \
-             For Left Alt, Right Shift and the other modifiers, use the \
-             browse button - they \
-             reach the editor already merged and cannot be told apart by \
-             listening.",
+             Modifiers need the browse button: they reach the editor already \
+             merged, so listening cannot tell them apart.",
         );
         remap_table(ui, RemapTable::Playing, &mut doc.input.remaps, capture);
 
         ui.add_space(10.0);
         ui.label("While the cursor is visible");
         ui.weak(
-            "Used instead of the rebinds above in inventories, menus and while paused. \
-             Leave empty to use one set everywhere. Needs the State Output mod, and \
-             replaces the set above rather than adding to it.",
+            "Used instead of the rebinds above in inventories, menus and while \
+             paused. Replaces the set above, it does not add to it. Leave it \
+             empty to use one set everywhere. Needs the State Output mod.",
         );
         ui.weak(
-            "Chat and your inventory are the same state to Minecraft, so these \
-             cannot tell them apart. To change what a key types without losing \
-             what it does, use the Layout tab instead.",
+            "Chat and your inventory look the same to Minecraft. toolwall \
+             watches the key that opens chat so it can tell them apart, which \
+             is input.chat_keys. To change what a key types without losing \
+             what it does, use the Layout tab.",
         );
         remap_table(ui, RemapTable::Menu, &mut doc.input.remaps_menu, capture);
 

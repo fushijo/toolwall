@@ -53,6 +53,10 @@ fn clear_arg(args: &mut Option<Value>, key: &str) {
     }
 }
 
+/// Width of the key column. Wide enough for "Shift + Caps Lock", which is
+/// about as long as a real bind gets.
+const KEY_COLUMN: f32 = 120.0;
+
 fn command_name(command: Command) -> &'static str {
     COMMANDS.iter().find(|(c, _)| *c == command).map(|(_, n)| *n).unwrap_or("?")
 }
@@ -89,14 +93,23 @@ pub fn show(
         let mut remove = None;
 
         for (index, bind) in doc.keybinds.iter_mut().enumerate() {
-            let heading = match &bind.label {
-                Some(label) => format!("{}  ({})", label, bind.input),
-                None => format!("{}  {}", bind.input, command_name(bind.command)),
+            let id = ui.make_persistent_id(("keybind", index));
+            let what = match &bind.label {
+                Some(label) if !label.trim().is_empty() => label.clone(),
+                _ => command_name(bind.command).to_string(),
             };
 
-            egui::CollapsingHeader::new(heading)
-                .id_salt(("keybind", index))
-                .show(ui, |ui| {
+            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
+                .show_header(ui, |ui| {
+                    // A column of keys, so the list can be read down rather
+                    // than word by word. The key is what you are looking for.
+                    ui.scope(|ui| {
+                        ui.set_min_width(KEY_COLUMN);
+                        ui.monospace(keys::pretty(&bind.input));
+                    });
+                    ui.label(what);
+                })
+                .body(|ui| {
                     problems_for(ui, problems, &Scope::Keybind(bind.input.clone()));
 
                     settings_grid(ui, ("keybind-grid", index), |ui| {

@@ -412,7 +412,7 @@ impl Setup {
                 Step::Keys => self.keys(ui),
                 Step::Look => self.look(ui),
                 Step::Sens => {
-                    if let Some(result) = sens::show(ui, &mut self.sens) {
+                    if let Some(result) = sens::show(ui, &mut self.sens, &self.base) {
                         self.choices.sensitivity = Some(result);
                         self.choices.normal_height =
                             self.sens.normal_height.trim().parse().unwrap_or(1080);
@@ -689,11 +689,10 @@ impl Setup {
             ui.end_row();
 
             ui.label("Type in chat").on_hover_text(
-                "Turns your rebinds off and puts your normal keyboard layout \
-                 back, so chat gets what you typed. Press it again to play. \
-                 Menus and chat already do this on their own if the instance \
-                 has the State Output mod, so this is the one to reach for \
-                 when it does not.",
+                "Turns your rebinds off and puts your normal layout back, so \
+                 chat gets what you typed. Press it again to play. With the \
+                 State Output mod this happens on its own, so the key is for \
+                 when the mod is not there.",
             );
             ui.horizontal(|ui| {
                 ui.text_edit_singleline(&mut self.choices.chat_key);
@@ -837,11 +836,10 @@ impl Setup {
                 );
                 ui.add_space(6.0);
                 ui.label(
-                    "Stock waywall has no way to fill a rectangle, so there is nothing \
-                     to draw the panel behind the text or the outline around it. The \
-                     patch adds one. It is in patches/ in the repository, it is not in \
-                     the release tarball, and applying it means building waywall \
-                     yourself.",
+                    "Stock waywall cannot fill a rectangle, so there is nothing to \
+                     draw the panel behind the text. The patch adds one. It is in \
+                     patches/ in the repository, and applying it means building \
+                     waywall yourself.",
                 );
                 ui.add_space(6.0);
                 ui.strong(
@@ -1004,7 +1002,7 @@ mod tests {
                         Step::Keys => setup.keys(ui),
                         Step::Look => setup.look(ui),
                         Step::Sens => {
-                            sens::show(ui, &mut setup.sens);
+                            sens::show(ui, &mut setup.sens, &setup.base);
                         }
                         Step::Ninb => setup.ninb(ui),
                         Step::Finish => {

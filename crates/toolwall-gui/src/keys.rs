@@ -299,3 +299,59 @@ mod tests {
         assert_eq!(keysym(egui::Key::F3), keycode(egui::Key::F3));
     }
 }
+
+/// A key as a person would write it, for display only.
+///
+/// The config stores X11 keysyms, which is what waywall reads, so a keybind
+/// list shows you `backslash` and `equal` and `Caps_Lock` when the key on your
+/// keyboard says `\` and `=` and `Caps Lock`. Nothing here changes what is
+/// written to the file.
+pub fn pretty(input: &str) -> String {
+    input.split('-').map(pretty_part).collect::<Vec<_>>().join(" + ")
+}
+
+fn pretty_part(part: &str) -> String {
+    match part {
+        "minus" => "-",
+        "equal" => "=",
+        "comma" => ",",
+        "period" => ".",
+        "semicolon" => ";",
+        "colon" => ":",
+        "backslash" => "\\",
+        "slash" => "/",
+        "bar" => "|",
+        "question" => "?",
+        "bracketleft" => "[",
+        "bracketright" => "]",
+        "grave" => "`",
+        "apostrophe" => "'",
+        "plus" => "+",
+        "space" => "Space",
+        "Return" => "Enter",
+        "BackSpace" => "Backspace",
+        "Prior" => "Page Up",
+        "Next" => "Page Down",
+        // Left_Alt and friends: the underscore is the only thing between the
+        // keysym and the label on the key.
+        other => return other.replace('_', " "),
+    }
+    .to_string()
+}
+
+#[cfg(test)]
+mod pretty_tests {
+    use super::pretty;
+
+    #[test]
+    fn a_keysym_reads_as_the_key_it_is_printed_on() {
+        assert_eq!(pretty("backslash"), "\\");
+        assert_eq!(pretty("Caps_Lock"), "Caps Lock");
+        assert_eq!(pretty("Shift-Z"), "Shift + Z");
+        assert_eq!(pretty("Ctrl-bracketleft"), "Ctrl + [");
+        assert_eq!(pretty("F7"), "F7");
+
+        // The wildcard modifier is not a key and must survive untouched.
+        assert_eq!(pretty("*-F3"), "* + F3");
+    }
+}

@@ -449,6 +449,7 @@ impl eframe::App for App {
         }
 
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
+            ui.add_space(3.0);
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.tab, Tab::Modes, "Modes");
                 ui.selectable_value(&mut self.tab, Tab::Mirrors, "Mirrors");
@@ -463,7 +464,12 @@ impl eframe::App for App {
                 // Right-aligned close. The editor floats over the game, so
                 // dismissing it needs to be reachable without the keybind.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("×").on_hover_text("Close (Esc)").clicked() {
+                    ui.add_space(2.0);
+                    if ui
+                        .add_sized([28.0, 24.0], egui::Button::new("×"))
+                        .on_hover_text("Close (Esc)")
+                        .clicked()
+                    {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
 
@@ -486,6 +492,7 @@ impl eframe::App for App {
                     // Everything most people need is in Basic; Advanced adds
                     // ids, layering and the things that break a setup.
                     ui.separator();
+                    ui.add_space(6.0);
                     ui.selectable_value(&mut self.advanced, true, "Advanced");
                     ui.selectable_value(&mut self.advanced, false, "Basic");
 
@@ -499,6 +506,7 @@ impl eframe::App for App {
         });
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+            ui.add_space(2.0);
             ui.horizontal(|ui| {
                 let blocked = !problems.is_empty();
 
@@ -531,9 +539,18 @@ impl eframe::App for App {
                     };
                     ui.colored_label(color, message);
                 } else {
-                    ui.weak(self.store.path().display().to_string());
+                    // The full path is longer than the bar and used to run off
+                    // the end mid-word. The file name is the part that says
+                    // which config you are editing.
+                    let path = self.store.path();
+                    let short = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| path.display().to_string());
+                    ui.weak(short).on_hover_text(path.display().to_string());
                 }
             });
+            ui.add_space(2.0);
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
