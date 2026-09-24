@@ -355,11 +355,23 @@ impl Canvas<'_> {
             // just enough to show which one has the handles
             painter.rect_filled(r, 3.0, base.gamma_multiply(0.10));
         }
-        painter.rect_stroke(
-            r,
-            3.0,
-            egui::Stroke::new(if selected { 2.0 } else { 1.0 }, base.gamma_multiply(dim)),
-        );
+        let stroke = egui::Stroke::new(if selected { 2.0 } else { 1.0 }, base.gamma_multiply(dim));
+
+        if item.muted {
+            // Dashed, so "belongs to another mode" is a shape and not only a
+            // shade. Fading alone left it at about 3:1 and meant nothing to
+            // anyone who had not been told.
+            for (a, b) in [
+                (r.left_top(), r.right_top()),
+                (r.right_top(), r.right_bottom()),
+                (r.right_bottom(), r.left_bottom()),
+                (r.left_bottom(), r.left_top()),
+            ] {
+                painter.add(egui::Shape::dashed_line(&[a, b], stroke, 6.0, 4.0));
+            }
+        } else {
+            painter.rect_stroke(r, 3.0, stroke);
+        }
 
         // The name, cut off at the edge of its own box and sitting on a chip.
         //
@@ -367,7 +379,7 @@ impl Canvas<'_> {
         // top of each other and neither could be read. Without the truncation
         // a long name ran out past the box it belongs to and looked like it
         // belonged to the one next door.
-        if r.width() > 36.0 && r.height() > 14.0 {
+        {
             let mut job = egui::text::LayoutJob::simple_singleline(
                 item.label.clone(),
                 egui::FontId::proportional(11.0),
@@ -377,15 +389,27 @@ impl Canvas<'_> {
 
             let galley = painter.layout_job(job);
 
+            // Under the box when there is no room in it, rather than sitting
+            // on top of whatever is drawn there.
+            let inside = r.height() > galley.size().y + 6.0;
+            let mut at = if inside {
+                r.min + egui::vec2(4.0, 3.0)
+            } else {
+                egui::pos2(r.min.x + 2.0, r.max.y + 2.0)
+            };
+
+            let step = galley.size().y + 2.0;
             // Drop below anything already written here. Two overlays pinned to
             // the same corner is normal, and it used to print one name on top
             // of the other so neither could be read.
-            let mut at = r.min + egui::vec2(4.0, 3.0);
-            let step = galley.size().y + 2.0;
-            while taken.iter().any(|p| (p.x - at.x).abs() < 40.0 && (p.y - at.y).abs() < step - 1.0)
-                && at.y + step * 2.0 < r.max.y
+            let mut room = 4;
+            while room > 0
+                && taken
+                    .iter()
+                    .any(|p| (p.x - at.x).abs() < 40.0 && (p.y - at.y).abs() < step - 1.0)
             {
                 at.y += step;
+                room -= 1;
             }
             taken.push(at);
 
