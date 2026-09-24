@@ -29,28 +29,26 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut LayoutEdit) {
              in game.",
         );
 
-        let enabled = doc.input.custom_layout.is_some();
-        let mut on = enabled;
+        // Turning it off must not throw the keys away. Someone unticked this
+        // and ticked it again and lost every key they had mapped, because the
+        // box used to delete the block rather than switch it off.
+        let mut on = doc.input.custom_layout.as_ref().is_some_and(|l| l.enabled);
 
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            ui.checkbox(&mut on, "Use a custom layout");
-
-            if on != enabled {
-                doc.input.custom_layout = if on {
-                    Some(CustomLayout::default())
-                } else {
-                    // Leave input.layout alone only if it was ours to clear.
-                    if let Some(existing) = &doc.input.custom_layout {
-                        if doc.input.layout == xkb::sanitise_name(&existing.name) {
-                            doc.input.layout.clear();
-                            doc.input.variant.clear();
-                        }
-                    }
-                    None
-                };
+            if ui.checkbox(&mut on, "Use a custom layout").changed() {
+                set_enabled(doc, on);
             }
         });
+
+        if doc.input.custom_layout.as_ref().is_some_and(|l| !l.enabled) {
+            ui.add_space(6.0);
+            ui.weak(
+                "Off. waywall uses your desktop layout. Your keys are kept, so \
+                 ticking the box puts them back.",
+            );
+            return;
+        }
 
         let Some(layout) = doc.input.custom_layout.as_mut() else {
             ui.add_space(6.0);
@@ -272,6 +270,29 @@ fn key_editor(ui: &mut egui::Ui, layout: &mut CustomLayout, code: &str, state: &
     });
 }
 
+/// Switch the custom layout on or off without losing what is in it.
+///
+/// Turning it off used to delete the block, so unticking the box and ticking
+/// it again threw away every key that had been mapped.
+fn set_enabled(doc: &mut Document, on: bool) {
+    let layout = doc.input.custom_layout.get_or_insert_with(CustomLayout::default);
+    layout.enabled = on;
+    let name = xkb::sanitise_name(&layout.name);
+
+    if on {
+        // Writing the file is what points waywall at it, and the name may
+        // have been edited while it was off.
+        if xkb::write_symbols(&layout.clone()).is_ok() {
+            doc.input.layout = name;
+            doc.input.variant = "basic".into();
+        }
+    } else if doc.input.layout == name {
+        // Only ours to clear.
+        doc.input.layout.clear();
+        doc.input.variant.clear();
+    }
+}
+
 /// Writing the symbols file, which is the step that makes any of this real.
 fn install(ui: &mut egui::Ui, doc: &mut Document) {
     let Some(layout) = doc.input.custom_layout.clone() else {
@@ -361,6 +382,34 @@ mod tests {
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| show(ui, doc, state));
         });
+    }
+
+    #[test]
+    fn switching_the_layout_off_and_on_keeps_every_key() {
+        // The box used to delete the block, so unticking it and ticking it
+        // again threw away every key that had been mapped. Someone hit this.
+        let mut doc = Document::default();
+        let mut state = LayoutEdit::default();
+
+        let mut layout = CustomLayout::default();
+        layout
+            .keys
+            .insert("AD01".into(), vec!["o".into(), "O".into(), String::new(), String::new()]);
+        doc.input.custom_layout = Some(layout);
+
+        set_enabled(&mut doc, false);
+        ctx_render(&mut doc, &mut state);
+
+        // And it has to survive the trip through the file, not just the frame.
+        let json = serde_json::to_string(&doc).unwrap();
+        let mut doc: Document = serde_json::from_str(&json).unwrap();
+
+        set_enabled(&mut doc, true);
+        ctx_render(&mut doc, &mut state);
+
+        let layout = doc.input.custom_layout.expect("the layout is still there");
+        assert_eq!(layout.keys.len(), 1, "and so are its keys");
+        assert!(layout.enabled);
     }
 
     #[test]

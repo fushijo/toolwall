@@ -435,8 +435,36 @@ function M.bind(rt)
         Modes own the overlays they declare; this pins one on top of whatever
         mode is active, and it survives mode switches until toggled off.
     ]]
+    --[[
+        One key, one or several overlays. A pie chart made of four keyed
+        layers is four overlays, and bringing them up one key at a time is
+        not a thing anyone wants to do mid-run.
+    ]]
     M.register("overlay.toggle", function(state, args)
-        return state.scene:toggle(args.overlay)
+        local ids = {}
+
+        if type(args.overlays) == "table" then
+            for _, id in ipairs(args.overlays) do
+                if type(id) == "string" and id ~= "" then
+                    table.insert(ids, id)
+                end
+            end
+        end
+
+        if #ids == 0 and type(args.overlay) == "string" then
+            table.insert(ids, args.overlay)
+        end
+
+        if #ids == 0 then
+            util.warn("overlay.toggle has no overlay to toggle")
+            return false
+        end
+
+        if #ids == 1 then
+            return state.scene:toggle(ids[1])
+        end
+
+        return state.scene:toggle_all(ids)
     end)
 
     M.register("exec", function(state, args)

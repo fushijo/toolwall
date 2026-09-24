@@ -374,6 +374,7 @@ mod tests {
             shader: None,
             color_key: None,
             color_keys: vec![],
+            outline: None,
         });
         doc.images.push(Image {
             id: "grid".into(),

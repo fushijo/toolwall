@@ -44,12 +44,17 @@ fn sample() -> Document {
             src_anchor: None,
             dst_anchor: None,
             color_keys: Vec::new(),
+            outline: None,
             label: Some("Boat eye".into()),
             src: Rect { x: 0, y: 0, w: 100, h: 100 },
             dst: Rect { x: 0, y: 300, w: 300, h: 300 },
             depth: Some(1),
             shader: Some("invert".into()),
-            color_key: Some(ColorKey { input: "#fff".into(), output: "#f00".into() }),
+            color_key: Some(ColorKey {
+                input: "#fff".into(),
+                output: "#f00".into(),
+                threshold: toolwall_core::schema::DEFAULT_THRESHOLD,
+            }),
         }],
         images: vec![Image {
             id: "grid".into(),

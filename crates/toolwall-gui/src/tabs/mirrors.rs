@@ -1,10 +1,11 @@
 //! Mirrors: a region of the Minecraft window drawn somewhere else.
 
-use toolwall_core::schema::{ColorKey, Mirror, Rect};
+use toolwall_core::schema::{ColorKey, Mirror, Outline, Rect, DEFAULT_THRESHOLD};
 use toolwall_core::{Document, Problem, Scope};
 
 use crate::widgets::{
     anchor_picker,
+    color_field,
     depth_editor,
     optional_text,
     problems_for,
@@ -25,6 +26,16 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
         let mut toggle_base: Option<String> = None;
 
         for (index, mirror) in doc.mirrors.iter_mut().enumerate() {
+            // Older configs carry one key in a field of its own. Fold it into
+            // the list so there is only ever one place to edit. Only when the
+            // list is empty: taking it unconditionally would throw it away
+            // wherever both are set.
+            if mirror.color_keys.is_empty() {
+                if let Some(single) = mirror.color_key.take() {
+                    mirror.color_keys.push(single);
+                }
+            }
+
             let heading = mirror.label.clone().unwrap_or_else(|| mirror.id.clone());
 
             egui::CollapsingHeader::new(heading)
@@ -97,13 +108,16 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                             );
                             ui.end_row();
 
-                            ui.label("Colour key").on_hover_text(
-                                "Replace one colour with another as it is drawn",
+                            ui.label("Border").on_hover_text(
+                                "Needs the rect patch (patches/apply.sh). \
+                                 Ignored without it.",
                             );
-                            color_key_editor(ui, &mut mirror.color_key);
+                            outline_editor(ui, &mut mirror.outline);
                             ui.end_row();
                         }
                     });
+
+                    colors_section(ui, index, &mut mirror.color_keys);
 
                     if advanced && ui.button("Remove mirror").clicked() {
                         remove = Some(index);
@@ -137,29 +151,100 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                 dst: Rect { x: 0, y: 0, w: 100, h: 100 },
                 depth: None,
                 shader: None,
+                outline: None,
                 color_key: None,
             });
         }
     });
 }
 
-fn color_key_editor(ui: &mut egui::Ui, key: &mut Option<ColorKey>) {
-    ui.vertical(|ui| {
-        let mut enabled = key.is_some();
-        if ui.checkbox(&mut enabled, "enabled").changed() {
-            *key = enabled.then(|| ColorKey {
-                input: "#ffffff".into(),
-                output: "#ff0000".into(),
-            });
+/// Colour keying, which does not do what its name suggests.
+///
+/// Every pixel that does not match is made fully transparent, so this is
+/// "keep only these colours", not "recolour this". The pie chart is the
+/// reason it takes a list: one entry per slice you want to keep.
+fn colors_section(ui: &mut egui::Ui, index: usize, keys: &mut Vec<ColorKey>) {
+    egui::CollapsingHeader::new("Keep only certain colours")
+        .id_salt(("mirror-colors", index))
+        .default_open(!keys.is_empty())
+        .show(ui, |ui| {
+            ui.weak(
+                "Everything else in the capture is made see-through. Use one \
+                 row per colour you want to keep, like one per pie chart slice.",
+            );
+            ui.add_space(6.0);
+
+            let mut drop = None;
+
+            for (row, key) in keys.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label("Keep").on_hover_text("The colour to look for in the capture");
+                    color_field(ui, &mut key.input);
+
+                    ui.label("draw as").on_hover_text(
+                        "What to paint it instead. The same colour leaves it as it is.",
+                    );
+                    color_field(ui, &mut key.output);
+
+                    if ui
+                        .button("×")
+                        .on_hover_text("Remove this colour")
+                        .clicked()
+                    {
+                        drop = Some(row);
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("Tolerance").on_hover_text(
+                        "How far a pixel may be from that colour and still \
+                         count. Raise it for anything with a soft or shaded \
+                         edge; lower it if colours you did not want are \
+                         getting through.",
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut key.threshold, 0.0..=0.5)
+                            .fixed_decimals(3)
+                            .custom_formatter(|v, _| format!("{:.0}/255", v * 255.0))
+                            .custom_parser(|s| s.trim_end_matches("/255").parse().ok()),
+                    );
+                    if key.threshold != DEFAULT_THRESHOLD {
+                        ui.weak("uses a generated shader");
+                    }
+                });
+
+                ui.add_space(4.0);
+            }
+
+            if let Some(row) = drop {
+                keys.remove(row);
+            }
+
+            if ui.button("Add a colour").clicked() {
+                keys.push(ColorKey {
+                    input: "#ffffffff".into(),
+                    output: "#ffffffff".into(),
+                    threshold: DEFAULT_THRESHOLD,
+                });
+            }
+        });
+}
+
+fn outline_editor(ui: &mut egui::Ui, outline: &mut Option<Outline>) {
+    ui.horizontal(|ui| {
+        let mut on = outline.is_some();
+        if ui.checkbox(&mut on, "").changed() {
+            *outline = on.then(Outline::default);
         }
 
-        if let Some(key) = key {
-            ui.horizontal(|ui| {
-                ui.label("in");
-                ui.text_edit_singleline(&mut key.input);
-                ui.label("out");
-                ui.text_edit_singleline(&mut key.output);
-            });
+        if let Some(outline) = outline {
+            ui.add(
+                egui::DragValue::new(&mut outline.width)
+                    .range(0..=32)
+                    .suffix(" px"),
+            )
+            .on_hover_text("Thickness");
+            color_field(ui, &mut outline.color);
         }
     });
 }

@@ -214,6 +214,12 @@ function M.keymap_for(doc, typing)
     local input = doc.input or {}
     local custom = input.custom_layout
 
+    -- A layout switched off in the editor keeps its keys in the file, so the
+    -- block being there is not the same as it being in use.
+    if type(custom) == "table" and util.bool(custom.enabled, true) == false then
+        custom = nil
+    end
+
     local km = {
         layout = input.layout or "",
         model = input.model or "",

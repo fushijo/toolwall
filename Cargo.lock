@@ -2554,6 +2554,7 @@ dependencies = [
  "anyhow",
  "eframe",
  "egui",
+ "image",
  "serde_json",
  "toolwall-core",
 ]

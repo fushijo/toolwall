@@ -235,6 +235,7 @@ mod tests {
                 shader: None,
                 color_key: None,
                 color_keys: vec![],
+                outline: None,
             });
             d
         }] {

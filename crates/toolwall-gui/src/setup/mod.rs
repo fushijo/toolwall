@@ -35,7 +35,7 @@ const COMMON_SCREENS: &[(u32, u32, &str)] = &[
 ];
 
 #[derive(PartialEq, Eq, Clone, Copy)]
-enum Step {
+pub(crate) enum Step {
     Start,
     Screens,
     Overlays,
@@ -46,7 +46,7 @@ enum Step {
     Finish,
 }
 
-const STEPS: &[(Step, &str)] = &[
+pub(crate) const STEPS: &[(Step, &str)] = &[
     (Step::Start, "Where to start"),
     (Step::Screens, "Screens"),
     (Step::Overlays, "Overlays"),
@@ -87,7 +87,7 @@ pub struct Setup {
     /// problem to solve.
     fit_preset: bool,
 
-    step: Step,
+    pub(crate) step: Step,
     capture: Option<Capture>,
     browser: FileBrowser,
     sens: sens::SensState,

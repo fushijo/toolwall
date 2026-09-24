@@ -347,7 +347,7 @@ mod tests {
     fn layout_with(code: &str, levels: &[&str]) -> CustomLayout {
         let mut keys = BTreeMap::new();
         keys.insert(code.to_string(), levels.iter().map(|s| s.to_string()).collect());
-        CustomLayout { name: "mc".into(), base: "us".into(), keys }
+        CustomLayout { name: "mc".into(), base: "us".into(), keys, enabled: true }
     }
 
     #[test]
@@ -391,7 +391,7 @@ mod tests {
     #[test]
     fn a_layout_that_changes_nothing_writes_no_keys() {
         let empty =
-            CustomLayout { name: "mc".into(), base: "us".into(), keys: BTreeMap::new() };
+            CustomLayout { name: "mc".into(), base: "us".into(), keys: BTreeMap::new(), enabled: true };
         let file = symbols_file(&empty);
 
         assert!(!file.contains("key <"), "{file}");

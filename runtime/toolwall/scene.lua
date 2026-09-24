@@ -12,6 +12,7 @@
 ]]
 
 local waywall = require("waywall")
+local config = require("toolwall.config")
 local util = require("toolwall.util")
 
 local Scene = {}
@@ -186,6 +187,49 @@ end
     compiles shaders at startup only, and every edit here arrives by hot
     reload.
 ]]
+
+--[[
+    A border around the destination rectangle, as four filled bars.
+
+    waywall.rect comes from patches/0001. Stock waywall has no fill primitive
+    at all, so without the patch this is skipped rather than failing the
+    overlay it belongs to.
+]]
+local warned_outline = false
+
+local function outline_objects(dst, outline, depth)
+    local width = math.floor(tonumber(outline.width) or 0)
+    if width <= 0 then
+        return {}
+    end
+
+    if type(waywall.rect) ~= "function" then
+        if not warned_outline then
+            warned_outline = true
+            util.warn("borders need the rect patch, see patches/apply.sh")
+        end
+        return {}
+    end
+
+    local color = outline.color
+    if color == nil or color == util.NULL or color == "" then
+        color = "#ffffffff"
+    end
+
+    local bars = {
+        { x = dst.x - width, y = dst.y - width, w = dst.w + width * 2, h = width },
+        { x = dst.x - width, y = dst.y + dst.h,  w = dst.w + width * 2, h = width },
+        { x = dst.x - width, y = dst.y,          w = width,            h = dst.h },
+        { x = dst.x + dst.w, y = dst.y,          w = width,            h = dst.h },
+    }
+
+    local objects = {}
+    for _, bar in ipairs(bars) do
+        table.insert(objects, waywall.rect({ dst = bar, color = color, depth = depth }))
+    end
+    return objects
+end
+
 function Scene:_create_mirror(spec)
     local src = rect(spec.src)
 
@@ -214,14 +258,28 @@ function Scene:_create_mirror(spec)
         table.insert(keys, spec.color_key)
     end
 
-    if #keys == 0 then
-        return { waywall.mirror(base) }
+    local extra = {}
+    if spec.outline and spec.outline ~= util.NULL then
+        extra = outline_objects(base.dst, spec.outline, spec.depth)
     end
 
-    local objects = {}
+    if #keys == 0 then
+        table.insert(extra, waywall.mirror(base))
+        return extra
+    end
+
+    local objects = extra
     for _, key in ipairs(keys) do
         local opts = util.shallow_copy(base)
         opts.color_key = { input = key.input, output = key.output }
+
+        -- A tolerance other than waywall's own is a different shader, since
+        -- the number is compiled in. An explicit shader wins: someone who
+        -- wrote one knows better than we do what it does with the key.
+        if not opts.shader then
+            opts.shader = config.threshold_shader(key.threshold)
+        end
+
         table.insert(objects, waywall.mirror(opts))
     end
     return objects
@@ -291,6 +349,39 @@ end
     A pinned overlay survives mode switches, which is the whole point: it is
     the equivalent of a toggle key for a single mirror or image.
 ]]
+--[[
+    Toggle several overlays as one, so a single key can bring up a set.
+
+    All of them follow the first thing that is already on screen: if any are
+    up, they all go down. Otherwise they all come up. Toggling each
+    independently would let them drift out of step until the key stopped
+    meaning anything.
+]]
+function Scene:toggle_all(ids)
+    local any = false
+    for _, id in ipairs(ids) do
+        if self.live[id] then
+            any = true
+            break
+        end
+    end
+
+    local ok = true
+    for _, id in ipairs(ids) do
+        if any then
+            if self.live[id] then
+                self.pinned[id] = nil
+                self:hide(id)
+            end
+        elseif not self.live[id] then
+            self.pinned[id] = true
+            ok = (self:show(id) ~= nil) and ok
+        end
+    end
+
+    return ok
+end
+
 function Scene:toggle(id)
     if not (self.doc._mirrors[id] or self.doc._images[id]) then
         util.warn(("unknown overlay %q"):format(tostring(id)))

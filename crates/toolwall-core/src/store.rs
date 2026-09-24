@@ -320,14 +320,9 @@ fn keybinds(doc: &Document, overlays: &HashSet<&str>, out: &mut Vec<Problem>) {
         // An overlay.toggle naming something that does not exist is a keybind
         // that silently does nothing, which is worth catching.
         if bind.command == Command::OverlayToggle {
-            let named = bind
-                .args
-                .as_ref()
-                .and_then(|a| a.get("overlay"))
-                .and_then(|v| v.as_str())
-                .unwrap_or_default();
+            let named = bind.overlay_ids();
 
-            if named.is_empty() || !overlays.contains(named) {
+            if named.is_empty() || named.iter().any(|id| !overlays.contains(id)) {
                 out.push(Problem {
                     scope: scope(),
                     message: "this key opens an overlay that no longer exists".into(),

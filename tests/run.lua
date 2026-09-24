@@ -513,6 +513,196 @@ check("a reload puts you back in the game rebinds", function()
 end)
 
 --[[
+    ==== COLOUR KEYS, BORDERS AND OVERLAY GROUPS ====
+]]
+
+local KEYED = [[
+  { "version": 1,
+    "gui": { "screen": { "w": 1920, "h": 1080 } },
+    "mirrors": [
+      { "id": "pie", "src": {"x":0,"y":0,"w":10,"h":10},
+        "dst": {"x":0,"y":0,"w":10,"h":10},
+        "outline": { "width": 3, "color": "#00ff00ff" },
+        "color_keys": [
+          { "input": "#ff0000ff", "output": "#ff0000ff" },
+          { "input": "#00ff00ff", "output": "#00ff00ff", "threshold": 0.08 }
+        ] },
+      { "id": "eye", "src": {"x":0,"y":0,"w":10,"h":10},
+        "dst": {"x":0,"y":0,"w":10,"h":10} }
+    ],
+    "modes": [ { "id": "thin", "resolution": {"width":340,"height":1080},
+                 "mirrors": ["pie", "eye"] } ],
+    "keybinds": [
+      { "input": "P", "command": "overlay.toggle",
+        "args": { "overlays": ["pie", "eye"] } } ] }
+]]
+
+local function count_kind(kind)
+    local n = 0
+    for _, obj in pairs(waywall.live_objects()) do
+        if obj.kind == kind then n = n + 1 end
+    end
+    return n
+end
+
+check("each colour a mirror keeps is its own layer", function()
+    -- waywall takes one colour key per mirror, so keeping two colours means
+    -- two mirrors over the same rectangle.
+    local path = write_config(KEYED)
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+    toolwall.rt.modes:set("thin")
+
+    -- two keyed layers for the pie chart, one plain mirror for the eye
+    assert_eq(count_kind("mirror"), 3, "live mirrors")
+
+    os.remove(path)
+end)
+
+check("a tolerance waywall cannot do gets a generated shader", function()
+    --[[
+        waywall compiles its threshold in:
+
+            const float threshold = 0.01;   // glsl/texcopy.frag
+
+        so a different one is a different shader, and the default must not
+        generate anything at all.
+    ]]
+    local config = require("toolwall.config")
+
+    assert_eq(config.threshold_shader(0.01), nil, "the default is waywall's own")
+    assert_eq(config.threshold_shader(nil), nil, "and so is saying nothing")
+
+    local name = config.threshold_shader(0.08)
+    assert(name, "a different tolerance is named")
+    assert_eq(name, config.threshold_shader(0.08), "and two mirrors share one")
+
+    local path = write_config(KEYED)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+
+    local shader = cfg.shaders[name]
+    assert(shader, "the shader is handed to waywall")
+    assert(shader.fragment:find("threshold = 0.08", 1, true), "with the right number")
+    assert(shader.fragment:find("f_dst_rgba", 1, true), "and waywall's own varyings")
+
+    waywall.finish_startup()
+    waywall.mount_view()
+    toolwall.rt.modes:set("thin")
+
+    local used = {}
+    for _, call in ipairs(waywall.log) do
+        if call.name == "mirror" then used[tostring(call.args[1].shader)] = true end
+    end
+    assert(used[name], "and the layer that asked for it uses it")
+    assert(used["nil"], "while the default layer does not")
+
+    os.remove(path)
+end)
+
+check("a border is four bars around the mirror", function()
+    local path = write_config(KEYED)
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+    toolwall.rt.modes:set("thin")
+
+    assert_eq(count_kind("rect"), 4, "one bar per side")
+
+    os.remove(path)
+end)
+
+check("a border without the rect patch is skipped, not fatal", function()
+    -- Stock waywall has no fill primitive. The overlay it belongs to still
+    -- has to appear.
+    local path = write_config(KEYED)
+    local rect = waywall.rect
+    waywall.rect = nil
+
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+    toolwall.rt.modes:set("thin")
+
+    local mirrors, rects = count_kind("mirror"), count_kind("rect")
+
+    -- Put it back before asserting: a failure here must not take every later
+    -- test that needs rect() down with it.
+    waywall.rect = rect
+    os.remove(path)
+
+    assert_eq(mirrors, 3, "the mirrors are still there")
+    assert_eq(rects, 0, "and no bars were drawn")
+end)
+
+check("one key can bring up a set of overlays together", function()
+    local path = write_config(KEYED)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["P"]()
+    assert(toolwall.rt.scene.live["pie"], "the pie chart came up")
+    assert(toolwall.rt.scene.live["eye"], "and so did the eye")
+
+    cfg.actions["P"]()
+    assert_eq(toolwall.rt.scene.live["pie"], nil, "and both went away")
+    assert_eq(toolwall.rt.scene.live["eye"], nil, "together")
+
+    os.remove(path)
+end)
+
+check("a half-open group closes rather than drifting apart", function()
+    -- Toggling each one independently would let them fall out of step until
+    -- the key stopped meaning anything.
+    local path = write_config(KEYED)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    toolwall.rt.scene:toggle("pie")
+    assert(toolwall.rt.scene.live["pie"], "one of them is up")
+
+    cfg.actions["P"]()
+    assert_eq(toolwall.rt.scene.live["pie"], nil, "so the key takes both down")
+    assert_eq(toolwall.rt.scene.live["eye"], nil, "leaving none up")
+
+    os.remove(path)
+end)
+
+check("a layout switched off leaves the keyboard alone", function()
+    -- The keys stay in the file so ticking the box puts them back, which
+    -- means the block being there is not the same as it being in use.
+    local path = write_config([[
+      { "version": 1,
+        "input": {
+          "custom_layout": { "name": "mcsr", "base": "us", "keys": {}, "enabled": false },
+          "remaps_menu": { "MB4": "ESC" }
+        },
+        "modes": [ { "id": "thin", "resolution": {"width":340,"height":1080} } ] }
+    ]])
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    for _, inworld in ipairs({ "unpaused", "menu", "unpaused" }) do
+        waywall.state_value = { screen = "inworld", inworld = inworld }
+        waywall.fire("state")
+    end
+
+    assert_eq(count_calls("set_keymap"), 0, "the keymap was never touched")
+
+    os.remove(path)
+end)
+
+--[[
     ==== ANCHORED OVERLAYS ====
 
     Two directions, and they resolve against different things. A capture is

@@ -187,6 +187,14 @@ pub struct CustomLayout {
     /// only the keys actually changed need an entry.
     #[serde(default)]
     pub keys: std::collections::BTreeMap<String, Vec<String>>,
+
+    /// Whether waywall is actually told to load it.
+    ///
+    /// Off keeps every key you mapped. Deleting the block to turn the layout
+    /// off threw all of them away, which is what someone hit by unticking the
+    /// box and ticking it again.
+    #[serde(default = "yes")]
+    pub enabled: bool,
 }
 
 /// Hand-written rather than derived: a derived `Default` would give `base` an
@@ -198,6 +206,7 @@ impl Default for CustomLayout {
             name: layout_name(),
             base: layout_base(),
             keys: Default::default(),
+            enabled: true,
         }
     }
 }
@@ -382,6 +391,33 @@ pub struct Mode {
 pub struct ColorKey {
     pub input: String,
     pub output: String,
+    /// How far a pixel may be from `input` and still count, per channel, as a
+    /// fraction of the 0-1 range. waywall's own shader hardcodes 0.01, which
+    /// is about 2 of 255 and too strict for anything with a soft edge.
+    ///
+    /// Anything other than the default makes toolwall generate a shader, since
+    /// the number is compiled into the shader rather than passed to it.
+    #[serde(default = "default_threshold")]
+    pub threshold: f32,
+}
+
+/// A border drawn around a mirror.
+///
+/// Needs `waywall.rect`, which stock waywall does not have: see
+/// `patches/0001`. Without the patch this is ignored with a warning.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Outline {
+    /// Thickness in screen pixels. 0 draws nothing.
+    #[serde(default = "default_outline_width")]
+    pub width: i32,
+    #[serde(default = "white")]
+    pub color: String,
+}
+
+impl Default for Outline {
+    fn default() -> Self {
+        Self { width: 2, color: white() }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -414,6 +450,10 @@ pub struct Mirror {
     pub shader: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color_key: Option<ColorKey>,
+
+    /// A border drawn around `dst`. Needs the rect patch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outline: Option<Outline>,
 
     /// Several colour keys, drawn as one layer each.
     ///
@@ -762,6 +802,22 @@ pub struct Keybind {
     pub label: Option<String>,
 }
 
+impl Keybind {
+    /// The overlays an `overlay.toggle` names.
+    ///
+    /// Two shapes: `overlays` is a list and is what the editor writes now,
+    /// `overlay` is the single id older configs and the setup window use.
+    pub fn overlay_ids(&self) -> Vec<&str> {
+        let Some(args) = &self.args else { return Vec::new() };
+
+        if let Some(list) = args.get("overlays").and_then(|v| v.as_array()) {
+            return list.iter().filter_map(|v| v.as_str()).collect();
+        }
+
+        args.get("overlay").and_then(|v| v.as_str()).into_iter().collect()
+    }
+}
+
 /// The closed set of verbs a keybind may invoke.
 ///
 /// Keybinds never carry Lua source. A config downloaded from someone else
@@ -888,11 +944,21 @@ pub struct Appearance {
     /// ttf/otf to use instead of the built-in face. empty keeps the default.
     #[serde(default)]
     pub font_path: String,
+    /// Whether the editor opens in Advanced. Remembered so it does not have to
+    /// be clicked on every launch.
+    #[serde(default)]
+    pub advanced: bool,
 }
 
 impl Default for Appearance {
     fn default() -> Self {
-        Self { opacity: 0.92, dark: true, font_size: 18.0, font_path: String::new() }
+        Self {
+            opacity: 0.92,
+            dark: true,
+            font_size: 18.0,
+            font_path: String::new(),
+            advanced: false,
+        }
     }
 }
 
@@ -906,6 +972,10 @@ fn black() -> String { "#000000ff".into() }
 fn base_label() -> String { "base".into() }
 fn chat_label() -> String { "chat".into() }
 fn chat_keys() -> Vec<String> { vec!["T".into(), "slash".into()] }
+/// waywall's own threshold, from glsl/texcopy.frag.
+pub const DEFAULT_THRESHOLD: f32 = 0.01;
+fn default_threshold() -> f32 { DEFAULT_THRESHOLD }
+fn default_outline_width() -> i32 { 2 }
 fn gui_command() -> String { "toolwall-gui".into() }
 fn launch_delay() -> u32 { 400 }
 fn zero_rect() -> Rect { Rect { x: 0, y: 0, w: 0, h: 0 } }

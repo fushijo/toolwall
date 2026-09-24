@@ -9,6 +9,8 @@
 //! waywall and no IPC.
 
 mod canvas;
+#[cfg(feature = "screenshot")]
+mod shots;
 mod keys;
 mod overlay;
 mod setup;
@@ -112,7 +114,13 @@ fn main() -> Result<()> {
         Err(err) => (Document::default(), Some(err.to_string())),
     };
 
-    let saved = serde_json::to_string(&doc).unwrap_or_default();
+    #[cfg(feature = "screenshot")]
+    if let Some(dir) = std::env::args()
+        .skip_while(|a| a != "--screenshot")
+        .nth(1)
+    {
+        return shots::Shooter::run(store, doc, dir.into(), DEFAULT_SIZE);
+    }
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -127,28 +135,7 @@ fn main() -> Result<()> {
     eframe::run_native(
         "toolwall",
         options,
-        Box::new(|_cc| {
-            Ok(Box::new(App {
-                seen_modified: store.modified(),
-                store,
-                doc,
-                load_error,
-                status: None,
-                tab: Tab::Modes,
-                browser: FileBrowser::default(),
-                capturing: None,
-                last_checked: Instant::now(),
-                ninb_keys: ninb_keys::NinbKeys::default(),
-                remap_capture: None,
-                layout_edit: Default::default(),
-                screen_edit: Default::default(),
-                written_layout: None,
-                advanced: false,
-                saved,
-                pending_since: None,
-                font_loaded: String::new(),
-            }))
-        }),
+        Box::new(|_cc| Ok(Box::new(App::new(store, doc, load_error)))),
     )
     .map_err(|e| anyhow::anyhow!("{e}"))
 }
@@ -157,7 +144,7 @@ fn main() -> Result<()> {
 mod tests;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
-enum Tab {
+pub(crate) enum Tab {
     Modes,
     Mirrors,
     Images,
@@ -169,12 +156,12 @@ enum Tab {
     Screen,
 }
 
-struct App {
+pub(crate) struct App {
     store: Store,
     doc: Document,
     load_error: Option<String>,
     status: Option<(bool, String)>,
-    tab: Tab,
+    pub(crate) tab: Tab,
     browser: FileBrowser,
     /// Index of the keybind currently swallowing the next keypress.
     capturing: Option<usize>,
@@ -187,7 +174,7 @@ struct App {
     screen_edit: tabs::screen::ScreenEdit,
     /// The layout last written to disk, so an unchanged one is not rewritten.
     written_layout: Option<toolwall_core::schema::CustomLayout>,
-    advanced: bool,
+    pub(crate) advanced: bool,
 
     /// The document as last written, so an edit can be noticed without every
     /// widget having to report one.
@@ -198,6 +185,29 @@ struct App {
 }
 
 impl App {
+    pub(crate) fn new(store: Store, doc: Document, load_error: Option<String>) -> Self {
+        Self {
+            seen_modified: store.modified(),
+            saved: serde_json::to_string(&doc).unwrap_or_default(),
+            advanced: doc.gui.appearance.advanced,
+            store,
+            doc,
+            load_error,
+            status: None,
+            tab: Tab::Modes,
+            browser: FileBrowser::default(),
+            capturing: None,
+            last_checked: Instant::now(),
+            ninb_keys: ninb_keys::NinbKeys::default(),
+            remap_capture: None,
+            layout_edit: Default::default(),
+            screen_edit: Default::default(),
+            written_layout: None,
+            pending_since: None,
+            font_loaded: String::new(),
+        }
+    }
+
     /// Re-assert our size while the compositor has left us degenerately small.
     ///
     /// waywall configures floating windows with `xdg_toplevel.configure(0, 0)`,
@@ -478,6 +488,12 @@ impl eframe::App for App {
                     ui.separator();
                     ui.selectable_value(&mut self.advanced, true, "Advanced");
                     ui.selectable_value(&mut self.advanced, false, "Basic");
+
+                    // Remembered, so it is not a click every time the editor
+                    // opens. Written with the document like any other edit.
+                    if self.doc.gui.appearance.advanced != self.advanced {
+                        self.doc.gui.appearance.advanced = self.advanced;
+                    }
                 });
             });
         });

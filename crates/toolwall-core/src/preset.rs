@@ -126,8 +126,15 @@ pub fn choices_for(doc: &Document) -> Choices {
             .map(|m| label_of(&m.id, &m.label))
             .collect();
 
-        let state = match bind_for(Command::OverlayToggle, "overlay", id) {
-            Some(input) => OverlayState::Bound(input),
+        // Only a key that toggles this one overlay on its own. A key that
+        // brings up a set is not something this window can describe, so it is
+        // left alone below and the overlay reads as always on.
+        let state = match doc
+            .keybinds
+            .iter()
+            .find(|b| b.command == Command::OverlayToggle && b.overlay_ids() == [id.as_str()])
+        {
+            Some(bind) => OverlayState::Bound(bind.input.clone()),
             None => OverlayState::AlwaysOn,
         };
 
@@ -282,9 +289,8 @@ pub fn build(base: &Document, choices: &Choices) -> Document {
             Command::GuiToggle
                 | Command::ModeSet
                 | Command::ModeReset
-                | Command::OverlayToggle
                 | Command::RemapsToggle
-        );
+        ) || (bind.command == Command::OverlayToggle && bind.overlay_ids().len() <= 1);
         if !ours {
             binds.push(bind.clone());
         }
@@ -721,6 +727,36 @@ mod tests {
             })
             .unwrap();
         assert_eq!(thin.input, "Alt_L");
+        assert!(problems(&built).is_empty(), "{:?}", problems(&built));
+    }
+
+    #[test]
+    fn a_key_that_toggles_several_overlays_is_left_alone() {
+        // The window can only describe one overlay per key, so rebuilding
+        // would otherwise quietly drop a group somebody made in the editor.
+        let base = preset();
+        let mut with_group = base.clone();
+
+        let group: Vec<String> = with_group.mirrors.iter().map(|m| m.id.clone()).collect();
+        assert!(group.len() > 1, "the preset has enough mirrors to group");
+
+        with_group.keybinds.push(Keybind {
+            f3_safe: true,
+            ingame_only: false,
+            input: "F8".into(),
+            command: Command::OverlayToggle,
+            args: Some(serde_json::json!({ "overlays": group })),
+            label: Some("Everything".into()),
+        });
+
+        let built = build(&with_group, &choices_for(&with_group));
+
+        let kept = built
+            .keybinds
+            .iter()
+            .find(|b| b.input == "F8")
+            .expect("the group survived the rebuild");
+        assert_eq!(kept.overlay_ids().len(), group.len());
         assert!(problems(&built).is_empty(), "{:?}", problems(&built));
     }
 

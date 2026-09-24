@@ -33,6 +33,26 @@ const COMMANDS: &[(Command, &str)] = &[
     (Command::Exec, "exec"),
 ];
 
+/// The overlays a bind toggles, from either shape the config can be in.
+fn overlay_args(args: &Option<Value>) -> Vec<String> {
+    let Some(args) = args else { return Vec::new() };
+
+    if let Some(list) = args.get("overlays").and_then(Value::as_array) {
+        return list.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect();
+    }
+
+    args.get("overlay")
+        .and_then(Value::as_str)
+        .map(|id| vec![id.to_string()])
+        .unwrap_or_default()
+}
+
+fn clear_arg(args: &mut Option<Value>, key: &str) {
+    if let Some(Value::Object(map)) = args {
+        map.remove(key);
+    }
+}
+
 fn command_name(command: Command) -> &'static str {
     COMMANDS.iter().find(|(c, _)| *c == command).map(|(_, n)| *n).unwrap_or("?")
 }
@@ -190,18 +210,34 @@ fn args_editor(
         }
 
         Command::OverlayToggle => {
-            ui.label("Overlay")
-                .on_hover_text("Shown on top of whatever mode is active, until toggled off");
-            let current = arg_str(&bind.args, "overlay");
-            egui::ComboBox::from_id_salt(("arg-overlay", index))
-                .selected_text(if current.is_empty() { "-".into() } else { current.clone() })
-                .show_ui(ui, |ui| {
-                    for id in overlay_ids {
-                        if ui.selectable_label(&current == id, id).clicked() {
-                            set_arg(&mut bind.args, "overlay", json!(id));
+            ui.label("Overlays").on_hover_text(
+                "Shown on top of whatever mode is active, until toggled off. \
+                 Tick several and one key brings all of them up together.",
+            );
+            ui.vertical(|ui| {
+                let mut selected = overlay_args(&bind.args);
+
+                let mut changed = false;
+                for id in overlay_ids {
+                    let mut on = selected.iter().any(|s| s == id);
+                    if ui.checkbox(&mut on, id).changed() {
+                        changed = true;
+                        if on {
+                            selected.push(id.clone());
+                        } else {
+                            selected.retain(|s| s != id);
                         }
                     }
-                });
+                }
+
+                if changed {
+                    set_arg(&mut bind.args, "overlays", json!(selected));
+                    // The single-id form is what older configs carry. Once
+                    // the list exists it is the only one read, so leaving it
+                    // behind would just be a stale copy in the file.
+                    clear_arg(&mut bind.args, "overlay");
+                }
+            });
             ui.end_row();
         }
 
