@@ -46,12 +46,22 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut LayoutEdit) {
                 "Using your desktop's keyboard layout. The keys you set here \
                  are kept, so ticking the box puts them back.",
             );
+            ui.add_space(4.0);
+            ui.weak(
+                "To pick a different system layout by name instead of building \
+                 one, use Keyboard language on the Input tab.",
+            );
             return;
         }
 
         let Some(layout) = doc.input.custom_layout.as_mut() else {
             ui.add_space(6.0);
             ui.weak("Using your desktop's keyboard layout.");
+            ui.add_space(4.0);
+            ui.weak(
+                "To pick a different system layout by name instead of building \
+                 one, use Keyboard language on the Input tab.",
+            );
             return;
         };
 
