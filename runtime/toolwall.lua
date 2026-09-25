@@ -49,6 +49,7 @@ local rt = {
     remaps = nil,   -- { base, menu }, filtered once at setup
     typing = false, -- chat mode, toggled by hand, reset by a reload
     chat = false,   -- chat is open, because we saw the key that opens it
+    trace = false,  -- log every state change, from experimental.debug
     keymap = nil,   -- the keymap waywall is on, so we never set the same one twice
     scene = nil,    -- scene registry (live mirror/image objects)
     modes = nil,    -- mode controller
@@ -173,6 +174,11 @@ local function apply_state_remaps()
     local st = read_state()
     if not st then
         return
+    end
+
+    if rt.trace then
+        util.warn(("state %s/%s chat=%s"):format(
+            tostring(st.screen), tostring(st.inworld), tostring(rt.chat)))
     end
 
     if playing(st) then
@@ -414,6 +420,28 @@ local function on_load()
 
     -- ninb is started from its own listener, below, so that it can wait.
 
+    --[[
+        Say so when the thing half these features need is not there.
+
+        waywall.state() throws "no state output" when it has no instance, and
+        every caller here pcalls it and moves on. That is right for the code
+        and wrong for the person: menu rebinds and chat detection both quietly
+        become no-ops, with nothing anywhere saying why. This is the one place
+        that can tell the difference, so it says it once, at load.
+    ]]
+    local wants_state = next(rt.remaps.menu) ~= nil or M.has_chat_keymap(rt.doc)
+    local state_ok = pcall(waywall.state)
+
+    if wants_state and not state_ok then
+        rt.degraded = rt.degraded
+            or "no state output, so menu rebinds and chat mode do nothing"
+        util.warn(
+            "no state output from the instance. " ..
+            "menu rebinds and chat mode need the State Output mod " ..
+            "(worldpreview or state-output) in the Minecraft instance."
+        )
+    end
+
     if next(rt.remaps.menu) then
         apply_state_remaps()
     end
@@ -627,6 +655,7 @@ function M.setup(opts)
     -- stopped working.
     rt.typing = false
     rt.chat = false
+    rt.trace = util.bool((doc.experimental or {}).debug, false)
 
     local cfg = build_waywall_config(doc)
     cfg.actions = keybinds.build(doc, rt)

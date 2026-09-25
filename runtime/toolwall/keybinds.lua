@@ -80,6 +80,14 @@ local function watch_chat_keys(doc, rt, actions)
                     rt.chat = true
                 end
 
+                if rt.trace then
+                    util.warn(("chat key %s: state=%s/%s -> chat=%s"):format(
+                        key,
+                        ok and tostring(st.screen) or "unreadable",
+                        ok and tostring(st.inworld) or "-",
+                        tostring(rt.chat)))
+                end
+
                 -- never consumed. this is a watcher, not a keybind.
                 return false
             end

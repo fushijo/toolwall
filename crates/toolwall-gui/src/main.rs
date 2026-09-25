@@ -90,19 +90,44 @@ fn run_setup(store: Store) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    // Before anything opens a window. `--version` used to open the editor
+    // and sit there, which is a surprising way to answer a question asked in
+    // a terminal, and made the binary impossible to probe from a script.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("toolwall-gui {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!(
+            "toolwall-gui {}\n\n\
+             Usage: toolwall-gui [OPTIONS]\n\n\
+             With no options it opens the editor, on the config waywall reads.\n\n\
+             Options:\n  \
+               --setup              Open the setup window instead\n  \
+               --overlay            Place overlays over the running game\n  \
+               -h, --help           Print this\n  \
+               -V, --version        Print the version",
+            env!("CARGO_PKG_VERSION"),
+        );
+        return Ok(());
+    }
+
     let store = Store::at_default_path()?;
 
     // `--overlay` is the same editing, over the game instead of over a
     // drawing of it. Same binary so both share the canvas and the store;
     // waywall launches it as a second floating window.
-    if std::env::args().any(|a| a == "--overlay") {
+    if args.iter().any(|a| a == "--overlay") {
         return run_overlay(store);
     }
 
     // `--setup` is the ten minutes before there is a config worth editing.
     // Its own window because it is a different job: it asks questions and
     // writes once, where the editor edits continuously.
-    if std::env::args().any(|a| a == "--setup") {
+    if args.iter().any(|a| a == "--setup") {
         return run_setup(store);
     }
 
