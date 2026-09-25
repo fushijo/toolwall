@@ -372,6 +372,50 @@ check("chat gets the base layout, a recipe search keeps the custom one", functio
     os.remove(path)
 end)
 
+check("a repeat of the state you are already in does not forget chat", function()
+    --[[
+        Straight from a real log. The state file is rewritten on a tick and
+        waywall fires for every write, changed or not, so pressing T gives:
+
+            chat key T -> chat=true
+            state inworld/unpaused      <- one more, chat is not open yet
+            state inworld/menu          <- and now it is
+
+        Clearing chat on any playing state wiped the flag in that gap. It
+        survived 4 times in one session and was wiped 19.
+    ]]
+    local path = write_config(CHAT)
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.fire("state")
+
+    cfg.actions["T"]()
+    assert_eq(toolwall.rt.chat, true, "the key was seen")
+
+    -- The stray repeat, before Minecraft has opened the screen.
+    waywall.fire("state")
+    assert_eq(toolwall.rt.chat, true, "and not forgotten by a repeat")
+
+    waywall.state_value = { screen = "inworld", inworld = "menu" }
+    waywall.fire("state")
+    assert_eq(next(last_call("set_remaps").args[1]), nil, "chat got no rebinds")
+
+    -- Closing it still forgets, or every menu afterwards would be chat.
+    waywall.state_value = { screen = "inworld", inworld = "unpaused" }
+    waywall.fire("state")
+    assert_eq(toolwall.rt.chat, false, "back in the world, chat is forgotten")
+
+    waywall.state_value = { screen = "inworld", inworld = "menu" }
+    waywall.fire("state")
+    assert_eq(last_call("set_remaps").args[1]["MB4"], "ESC", "the next menu is a menu")
+
+    os.remove(path)
+end)
+
 check("the chat key only counts while you are playing", function()
     -- Typing a t into the recipe search must not convince us chat opened,
     -- which would pull the searchcraft rebinds out from under it.

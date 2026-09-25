@@ -49,6 +49,7 @@ local rt = {
     remaps = nil,   -- { base, menu }, filtered once at setup
     typing = false, -- chat mode, toggled by hand, reset by a reload
     chat = false,   -- chat is open, because we saw the key that opens it
+    playing = nil,  -- last state, so chat is forgotten on the way back, once
     trace = false,  -- log every state change, from experimental.debug
     keymap = nil,   -- the keymap waywall is on, so we never set the same one twice
     scene = nil,    -- scene registry (live mirror/image objects)
@@ -154,10 +155,31 @@ local function read_state()
         return nil
     end
 
-    -- Back in the world with the cursor gone: whatever was open is closed.
-    if st.screen == "inworld" and st.inworld == "unpaused" then
+    local now = st.screen == "inworld" and st.inworld == "unpaused"
+
+    --[[
+        Forget chat on the way *back* into the world, not on every event that
+        says you are in it.
+
+        The state file is rewritten on a tick, and waywall fires for each
+        write whether the state changed or not, so pressing T produces this:
+
+            chat key T: state=inworld/unpaused -> chat=true
+            state inworld/unpaused                 <- one more, chat not open yet
+            state inworld/menu                     <- and now it is
+
+        Clearing on any playing state wiped the flag in that gap, so chat got
+        the menu rebinds and a searchcrafting D typed an O at whoever you were
+        talking to. In one session of fushijo's it survived 4 times and was
+        wiped 19.
+
+        A transition cannot be wiped by a repeat of the state it is already
+        in, which is the whole point.
+    ]]
+    if now and rt.playing == false then
         rt.chat = false
     end
+    rt.playing = now
 
     return st
 end
@@ -655,6 +677,7 @@ function M.setup(opts)
     -- stopped working.
     rt.typing = false
     rt.chat = false
+    rt.playing = nil
     rt.trace = util.bool((doc.experimental or {}).debug, false)
 
     local cfg = build_waywall_config(doc)
