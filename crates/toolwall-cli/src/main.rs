@@ -69,6 +69,10 @@ enum Cmd {
         /// Say what is available and stop.
         #[arg(long)]
         check: bool,
+        /// Reinstall even when there is nothing newer, for repairing a
+        /// half-finished install.
+        #[arg(long)]
+        force: bool,
     },
 
     /// Write the custom keyboard layout out as an XKB symbols file.
@@ -246,23 +250,29 @@ fn main() -> Result<()> {
             println!("reload triggered");
         }
 
-        Cmd::Update { check } => {
+        Cmd::Update { check, force } => {
             let current = toolwall_core::update::current();
 
             let latest = match toolwall_core::update::latest() {
                 Ok(latest) => latest,
-                Err(err) => {
+                Err(err) if !force => {
                     println!("on {current}, could not check for a newer one: {err:#}");
                     return Ok(());
                 }
+                Err(_) => "unknown".to_string(),
             };
 
-            if !toolwall_core::update::is_newer(&latest, current) {
+            if !force && !toolwall_core::update::is_newer(&latest, current) {
                 println!("on {current}, which is the newest");
                 return Ok(());
             }
 
-            println!("{latest} is out, you are on {current}");
+            if force {
+                println!("reinstalling {latest} over {current}");
+            } else {
+                println!("{latest} is out, you are on {current}");
+            }
+
             if check {
                 return Ok(());
             }
