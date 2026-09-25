@@ -413,6 +413,14 @@ impl Canvas<'_> {
                 (false, _) => egui::pos2(r.max.x + 5.0, r.min.y),
             };
 
+            // And on the other side when that would run off the picture. An
+            // overlay pinned to the right edge is the normal case, not a
+            // corner one.
+            if at.x + galley.size().x > area.max.x - 2.0 {
+                at.x = (r.min.x - galley.size().x - 5.0).max(area.min.x + 2.0);
+            }
+            at.y = at.y.min(area.max.y - galley.size().y - 2.0);
+
             let step = galley.size().y + 2.0;
             let mut room = 4;
             while room > 0
