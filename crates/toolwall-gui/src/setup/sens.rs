@@ -264,10 +264,19 @@ pub fn show(ui: &mut egui::Ui, state: &mut SensState, doc: &Document) -> Option<
     });
 
     ui.add_space(8.0);
+
+    // Nothing to work from is not a reason to look ready.
+    let ready = !state.mc_sens.trim().is_empty();
     let calculate = egui::Button::new(egui::RichText::new("Calculate").strong())
         .fill(ui.visuals().selection.bg_fill);
-    if ui.add_sized([150.0, 28.0], calculate).clicked() {
-        state.calculate();
+
+    ui.add_enabled_ui(ready, |ui| {
+        if ui.add_sized([150.0, 28.0], calculate).clicked() {
+            state.calculate();
+        }
+    });
+    if !ready {
+        ui.weak("Fill in your Minecraft sensitivity first.");
     }
 
     if let Some(error) = &state.error {

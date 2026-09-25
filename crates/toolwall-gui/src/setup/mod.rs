@@ -82,6 +82,10 @@ pub struct Setup {
     detected: Vec<(u32, u32)>,
     /// The download button has been pressed once and is waiting for a yes.
     confirm_gore: bool,
+    /// Copy the config being replaced next to itself first. On by default:
+    /// the person who loses a config they spent an evening on is not the
+    /// person who thought to tick a box.
+    keep_a_copy: bool,
     /// Whether the config still needs reshaping for that screen.
     ///
     /// Only the preset does. An imported config was already written for the
@@ -138,6 +142,7 @@ impl Setup {
             monitor_hint: toolwall_core::screen::hint(),
             detected: toolwall_core::screen::detected(),
             confirm_gore: false,
+            keep_a_copy: true,
             fit_preset: had_config.is_none(),
             step: Step::Start,
             capture: None,
@@ -1030,10 +1035,12 @@ impl Setup {
                         );
                     });
                     ui.add_space(4.0);
-                    ui.strong(&name);
-                    // Wrapped, not cut: a directory that runs off the right
-                    // edge mid-word looks like part of the warning.
-                    ui.add(egui::Label::new(egui::RichText::new(format!("in {dir}")).weak()).wrap());
+                    // The path is the safety-critical half, so it is not the
+                    // dimmest text in the box.
+                    ui.strong(format!("{dir}/{name}"));
+                    ui.add_space(6.0);
+                    ui.checkbox(&mut self.keep_a_copy, "Keep a copy of the old one")
+                        .on_hover_text(format!("{dir}/{name}.before-toolwall"));
                 });
             ui.add_space(10.0);
         }
@@ -1042,6 +1049,17 @@ impl Setup {
             .fill(ui.visuals().selection.bg_fill);
 
         if ui.add_sized([180.0, 30.0], write).clicked() {
+            if self.keep_a_copy && self.had_config.is_some() {
+                let from = self.store.path().to_path_buf();
+                let mut to = from.clone().into_os_string();
+                to.push(".before-toolwall");
+
+                if let Err(err) = std::fs::copy(&from, &to) {
+                    self.status = Some((false, format!("could not keep a copy: {err}")));
+                    return;
+                }
+            }
+
             self.status = Some(match self.store.save(&doc) {
                 Ok(()) => {
                     self.written = true;
