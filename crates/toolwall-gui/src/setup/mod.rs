@@ -24,6 +24,10 @@ const REPORT_NAME: &str = "toolwall-import-report.txt";
 
 const GORE_URL: &str = "https://github.com/arjuncgore/waywall_generic_config";
 
+/// A key is one or two words. A field the width of the row said it was a
+/// sentence.
+const KEY_FIELD: f32 = 150.0;
+
 /// Screens people actually have, so most setups are one click.
 const COMMON_SCREENS: &[(u32, u32, &str)] = &[
     (1920, 1080, "1920x1080"),
@@ -582,11 +586,7 @@ impl Setup {
         ui.weak(format!("Currently starting from {}.", self.origin));
 
         ui.add_space(6.0);
-        ui.label(
-            "The download fetches that repository and converts it. Its overlay \
-             images are copied in alongside, because its config points at them by \
-             absolute path.",
-        );
+        ui.label("Its overlay images are copied in with it.");
 
         if let Some(report) = &self.report {
             ui.add_space(14.0);
@@ -645,7 +645,7 @@ impl Setup {
 
                         ui.label("Key");
                         ui.horizontal(|ui| {
-                            ui.text_edit_singleline(&mut screen.input);
+                            ui.add(egui::TextEdit::singleline(&mut screen.input).desired_width(KEY_FIELD));
                             if ui.button("Capture").clicked() {
                                 capture = Some(Capture::Screen(index));
                             }
@@ -712,7 +712,7 @@ impl Setup {
 
                 if let OverlayState::Bound(input) = &mut overlay.state {
                     ui.horizontal(|ui| {
-                        ui.text_edit_singleline(input);
+                        ui.add(egui::TextEdit::singleline(input).desired_width(KEY_FIELD));
                         if ui.button("Capture").clicked() {
                             capture = Some(Capture::Overlay(index));
                         }
@@ -742,7 +742,7 @@ impl Setup {
                  inside the editor, including this.",
             );
             ui.horizontal(|ui| {
-                ui.text_edit_singleline(&mut self.choices.editor_key);
+                ui.add(egui::TextEdit::singleline(&mut self.choices.editor_key).desired_width(KEY_FIELD));
                 if ui.button("Capture").clicked() {
                     capture = Some(Capture::Editor);
                 }
@@ -751,7 +751,7 @@ impl Setup {
 
             ui.label("Reset").on_hover_text("Leave whichever mode you are in.");
             ui.horizontal(|ui| {
-                ui.text_edit_singleline(&mut self.choices.reset_key);
+                ui.add(egui::TextEdit::singleline(&mut self.choices.reset_key).desired_width(KEY_FIELD));
                 if ui.button("Capture").clicked() {
                     capture = Some(Capture::Reset);
                 }
@@ -765,7 +765,7 @@ impl Setup {
                  when the mod is not there.",
             );
             ui.horizontal(|ui| {
-                ui.text_edit_singleline(&mut self.choices.chat_key);
+                ui.add(egui::TextEdit::singleline(&mut self.choices.chat_key).desired_width(KEY_FIELD));
                 if ui.button("Capture").clicked() {
                     capture = Some(Capture::Chat);
                 }
@@ -882,18 +882,21 @@ impl Setup {
         egui::Frame::group(ui.style())
             .fill(egui::Color32::from_rgb(60, 40, 10))
             .show(ui, |ui| {
-                ui.colored_label(
-                    egui::Color32::from_rgb(255, 200, 100),
-                    "Read this before you go looking for the readout",
-                );
+                ui.horizontal(|ui| {
+                    ui.colored_label(egui::Color32::from_rgb(255, 200, 100), "⚠");
+                    ui.colored_label(
+                        egui::Color32::from_rgb(255, 200, 100),
+                        "The in-game readout needs a patched waywall",
+                    );
+                });
                 ui.add_space(6.0);
                 ui.label(
-                    "toolwall can also draw Ninjabrain Bot's numbers into the game \
-                     itself, instead of you reading them off the window. That part \
-                     needs a patched waywall.",
+                    "toolwall can draw Ninjabrain Bot's numbers into the game, so \
+                     you are not reading them off a window beside it. The numbers \
+                     work on stock waywall; their panel and outline do not.",
                 );
-                ui.add_space(6.0);
-                ui.label("The readout itself works. Its panel and outline need the patch.");
+                ui.add_space(4.0);
+                ui.monospace("patches/apply.sh ~/waywall");
                 ui.collapsing("Why", |ui| {
                     ui.label(
                         "Stock waywall cannot fill a rectangle, so there is \

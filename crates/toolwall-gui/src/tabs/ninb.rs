@@ -89,7 +89,7 @@ pub fn show(
 
         ui.separator();
         ui.heading("Readout");
-        ui.weak("Drawn into the game, so it does not hide with the other floating windows.");
+        ui.weak("Stays put when you hide the floating windows.");
 
         let o = &mut doc.ninb.overlay;
 
@@ -365,11 +365,8 @@ const PLACEHOLDERS: &str = "{x} {z} {certainty} {distance} {netherX} {netherZ} \
 /// once that window is hidden, so they are edited here and written straight
 /// into ninb's preferences.
 fn hotkeys(ui: &mut egui::Ui, doc: &mut Document, keys: &mut NinbKeys) {
-    ui.heading("Its window and its own keys");
-    ui.weak(
-        "Ninjabrain Bot watches the keyboard itself, so these are its own \
-         keys, not toolwall's.",
-    );
+    ui.heading("Its own keys");
+    ui.weak("These are set inside Ninjabrain Bot, not here.");
 
     ui.add_space(4.0);
     let mut shown = !doc.theme.ninb_hidden;
