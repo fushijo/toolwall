@@ -16,6 +16,7 @@ mod overlay;
 mod setup;
 mod ninb_keys;
 mod tabs;
+mod updates;
 mod widgets;
 
 use std::time::{Duration, Instant};
@@ -200,6 +201,7 @@ pub(crate) struct App {
     /// The layout last written to disk, so an unchanged one is not rewritten.
     written_layout: Option<toolwall_core::schema::CustomLayout>,
     pub(crate) advanced: bool,
+    updates: updates::Updates,
 
     /// The document as last written, so an edit can be noticed without every
     /// widget having to report one.
@@ -319,6 +321,7 @@ impl App {
             seen_modified: store.modified(),
             saved: serde_json::to_string(&doc).unwrap_or_default(),
             advanced: doc.gui.appearance.advanced,
+            updates: Default::default(),
             store,
             doc,
             load_error,
@@ -725,7 +728,13 @@ impl eframe::App for App {
                     tabs::keybinds::show(ui, &mut self.doc, &problems, &mut self.capturing, self.advanced)
                 }
                 Tab::Theme => {
-                    tabs::theme::show(ui, &mut self.doc, self.advanced, &mut self.browser)
+                    tabs::theme::show(
+                        ui,
+                        &mut self.doc,
+                        self.advanced,
+                        &mut self.browser,
+                        &mut self.updates,
+                    )
                 }
                 Tab::Ninb => tabs::ninb::show(
                     ui,

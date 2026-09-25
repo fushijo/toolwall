@@ -64,6 +64,13 @@ enum Cmd {
     /// Trip waywall's hot reload without changing anything.
     Reload,
 
+    /// Update toolwall to the newest release.
+    Update {
+        /// Say what is available and stop.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Write the custom keyboard layout out as an XKB symbols file.
     ///
     /// The document is where the layout lives; this is what puts it somewhere
@@ -237,6 +244,32 @@ fn main() -> Result<()> {
         Cmd::Reload => {
             store.trigger_reload()?;
             println!("reload triggered");
+        }
+
+        Cmd::Update { check } => {
+            let current = toolwall_core::update::current();
+
+            let latest = match toolwall_core::update::latest() {
+                Ok(latest) => latest,
+                Err(err) => {
+                    println!("on {current}, could not check for a newer one: {err:#}");
+                    return Ok(());
+                }
+            };
+
+            if !toolwall_core::update::is_newer(&latest, current) {
+                println!("on {current}, which is the newest");
+                return Ok(());
+            }
+
+            println!("{latest} is out, you are on {current}");
+            if check {
+                return Ok(());
+            }
+
+            let installed = toolwall_core::update::run(&mut |step| println!("{step}"))?;
+            println!("updated to {installed}");
+            println!("restart waywall to pick up the new runtime");
         }
     }
 

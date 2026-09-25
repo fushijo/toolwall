@@ -269,7 +269,7 @@ fn every_tab_renders() {
         let mut state = tabs::screen::ScreenEdit::default();
         tabs::screen::show(ui, doc, &mut state);
     });
-    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true, &mut FileBrowser::default()));
+    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true, &mut FileBrowser::default(), &mut Default::default()));
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
         tabs::ninb::show(
@@ -305,7 +305,7 @@ fn tabs_render_an_empty_document() {
         let mut state = tabs::screen::ScreenEdit::default();
         tabs::screen::show(ui, doc, &mut state);
     });
-    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true, &mut FileBrowser::default()));
+    render(&mut doc, |ui, doc| tabs::theme::show(ui, doc, true, &mut FileBrowser::default(), &mut Default::default()));
     render(&mut doc, |ui, doc| {
         let found = problems(doc);
         tabs::ninb::show(

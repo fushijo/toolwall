@@ -12,6 +12,7 @@ pub mod schema;
 pub mod screen;
 pub mod sens;
 pub mod store;
+pub mod update;
 pub mod xkb;
 
 pub use schema::{Document, NINB_PRESETS, SCHEMA_VERSION};

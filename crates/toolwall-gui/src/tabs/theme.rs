@@ -22,6 +22,7 @@ pub fn show(
     doc: &mut Document,
     advanced: bool,
     browser: &mut FileBrowser,
+    updates: &mut crate::updates::Updates,
 ) {
     scroll_body(ui, |ui| {
         ui.heading("Around the game");
@@ -59,6 +60,10 @@ pub fn show(
         // waywall's own window size lives on the Modes tab, next to the sizes
         // it is the backdrop for, and Ninjabrain Bot's position lives on the
         // Ninjabrain tab with the rest of it.
+
+        ui.separator();
+        ui.heading("toolwall itself");
+        crate::updates::show(ui, updates);
 
         ui.separator();
         ui.heading("This editor");

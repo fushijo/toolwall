@@ -167,6 +167,8 @@ fi
 # ---------------------------------------------------------------------------
 
 ask() {
+    # No terminal, or the updater running this for someone: take the default.
+    [ -n "${TOOLWALL_NONINTERACTIVE:-}" ] && return 1
     [ -t 0 ] || return 1
     printf "%s [Y/n] " "$1"
     read -r reply
