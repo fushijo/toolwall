@@ -431,3 +431,37 @@ pub fn segment_button(ui: &egui::Ui, selected: bool, text: &str) -> egui::Button
             .stroke(visuals.widgets.inactive.bg_stroke)
     }
 }
+
+/// A field holding a key, shown the way the key is printed on the keyboard.
+///
+/// The stored value is the keysym waywall reads. The field shows `[` where
+/// the config says `bracketleft`, and converts back when you leave it, so the
+/// editor has one vocabulary instead of one for reading and one for typing.
+///
+/// It only converts on the way out. Converting each keystroke would rewrite
+/// what you were halfway through typing.
+pub fn key_field(ui: &mut egui::Ui, id_salt: impl std::hash::Hash, value: &mut String) {
+    let id = ui.make_persistent_id(("key-field", id_salt));
+
+    let mut buffer = ui
+        .memory(|m| m.data.get_temp::<String>(id))
+        .filter(|_| ui.memory(|m| m.has_focus(id)))
+        .unwrap_or_else(|| crate::keys::pretty(value));
+
+    let response = ui.add(
+        egui::TextEdit::singleline(&mut buffer).id(id).desired_width(KEY_FIELD_WIDTH),
+    );
+
+    if response.changed() {
+        *value = crate::keys::unpretty(&buffer);
+    }
+
+    if response.has_focus() {
+        ui.memory_mut(|m| m.data.insert_temp(id, buffer));
+    } else {
+        ui.memory_mut(|m| m.data.remove::<String>(id));
+    }
+}
+
+/// A key is one or two words, not a sentence.
+pub const KEY_FIELD_WIDTH: f32 = 150.0;

@@ -17,16 +17,12 @@ use toolwall_core::preset::{self, Choices, OverlayState};
 use toolwall_core::{problems, Document, Store};
 
 use crate::keys;
-use crate::widgets::{path_field, settings_grid, FileBrowser, PickTarget, segment, segment_button};
+use crate::widgets::{key_field, path_field, settings_grid, FileBrowser, PickTarget, segment, segment_button};
 
 /// Where the import leaves its notes, next to the config.
 const REPORT_NAME: &str = "toolwall-import-report.txt";
 
 const GORE_URL: &str = "https://github.com/arjuncgore/waywall_generic_config";
-
-/// A key is one or two words. A field the width of the row said it was a
-/// sentence.
-const KEY_FIELD: f32 = 150.0;
 
 /// Screens people actually have, so most setups are one click.
 const COMMON_SCREENS: &[(u32, u32, &str)] = &[
@@ -645,7 +641,7 @@ impl Setup {
 
                         ui.label("Key");
                         ui.horizontal(|ui| {
-                            ui.add(egui::TextEdit::singleline(&mut screen.input).desired_width(KEY_FIELD));
+                            key_field(ui, ("mode-key", index), &mut screen.input);
                             if ui.button("Capture").clicked() {
                                 capture = Some(Capture::Screen(index));
                             }
@@ -712,7 +708,7 @@ impl Setup {
 
                 if let OverlayState::Bound(input) = &mut overlay.state {
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(input).desired_width(KEY_FIELD));
+                        key_field(ui, ("overlay-key", index), input);
                         if ui.button("Capture").clicked() {
                             capture = Some(Capture::Overlay(index));
                         }
@@ -742,7 +738,7 @@ impl Setup {
                  inside the editor, including this.",
             );
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut self.choices.editor_key).desired_width(KEY_FIELD));
+                key_field(ui, "editor-key", &mut self.choices.editor_key);
                 if ui.button("Capture").clicked() {
                     capture = Some(Capture::Editor);
                 }
@@ -751,7 +747,7 @@ impl Setup {
 
             ui.label("Reset").on_hover_text("Leave whichever mode you are in.");
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut self.choices.reset_key).desired_width(KEY_FIELD));
+                key_field(ui, "reset-key", &mut self.choices.reset_key);
                 if ui.button("Capture").clicked() {
                     capture = Some(Capture::Reset);
                 }
@@ -765,7 +761,7 @@ impl Setup {
                  when the mod is not there.",
             );
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut self.choices.chat_key).desired_width(KEY_FIELD));
+                key_field(ui, "chat-key", &mut self.choices.chat_key);
                 if ui.button("Capture").clicked() {
                     capture = Some(Capture::Chat);
                 }

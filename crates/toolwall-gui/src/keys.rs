@@ -355,3 +355,86 @@ mod pretty_tests {
         assert_eq!(pretty("*-F3"), "* + F3");
     }
 }
+
+/// `pretty` backwards: what the user typed, as waywall spells it.
+///
+/// The two are a pair and a test holds them to it. Without the inverse the
+/// editor had two vocabularies at once, and the one you had to type in was
+/// the one nobody knows: a field saying `bracketleft` directly above a list
+/// calling the same bind `[`.
+pub fn unpretty(shown: &str) -> String {
+    shown
+        .split('+')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(plain_part)
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn plain_part(part: &str) -> String {
+    match part {
+        "-" => "minus",
+        "=" => "equal",
+        "," => "comma",
+        "." => "period",
+        ";" => "semicolon",
+        ":" => "colon",
+        "\\" => "backslash",
+        "/" => "slash",
+        "|" => "bar",
+        "?" => "question",
+        "[" => "bracketleft",
+        "]" => "bracketright",
+        "`" => "grave",
+        "'" => "apostrophe",
+        "Space" => "space",
+        "Enter" => "Return",
+        "Backspace" => "BackSpace",
+        "Page Up" => "Prior",
+        "Page Down" => "Next",
+        other => return other.replace(' ', "_"),
+    }
+    .to_string()
+}
+
+#[cfg(test)]
+mod round_trip {
+    use super::*;
+
+    #[test]
+    fn every_key_the_editor_prints_can_be_typed_back_in() {
+        // The field and the list have to mean the same thing, or capturing a
+        // key would be the only way to set one.
+        for stored in [
+            "Ctrl-I",
+            "bracketleft",
+            "backslash",
+            "equal",
+            "Caps_Lock",
+            "Shift-Z",
+            "grave",
+            "F7",
+            "B",
+            "space",
+            "Return",
+            "Prior",
+            "Ctrl-Shift-bracketright",
+            "Alt_L",
+            "*-F3",
+            "minus",
+        ] {
+            let shown = pretty(stored);
+            assert_eq!(unpretty(&shown), stored, "{stored} came back as {shown}");
+        }
+    }
+
+    #[test]
+    fn typing_the_keysym_itself_still_works() {
+        // Nobody should have to, but a config people hand-edit is full of
+        // them and pasting one in must not turn it into something else.
+        for stored in ["bracketleft", "Caps_Lock", "Shift-Z"] {
+            assert_eq!(unpretty(stored), stored);
+        }
+    }
+}

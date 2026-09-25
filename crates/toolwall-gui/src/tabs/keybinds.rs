@@ -12,6 +12,7 @@ use toolwall_core::{Document, Problem, Scope};
 use crate::keys;
 use crate::widgets::{optional_text, problems_for, settings_grid,
     scroll_body,
+    key_field,
 };
 
 /// Every command, as what it does and as what it is called in the file.
@@ -179,14 +180,9 @@ pub fn show(
                     problems_for(ui, problems, &Scope::Keybind(bind.input.clone()));
 
                     settings_grid(ui, ("keybind-grid", index), |ui| {
-                        ui.label("Key").on_hover_text(
-                            "Spelled the way waywall reads it, which is not \
-                             always the way it is printed on the key.",
-                        );
+                        ui.label("Key");
                         ui.horizontal(|ui| {
-                            ui.add(
-                                egui::TextEdit::singleline(&mut bind.input).desired_width(150.0),
-                            );
+                            key_field(ui, index, &mut bind.input);
 
                             // A frame, so it reads as something you press.
                             // selectable_label put it at the same weight and
