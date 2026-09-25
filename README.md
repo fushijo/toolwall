@@ -123,6 +123,28 @@ toolwall-gui --setup
 `install.sh` also drops a **toolwall setup** entry into your app menu, so you
 can come back to it without a terminal.
 
+## Updating
+
+From 0.3.7 on, toolwall updates itself: open the editor, **Theme** tab,
+**toolwall itself**, press **Check for updates**. An **Update now** button
+turns up when there is one. Or from a terminal, `toolwall update`.
+
+Restart waywall afterwards so the new runtime loads. Your config is not
+touched.
+
+**Coming from 0.3.6 or older**, neither of those exists yet, so do it once by
+hand and you will have them from then on:
+
+```sh
+git clone https://github.com/fushijo/toolwall
+cd toolwall && ./install.sh
+```
+
+Say yes when it offers to build. Your existing `toolwall.json` is kept, and
+the setup window will not overwrite it unless you finish it.
+
+Building needs git, cargo, and a few GB free while it works.
+
 ### The setup window
 
 ![The setup window, start to finish](docs/screenshots/setup.gif)
