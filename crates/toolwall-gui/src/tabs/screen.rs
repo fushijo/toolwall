@@ -327,7 +327,38 @@ pub(crate) fn apply(doc: &mut Document, action: crate::canvas::Action) {
 
 fn inspector(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
     let Some(key) = state.canvas.selected.clone() else {
-        ui.weak("Click something to see its numbers.");
+        // The mode's own numbers while nothing is picked, so the column is
+        // useful before you click rather than a line of grey text.
+        let mode = doc.modes.iter().find(|m| m.id == state.mode);
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            match mode {
+                Some(mode) => {
+                    ui.strong(mode.label.clone().unwrap_or_else(|| mode.id.clone()));
+                    ui.add_space(4.0);
+                    if mode.resolution.width == 0 || mode.resolution.height == 0 {
+                        ui.label("Minecraft fills the window");
+                    } else {
+                        ui.label(format!(
+                            "Minecraft {} x {}",
+                            mode.resolution.width, mode.resolution.height
+                        ));
+                    }
+                    ui.label(format!("Window {} x {}", doc.gui.screen.w, doc.gui.screen.h));
+                    ui.add_space(4.0);
+                    ui.weak(format!(
+                        "{} here, {} in other modes",
+                        collect(doc, &state.mode).iter().filter(|i| !i.muted).count(),
+                        collect(doc, &state.mode).iter().filter(|i| i.muted).count(),
+                    ));
+                }
+                None => {
+                    ui.label("No mode selected");
+                }
+            }
+        });
+        ui.add_space(6.0);
+        ui.weak("Click an overlay to see and type its numbers.");
         return;
     };
 
