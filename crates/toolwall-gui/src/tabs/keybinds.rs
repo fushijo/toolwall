@@ -267,7 +267,7 @@ pub fn show(
                         ui.checkbox(&mut bind.ingame_only, "");
                         ui.end_row();
 
-                        ui.label("Does");
+                        ui.label("Action");
                         ui.horizontal(|ui| {
                             egui::ComboBox::from_id_salt(("command", index))
                                 .selected_text(command_name(bind.command))
