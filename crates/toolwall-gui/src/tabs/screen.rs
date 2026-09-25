@@ -118,6 +118,7 @@ fn toolbar(ui: &mut egui::Ui, doc: &mut Document, state: &mut ScreenEdit) {
         "Drag to move, corners to resize. Overlays belonging to another mode \
          are dashed and faded, so you can line things up against them.",
     );
+
 }
 
 /// Everything that can be placed, with the ones outside this mode faded.

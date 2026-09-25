@@ -401,8 +401,7 @@ impl Canvas<'_> {
             let font = egui::FontId::proportional(11.0);
             let ink = if item.muted { faint_ink(&visuals, base) } else { base };
 
-            let galley =
-                painter.layout_no_wrap(item.label.clone(), font.clone(), ink);
+            let galley = painter.layout_no_wrap(item.label.clone(), font.clone(), ink);
             let inside_width = galley.size().x + 8.0 <= r.width();
             let inside_height = galley.size().y + 6.0 <= r.height();
 

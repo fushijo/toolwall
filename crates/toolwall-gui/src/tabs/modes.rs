@@ -72,7 +72,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                 });
                 ui.scope(|ui| {
                     ui.set_min_width(SIZE_COLUMN);
-                    ui.weak("Size");
+                    ui.weak("Size").on_hover_text("0 stretches to the window");
                 });
                 ui.weak("Key");
             });
@@ -82,11 +82,6 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
 
         for (index, mode) in doc.modes.iter_mut().enumerate() {
             let heading = mode.label.clone().unwrap_or_else(|| mode.id.clone());
-            let size = if mode.resolution.width == 0 || mode.resolution.height == 0 {
-                "stretched to the window".to_string()
-            } else {
-                format!("{} x {}", mode.resolution.width, mode.resolution.height)
-            };
             let key = keys_for
                 .iter()
                 .find(|(id, _)| *id == mode.id)
@@ -99,9 +94,23 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, problems: &[Problem], advance
                         ui.set_min_width(NAME_COLUMN);
                         ui.label(heading);
                     });
+                    // Editable in the row. The size is what people come to
+                    // this tab to change, and it was behind a triangle.
                     ui.scope(|ui| {
                         ui.set_min_width(SIZE_COLUMN);
-                        ui.weak(size);
+                        ui.horizontal(|ui| {
+                            ui.add(
+                                egui::DragValue::new(&mut mode.resolution.width)
+                                    .range(0..=16384)
+                                    .speed(4),
+                            );
+                            ui.weak("x");
+                            ui.add(
+                                egui::DragValue::new(&mut mode.resolution.height)
+                                    .range(0..=16384)
+                                    .speed(4),
+                            );
+                        });
                     });
                     match key {
                         Some(key) => ui.monospace(key),
