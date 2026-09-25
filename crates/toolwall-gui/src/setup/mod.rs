@@ -392,7 +392,12 @@ impl Setup {
                     self.step = STEPS[at - 1].0;
                     self.status = None;
                 }
-                if at + 1 < STEPS.len() && ui.button("Next").clicked() {
+                // Filled, so the way forward through seven steps is visible
+                // at a glance. Back stays an outline.
+                let next = egui::Button::new(egui::RichText::new("Next").strong())
+                    .fill(ui.visuals().selection.bg_fill);
+
+                if at + 1 < STEPS.len() && ui.add(next).clicked() {
                     self.step = STEPS[at + 1].0;
                     self.status = None;
                 }

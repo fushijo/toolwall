@@ -374,7 +374,9 @@ pub fn scroll_body<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -
     egui::ScrollArea::vertical()
         .show(ui, |ui| {
             let value = add(ui);
-            ui.add_space(24.0);
+            // A whole row's worth. At 24 the last row still came out sliced
+            // through the middle of its glyphs, which reads as a crash.
+            ui.add_space(ui.spacing().interact_size.y + 20.0);
             value
         })
         .inner

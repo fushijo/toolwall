@@ -80,6 +80,39 @@ pub(crate) fn listen_button(ui: &egui::Ui, listening: bool, idle: &str) -> egui:
     }
 }
 
+/// What a bind does, with the thing it does it to.
+fn action_of(bind: &Keybind, modes: &[(String, String)], overlays: &[(String, String)]) -> String {
+    let named = |list: &[(String, String)], id: &str| {
+        list.iter()
+            .find(|(candidate, _)| candidate == id)
+            .map(|(_, label)| label.clone())
+            .unwrap_or_else(|| id.to_string())
+    };
+
+    let arg = |key: &str| {
+        bind.args.as_ref().and_then(|a| a.get(key)).and_then(|v| v.as_str()).map(str::to_string)
+    };
+
+    match bind.command {
+        Command::ModeSet => match arg("mode") {
+            Some(id) => format!("Switch to {}", named(modes, &id)),
+            None => command_name(bind.command).to_string(),
+        },
+        Command::OverlayToggle => {
+            let ids = overlay_args(&bind.args);
+            if ids.is_empty() {
+                command_name(bind.command).to_string()
+            } else {
+                format!(
+                    "Show or hide {}",
+                    ids.iter().map(|id| named(overlays, id)).collect::<Vec<_>>().join(", ")
+                )
+            }
+        }
+        _ => command_name(bind.command).to_string(),
+    }
+}
+
 /// What it does, for anywhere a person reads it.
 fn command_name(command: Command) -> &'static str {
     COMMANDS.iter().find(|(c, ..)| *c == command).map(|(_, name, _)| *name).unwrap_or("?")
@@ -97,6 +130,24 @@ pub fn show(
     capturing: &mut Option<usize>,
     advanced: bool,
 ) {
+    // id and the name you gave it, so the list can say "Switch to Thin BT"
+    // rather than "Switch to a mode" three times over.
+    let doc_modes: Vec<(String, String)> = doc
+        .modes
+        .iter()
+        .map(|m| (m.id.clone(), m.label.clone().unwrap_or_else(|| m.id.clone())))
+        .collect();
+    let doc_mirrors: Vec<(String, String)> = doc
+        .mirrors
+        .iter()
+        .map(|m| (m.id.clone(), m.label.clone().unwrap_or_else(|| m.id.clone())))
+        .chain(
+            doc.images
+                .iter()
+                .map(|i| (i.id.clone(), i.label.clone().unwrap_or_else(|| i.id.clone()))),
+        )
+        .collect();
+
     let mode_ids: Vec<String> = doc.modes.iter().map(|m| m.id.clone()).collect();
     let overlay_ids: Vec<String> = doc
         .mirrors
@@ -145,7 +196,7 @@ pub fn show(
                     ui.set_min_width(NAME_COLUMN);
                     ui.weak("Name");
                 });
-                ui.weak("Does");
+                ui.weak("Action");
             });
         }
 
@@ -174,7 +225,9 @@ pub fn show(
                         ui.set_min_width(NAME_COLUMN);
                         ui.label(what);
                     });
-                    ui.weak(command_name(bind.command));
+                    // With its target. Three rows reading "Switch to a mode"
+                    // is a list you cannot scan.
+                    ui.weak(action_of(bind, &doc_modes, &doc_mirrors));
                 })
                 .body(|ui| {
                     problems_for(ui, problems, &Scope::Keybind(bind.input.clone()));

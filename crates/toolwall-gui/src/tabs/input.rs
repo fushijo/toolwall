@@ -54,16 +54,22 @@ pub fn show(
 ) {
     scroll_body(ui, |ui| {
         ui.heading("Mouse");
+        // On the screen, not in a tooltip. This is the number the whole
+        // boat-eye setup hangs on, and 12.8 means nothing without it.
+        ui.weak(
+            "Sensitivity multiplies Minecraft's own setting. 1.0 leaves it \
+             alone; a god-sens setup keeps Minecraft very low and multiplies \
+             it back up here, so values near 13 are normal.",
+        );
+        ui.add_space(4.0);
+
         settings_grid(ui, "input-grid", |ui| {
-            ui.label("Sensitivity").on_hover_text(
-                "Multiplies Minecraft's own setting. A god-sens setup keeps \
-                 Minecraft very low and multiplies it back up here, so values \
-                 well above 10 are normal.",
-            );
+            ui.label("Sensitivity");
             // log scale: god-sens setups sit near 13, normal ones near 1
             ui.add(
                 egui::Slider::new(&mut doc.input.sensitivity, 0.01..=20.0)
                     .logarithmic(true)
+                    .suffix("x")
                     .clamping(egui::SliderClamping::Never),
             );
             ui.end_row();

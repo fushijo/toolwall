@@ -605,15 +605,15 @@ impl eframe::App for App {
 
                     ui.separator();
                     ui.add_space(6.0);
-                    ui.add_enabled_ui(reads_it, |ui| {
-                        let response = ui
-                            .selectable_value(&mut self.advanced, true, "Advanced")
-                            .union(ui.selectable_value(&mut self.advanced, false, "Basic"));
-
-                        if !reads_it {
-                            response.on_hover_text("This tab has nothing extra to show");
-                        }
-                    });
+                    if reads_it {
+                        ui.selectable_value(&mut self.advanced, true, "Advanced");
+                        ui.selectable_value(&mut self.advanced, false, "Basic");
+                    } else {
+                        // Greyed out, it looked like a rendering fault. Say
+                        // why instead, the way the disabled Calculate button
+                        // in the wizard does.
+                        ui.weak("everything on this tab is shown");
+                    }
 
                     // Remembered, so it is not a click every time the editor
                     // opens. Written with the document like any other edit.
