@@ -63,6 +63,7 @@ fn clear_arg(args: &mut Option<Value>, key: &str) {
 
 /// Width of the key column. Wide enough for "Shift + Caps Lock", which is
 /// about as long as a real bind gets.
+const NAME_COLUMN: f32 = 190.0;
 const KEY_COLUMN: f32 = 120.0;
 
 /// The Capture / Set / List buttons, in both states.
@@ -139,6 +140,10 @@ pub fn show(
                     ui.set_min_width(KEY_COLUMN);
                     ui.weak("Key");
                 });
+                ui.scope(|ui| {
+                    ui.set_min_width(NAME_COLUMN);
+                    ui.weak("Name");
+                });
                 ui.weak("Does");
             });
         }
@@ -149,7 +154,7 @@ pub fn show(
             let id = ui.make_persistent_id(("keybind", index));
             let what = match &bind.label {
                 Some(label) if !label.trim().is_empty() => label.clone(),
-                _ => command_name(bind.command).to_string(),
+                _ => String::new(),
             };
 
             egui::collapsing_header::CollapsingState::load_with_default_open(
@@ -164,7 +169,11 @@ pub fn show(
                         ui.set_min_width(KEY_COLUMN);
                         ui.monospace(keys::pretty(&bind.input));
                     });
-                    ui.label(what);
+                    ui.scope(|ui| {
+                        ui.set_min_width(NAME_COLUMN);
+                        ui.label(what);
+                    });
+                    ui.weak(command_name(bind.command));
                 })
                 .body(|ui| {
                     problems_for(ui, problems, &Scope::Keybind(bind.input.clone()));
@@ -187,12 +196,6 @@ pub fn show(
                                 *capturing = if capturing_this { None } else { Some(index) };
                             }
 
-                            // The same key as the list above spells it, when
-                            // the two differ.
-                            let printed = keys::pretty(&bind.input);
-                            if printed != bind.input {
-                                ui.weak(format!("the {printed} key"));
-                            }
                         });
                         ui.end_row();
 

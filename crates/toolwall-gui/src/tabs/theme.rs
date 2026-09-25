@@ -6,10 +6,15 @@ use toolwall_core::Document;
 use crate::widgets::{color_field, path_field, settings_grid, FileBrowser, PickTarget,
     scroll_body, segment_value};
 
-const ANCHORS: &[&str] = &[
-    "topleft", "top", "topright",
-    "left", "right",
-    "bottomleft", "bottomright",
+/// Stored as one word, shown as two. waywall reads the left-hand spelling.
+const ANCHORS: &[(&str, &str)] = &[
+    ("topleft", "Top left"),
+    ("top", "Top"),
+    ("topright", "Top right"),
+    ("left", "Left"),
+    ("right", "Right"),
+    ("bottomleft", "Bottom left"),
+    ("bottomright", "Bottom right"),
 ];
 
 pub fn show(
@@ -99,16 +104,23 @@ pub(crate) fn anchor_editor(ui: &mut egui::Ui, doc: &mut Document) {
     let mut changed = false;
 
     ui.horizontal(|ui| {
+        let shown = ANCHORS
+            .iter()
+            .find(|(stored, _)| *stored == position)
+            .map(|(_, shown)| *shown)
+            .unwrap_or("Wherever it opens");
+
         egui::ComboBox::from_id_salt("ninb-anchor")
-            .selected_text(if position.is_empty() { "none".into() } else { position.clone() })
+            .selected_text(shown)
+            .width(170.0)
             .show_ui(ui, |ui| {
-                if ui.selectable_label(position.is_empty(), "none").clicked() {
+                if ui.selectable_label(position.is_empty(), "Wherever it opens").clicked() {
                     position.clear();
                     changed = true;
                 }
-                for name in ANCHORS {
-                    if ui.selectable_label(position == *name, *name).clicked() {
-                        position = (*name).to_string();
+                for (stored, shown) in ANCHORS {
+                    if ui.selectable_label(position == *stored, *shown).clicked() {
+                        position = (*stored).to_string();
                         changed = true;
                     }
                 }

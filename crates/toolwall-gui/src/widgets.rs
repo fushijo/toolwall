@@ -179,22 +179,23 @@ fn parse_hex(hex: &str) -> Option<[u8; 4]> {
 /// choice is the same five and so is the meaning of the offsets.
 pub fn anchor_picker(ui: &mut egui::Ui, salt: &str, value: &mut Option<Anchor>) {
     const CHOICES: &[(Option<Anchor>, &str)] = &[
-        (None, "none"),
-        (Some(Anchor::TopLeft), "top left"),
-        (Some(Anchor::TopRight), "top right"),
-        (Some(Anchor::BottomLeft), "bottom left"),
-        (Some(Anchor::BottomRight), "bottom right"),
-        (Some(Anchor::Center), "centre"),
+        (None, "Not pinned"),
+        (Some(Anchor::TopLeft), "Top left"),
+        (Some(Anchor::TopRight), "Top right"),
+        (Some(Anchor::BottomLeft), "Bottom left"),
+        (Some(Anchor::BottomRight), "Bottom right"),
+        (Some(Anchor::Center), "Centre"),
     ];
 
     let label = CHOICES
         .iter()
         .find(|(a, _)| a == value)
         .map(|(_, name)| *name)
-        .unwrap_or("none");
+        .unwrap_or("Not pinned");
 
     egui::ComboBox::from_id_salt(salt)
         .selected_text(label)
+        .width(150.0)
         .show_ui(ui, |ui| {
             for (choice, name) in CHOICES {
                 ui.selectable_value(value, *choice, *name);
@@ -360,45 +361,23 @@ pub fn path_field(
     });
 }
 
-/// A tab's scrolling body, with a fade at the bottom when there is more.
+/// A tab's scrolling body.
 ///
-/// A row half-cut by the status bar reads as a crash rather than as "scroll
-/// down", and the scrollbar alone was not saying it loudly enough. The fade
-/// only appears while there is something below, so a tab that fits looks
-/// exactly as it did.
+/// One place, so every tab leaves the same room under its last row and the
+/// status bar never sits flush against a control.
+///
+/// It used to fade the bottom few pixels to say "there is more below". The
+/// fade painted over whatever was there, which was usually the Add button, so
+/// the one action on the screen came out at half contrast and looked
+/// disabled. The scrollbar is solid and always visible; that is the signal.
 pub fn scroll_body<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let out = egui::ScrollArea::vertical().show(ui, |ui| {
-        let value = add(ui);
-        // Room under the last row so it is never flush against the edge.
-        ui.add_space(24.0);
-        value
-    });
-
-    let hidden = out.content_size.y - out.inner_rect.height();
-    let left = hidden - out.state.offset.y;
-
-    if left > 1.0 {
-        let rect = out.inner_rect;
-        let ground = ui.visuals().panel_fill;
-        let painter = ui.painter_at(rect);
-
-        // Four bands instead of a gradient mesh: the same effect, and it
-        // cannot be off by a colour space.
-        for step in 0..4 {
-            let height = 5.0;
-            let y = rect.max.y - height * (step as f32 + 1.0);
-            painter.rect_filled(
-                egui::Rect::from_min_max(
-                    egui::pos2(rect.min.x, y),
-                    egui::pos2(rect.max.x, y + height),
-                ),
-                0.0,
-                ground.gamma_multiply(0.22 * (step as f32 + 1.0)),
-            );
-        }
-    }
-
-    out.inner
+    egui::ScrollArea::vertical()
+        .show(ui, |ui| {
+            let value = add(ui);
+            ui.add_space(24.0);
+            value
+        })
+        .inner
 }
 
 /// One option of a segmented control, with chrome whether it is picked or not.

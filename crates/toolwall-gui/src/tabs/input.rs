@@ -100,16 +100,25 @@ pub fn show(
         });
         remap_table(ui, RemapTable::Menu, &mut doc.input.remaps_menu, capture);
 
-        if advanced {
+        {
             ui.separator();
             // The Layout tab is also about the keyboard layout. This half is
-            // the xkb names waywall is handed; that half builds one.
+            // the xkb names waywall is handed; that half builds one. Not
+            // gated behind Advanced: picking a layout your system already has
+            // is simpler than building one, and the Layout tab points here.
             ui.heading("Keyboard language");
             ui.weak("A layout your system already has, by name: us, de, no.");
 
             settings_grid(ui, "layout-grid", |ui| {
+                ui.label("System layout");
+                ui.text_edit_singleline(&mut doc.input.layout);
+                ui.end_row();
+
+                if !advanced {
+                    return;
+                }
+
                 for (label, field) in [
-                    ("System layout", &mut doc.input.layout),
                     ("Model", &mut doc.input.model),
                     ("Rules", &mut doc.input.rules),
                     ("Variant", &mut doc.input.variant),

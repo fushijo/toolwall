@@ -325,6 +325,11 @@ impl Setup {
     /// checking. Text that does not fit and a step that draws nothing both
     /// look fine in a per-widget test.
     pub(crate) fn draw(&mut self, ctx: &egui::Context) {
+        // The same look as the editor. Without this the wizard ran on egui's
+        // stock theme: no border on a text field, no fill on an unpicked
+        // segment, and dimmer text than the editor it hands you over to.
+        crate::appearance(ctx, self.base.gui.appearance.dark, 1.0);
+
         // A capture in progress swallows the next keypress.
         if let Some(target) = self.capture.clone() {
             if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {

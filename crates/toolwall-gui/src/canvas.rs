@@ -186,6 +186,21 @@ pub struct Canvas<'a> {
     pub over_the_real_thing: bool,
 }
 
+/// A readable colour for a faded box's name.
+///
+/// Fading the name along with the box put it at 2.2:1, under even the 3:1
+/// floor for large text, and the name is the one thing saying which overlay
+/// you are looking at.
+fn faint_ink(visuals: &egui::Visuals, base: egui::Color32) -> egui::Color32 {
+    let ground = visuals.panel_fill;
+    let blend = |a: u8, b: u8| ((a as f32 * 0.62) + (b as f32 * 0.38)) as u8;
+    egui::Color32::from_rgb(
+        blend(base.r(), ground.r()),
+        blend(base.g(), ground.g()),
+        blend(base.b(), ground.b()),
+    )
+}
+
 /// How big to draw the picture of the screen.
 ///
 /// Sized on width alone, a 16:10 screen came out taller than the panel, so the
@@ -371,35 +386,34 @@ impl Canvas<'_> {
             painter.rect_stroke(r, 3.0, stroke);
         }
 
-        // The name, cut off at the edge of its own box and sitting on a chip.
+        // The name.
         //
-        // Without the chip two overlays in the same place drew their names on
-        // top of each other and neither could be read. Without the truncation
-        // a long name ran out past the box it belongs to and looked like it
-        // belonged to the one next door.
+        // Three rules, each from something that was actually unreadable:
+        //
+        //  - it does not fade with the box. A dimmed name measured 2.2:1, and
+        //    the name is the only thing telling you which overlay this is.
+        //  - it never gets cut to "Entit…". Too narrow a box and it goes
+        //    outside, to the right, where there is room.
+        //  - it drops a line rather than printing over one already there, and
+        //    it sits on an opaque chip so it never has another box's border
+        //    running through the middle of it.
         {
-            let mut job = egui::text::LayoutJob::simple_singleline(
-                item.label.clone(),
-                egui::FontId::proportional(11.0),
-                base.gamma_multiply(dim),
-            );
-            job.wrap = egui::text::TextWrapping::truncate_at_width(r.width() - 8.0);
+            let font = egui::FontId::proportional(11.0);
+            let ink = if item.muted { faint_ink(&visuals, base) } else { base };
 
-            let galley = painter.layout_job(job);
+            let galley =
+                painter.layout_no_wrap(item.label.clone(), font.clone(), ink);
+            let inside_width = galley.size().x + 8.0 <= r.width();
+            let inside_height = galley.size().y + 6.0 <= r.height();
 
-            // Under the box when there is no room in it, rather than sitting
-            // on top of whatever is drawn there.
-            let inside = r.height() > galley.size().y + 6.0;
-            let mut at = if inside {
-                r.min + egui::vec2(4.0, 3.0)
-            } else {
-                egui::pos2(r.min.x + 2.0, r.max.y + 2.0)
+            let mut at = match (inside_width, inside_height) {
+                (true, true) => r.min + egui::vec2(4.0, 3.0),
+                (true, false) => egui::pos2(r.min.x + 2.0, r.max.y + 2.0),
+                // No room across: put it beside the box instead of cutting it.
+                (false, _) => egui::pos2(r.max.x + 5.0, r.min.y),
             };
 
             let step = galley.size().y + 2.0;
-            // Drop below anything already written here. Two overlays pinned to
-            // the same corner is normal, and it used to print one name on top
-            // of the other so neither could be read.
             let mut room = 4;
             while room > 0
                 && taken
@@ -411,15 +425,12 @@ impl Canvas<'_> {
             }
             taken.push(at);
 
-            // The chip does not fade with the item. A see-through chip on a
-            // dimmed overlay is the same as no chip, which is how two names
-            // in the same corner became unreadable in the first place.
             painter.rect_filled(
                 egui::Rect::from_min_size(at, galley.size()).expand2(egui::vec2(3.0, 1.0)),
                 2.0,
-                visuals.panel_fill.gamma_multiply(0.92),
+                visuals.panel_fill.gamma_multiply(0.95),
             );
-            painter.galley(at, galley, base);
+            painter.galley(at, galley, ink);
         }
 
         if selected {

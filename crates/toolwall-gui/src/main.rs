@@ -184,6 +184,110 @@ pub(crate) struct App {
     font_loaded: String,
 }
 
+/// The whole look, in one place.
+///
+/// Shared with the setup window, which is a separate eframe app and was
+/// therefore running on egui's stock dark theme: no border on a text field, no
+/// fill on an unpicked segment, and dimmer text than the editor beside it.
+pub(crate) fn appearance(ctx: &egui::Context, dark: bool, opacity: f32) {
+        let mut visuals = if dark {
+            egui::Visuals::dark()
+        } else {
+            egui::Visuals::light()
+        };
+
+        // Translucency has to be painted, not just requested: the window is
+        // transparent, so every opaque surface we draw is one we chose to.
+        let alpha = (opacity.clamp(0.15, 1.0) * 255.0) as u8;
+        let tint = |c: egui::Color32| {
+            egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), alpha)
+        };
+
+        // Raise the ordinary and the dim text a step.
+        //
+        // egui's dark defaults put body text at #8c8c8c on a near-black panel,
+        // which is under 5:1, and the weak text it derives from that is around
+        // 2.5:1. This floats over a bright game on a laptop screen, so it has
+        // to be readable at a glance rather than merely present.
+        if dark {
+            visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::from_gray(205);
+            visuals.widgets.inactive.fg_stroke.color = egui::Color32::from_gray(215);
+            // ui.weak() is this blended halfway to the panel, and it carries
+            // load-bearing text: column headers, "Drag to move", every hint.
+            // Left at egui's default it landed at 4.0:1, under AA.
+            visuals.widgets.noninteractive.weak_bg_fill = egui::Color32::from_gray(110);
+            // A checkbox you cannot see the edge of is not a control. 1.86:1
+            // against the panel, measured.
+            visuals.widgets.inactive.bg_fill = egui::Color32::from_gray(58);
+            // The selected tab and the accent.
+            //
+            // The pill's own label was the least legible text in the window:
+            // egui puts light blue on this fill, which came to 3.5:1 while the
+            // unselected tabs beside it were 13:1. Darker fill, white label.
+            visuals.selection.bg_fill = egui::Color32::from_rgb(0, 86, 122);
+            // egui takes the selected label's colour from here.
+            visuals.selection.stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+        } else {
+            visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::from_gray(30);
+            visuals.widgets.inactive.fg_stroke.color = egui::Color32::from_gray(20);
+            visuals.widgets.noninteractive.weak_bg_fill = egui::Color32::from_gray(150);
+        }
+
+        // A field has to look like a field.
+        //
+        // egui's dark theme fills a text box at near-panel-black with no
+        // border, so "Cursor icon" and "Model" and "Rules" read as gaps in the
+        // panel rather than as somewhere you can type.
+        let edge = if dark {
+            egui::Color32::from_gray(106)
+        } else {
+            egui::Color32::from_gray(160)
+        };
+        for widget in [
+            &mut visuals.widgets.noninteractive,
+            &mut visuals.widgets.inactive,
+        ] {
+            widget.bg_stroke = egui::Stroke::new(1.0, edge);
+        }
+
+        // An unselected segment of a segmented control had no fill and no
+        // border at all, so "Light" and "2560x1440" and "Always on" read as
+        // captions sitting next to the one that happened to be filled.
+        visuals.widgets.inactive.weak_bg_fill = if dark {
+            egui::Color32::from_gray(38)
+        } else {
+            egui::Color32::from_gray(228)
+        };
+        visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, edge.gamma_multiply(1.4));
+
+        // ui.weak() is this colour blended halfway to weak_bg_fill, so the
+        // bump above is what carries the hints too.
+
+        visuals.panel_fill = tint(if dark {
+            egui::Color32::from_rgb(12, 12, 14)
+        } else {
+            egui::Color32::from_rgb(246, 246, 248)
+        });
+        visuals.window_fill = visuals.panel_fill;
+        visuals.extreme_bg_color = tint(visuals.extreme_bg_color);
+        visuals.faint_bg_color = tint(visuals.faint_bg_color);
+
+        ctx.set_visuals(visuals);
+
+        ctx.style_mut(|style| {
+            // Solid, always there. A floating bar on a dark panel is invisible
+            // until you are already scrolling, so a control row cut in half by
+            // the status bar read as a crash rather than as "there is more".
+            style.spacing.scroll = egui::style::ScrollStyle::solid();
+
+            // A checkbox at egui's default 14px is both hard to see and hard
+            // to hit. 24 is the smallest target worth shipping.
+            style.spacing.icon_width = 18.0;
+            style.spacing.icon_width_inner = 10.0;
+            style.spacing.interact_size.y = style.spacing.interact_size.y.max(24.0);
+        });
+}
+
 impl App {
     pub(crate) fn new(store: Store, doc: Document, load_error: Option<String>) -> Self {
         Self {
@@ -245,97 +349,7 @@ impl App {
             Self::load_font(ctx, &self.font_loaded);
         }
 
-        let mut visuals = if look.dark {
-            egui::Visuals::dark()
-        } else {
-            egui::Visuals::light()
-        };
-
-        // Translucency has to be painted, not just requested: the window is
-        // transparent, so every opaque surface we draw is one we chose to.
-        let alpha = (look.opacity.clamp(0.15, 1.0) * 255.0) as u8;
-        let tint = |c: egui::Color32| {
-            egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), alpha)
-        };
-
-        // Raise the ordinary and the dim text a step.
-        //
-        // egui's dark defaults put body text at #8c8c8c on a near-black panel,
-        // which is under 5:1, and the weak text it derives from that is around
-        // 2.5:1. This floats over a bright game on a laptop screen, so it has
-        // to be readable at a glance rather than merely present.
-        if look.dark {
-            visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::from_gray(205);
-            visuals.widgets.inactive.fg_stroke.color = egui::Color32::from_gray(215);
-            // ui.weak() is this blended halfway to the panel, and it carries
-            // load-bearing text: column headers, "Drag to move", every hint.
-            // Left at egui's default it landed at 4.0:1, under AA.
-            visuals.widgets.noninteractive.weak_bg_fill = egui::Color32::from_gray(110);
-            // A checkbox you cannot see the edge of is not a control. 1.86:1
-            // against the panel, measured.
-            visuals.widgets.inactive.bg_fill = egui::Color32::from_gray(58);
-            // The selected tab and the accent, which were 2.65:1 on the bar.
-            visuals.selection.bg_fill = egui::Color32::from_rgb(0, 122, 168);
-        } else {
-            visuals.widgets.noninteractive.fg_stroke.color = egui::Color32::from_gray(30);
-            visuals.widgets.inactive.fg_stroke.color = egui::Color32::from_gray(20);
-            visuals.widgets.noninteractive.weak_bg_fill = egui::Color32::from_gray(150);
-        }
-
-        // A field has to look like a field.
-        //
-        // egui's dark theme fills a text box at near-panel-black with no
-        // border, so "Cursor icon" and "Model" and "Rules" read as gaps in the
-        // panel rather than as somewhere you can type.
-        let edge = if look.dark {
-            egui::Color32::from_gray(106)
-        } else {
-            egui::Color32::from_gray(160)
-        };
-        for widget in [
-            &mut visuals.widgets.noninteractive,
-            &mut visuals.widgets.inactive,
-        ] {
-            widget.bg_stroke = egui::Stroke::new(1.0, edge);
-        }
-
-        // An unselected segment of a segmented control had no fill and no
-        // border at all, so "Light" and "2560x1440" and "Always on" read as
-        // captions sitting next to the one that happened to be filled.
-        visuals.widgets.inactive.weak_bg_fill = if look.dark {
-            egui::Color32::from_gray(38)
-        } else {
-            egui::Color32::from_gray(228)
-        };
-        visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, edge.gamma_multiply(1.4));
-        visuals.selection.stroke = egui::Stroke::new(1.0, visuals.selection.stroke.color);
-
-        // ui.weak() is this colour blended halfway to weak_bg_fill, so the
-        // bump above is what carries the hints too.
-
-        visuals.panel_fill = tint(if look.dark {
-            egui::Color32::from_rgb(12, 12, 14)
-        } else {
-            egui::Color32::from_rgb(246, 246, 248)
-        });
-        visuals.window_fill = visuals.panel_fill;
-        visuals.extreme_bg_color = tint(visuals.extreme_bg_color);
-        visuals.faint_bg_color = tint(visuals.faint_bg_color);
-
-        ctx.set_visuals(visuals);
-
-        ctx.style_mut(|style| {
-            // Solid, always there. A floating bar on a dark panel is invisible
-            // until you are already scrolling, so a control row cut in half by
-            // the status bar read as a crash rather than as "there is more".
-            style.spacing.scroll = egui::style::ScrollStyle::solid();
-
-            // A checkbox at egui's default 14px is both hard to see and hard
-            // to hit. 24 is the smallest target worth shipping.
-            style.spacing.icon_width = 18.0;
-            style.spacing.icon_width_inner = 10.0;
-            style.spacing.interact_size.y = style.spacing.interact_size.y.max(24.0);
-        });
+        appearance(ctx, look.dark, look.opacity);
 
         // Zoom scales the whole UI with the text, which keeps hit targets and
         // spacing proportional - setting a font size alone does not.
@@ -523,15 +537,35 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
             ui.add_space(3.0);
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.tab, Tab::Modes, "Modes");
-                ui.selectable_value(&mut self.tab, Tab::Mirrors, "Mirrors");
-                ui.selectable_value(&mut self.tab, Tab::Images, "Images");
-                ui.selectable_value(&mut self.tab, Tab::Keybinds, "Keybinds");
-                ui.selectable_value(&mut self.tab, Tab::Theme, "Theme");
-                ui.selectable_value(&mut self.tab, Tab::Ninb, "Ninjabrain");
-                ui.selectable_value(&mut self.tab, Tab::Input, "Input");
-                ui.selectable_value(&mut self.tab, Tab::Layout, "Layout");
-                ui.selectable_value(&mut self.tab, Tab::Screen, "Screen");
+                // Which tab you are on was carried by the fill alone, and the
+                // fill is the one thing a colour-blind reader may not have.
+                // The underline says it a second way.
+                for (tab, label) in [
+                    (Tab::Modes, "Modes"),
+                    (Tab::Mirrors, "Mirrors"),
+                    (Tab::Images, "Images"),
+                    (Tab::Keybinds, "Keybinds"),
+                    (Tab::Theme, "Theme"),
+                    (Tab::Ninb, "Ninjabrain"),
+                    (Tab::Input, "Input"),
+                    (Tab::Layout, "Layout"),
+                    (Tab::Screen, "Screen"),
+                ] {
+                    let here = self.tab == tab;
+                    let response = ui.selectable_value(&mut self.tab, tab, label);
+
+                    if here {
+                        let rect = response.rect;
+                        ui.painter().rect_filled(
+                            egui::Rect::from_min_max(
+                                egui::pos2(rect.min.x, rect.max.y - 2.0),
+                                egui::pos2(rect.max.x, rect.max.y + 1.0),
+                            ),
+                            0.0,
+                            ui.visuals().selection.stroke.color,
+                        );
+                    }
+                }
 
                 // Right-aligned close. The editor floats over the game, so
                 // dismissing it needs to be reachable without the keybind.

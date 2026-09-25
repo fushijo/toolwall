@@ -50,8 +50,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Document, state: &mut LayoutEdit) {
             ui.add_space(4.0);
             ui.weak(
                 "To use a layout your system already has instead of building \
-                 one, turn on Advanced and look under Keyboard language on the \
-                 Input tab.",
+                 one, see Keyboard language on the Input tab.",
             );
             return;
         }

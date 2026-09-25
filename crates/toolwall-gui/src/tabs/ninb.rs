@@ -70,9 +70,6 @@ pub fn show(
 
         ui.separator();
         ui.heading("Where its window sits");
-        ui.horizontal(|ui| {
-            ui.checkbox(&mut doc.ninb.autostart, "Open Ninjabrain Bot on startup");
-        });
         ui.add_space(4.0);
 
         crate::tabs::theme::anchor_editor(ui, doc);
