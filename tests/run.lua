@@ -372,6 +372,35 @@ check("chat gets the base layout, a recipe search keeps the custom one", functio
     os.remove(path)
 end)
 
+check("a missing State Output mod is not announced before the game exists", function()
+    --[[
+        wrap->instance is built in on_view_create, so waywall.state() throws
+        for everyone at load time. Asking then told people with a perfectly
+        good instance that they had no state output, on a banner that also
+        claimed the config had fallen back to the last known good one.
+    ]]
+    local path = write_config(CHAT)
+    local toolwall = require("toolwall")
+    toolwall.setup({ path = path })
+
+    waywall.state_broken = true
+
+    -- util.warn goes through print, which waywall replaces with its own log.
+    local said = false
+    local real_print = print
+    _G.print = function(line)
+        if tostring(line):find("state output") then said = true end
+    end
+    waywall.fire("load")
+    _G.print = real_print
+
+    assert_eq(said, false, "nothing said before there is a game to ask about")
+    assert_eq(toolwall.rt.degraded, nil, "and the config did not fall back")
+
+    waywall.state_broken = nil
+    os.remove(path)
+end)
+
 check("a repeat of the state you are already in does not forget chat", function()
     --[[
         Straight from a real log. The state file is rewritten on a tick and

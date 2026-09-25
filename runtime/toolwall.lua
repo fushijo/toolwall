@@ -442,28 +442,6 @@ local function on_load()
 
     -- ninb is started from its own listener, below, so that it can wait.
 
-    --[[
-        Say so when the thing half these features need is not there.
-
-        waywall.state() throws "no state output" when it has no instance, and
-        every caller here pcalls it and moves on. That is right for the code
-        and wrong for the person: menu rebinds and chat detection both quietly
-        become no-ops, with nothing anywhere saying why. This is the one place
-        that can tell the difference, so it says it once, at load.
-    ]]
-    local wants_state = next(rt.remaps.menu) ~= nil or M.has_chat_keymap(rt.doc)
-    local state_ok = pcall(waywall.state)
-
-    if wants_state and not state_ok then
-        rt.degraded = rt.degraded
-            or "no state output, so menu rebinds and chat mode do nothing"
-        util.warn(
-            "no state output from the instance. " ..
-            "menu rebinds and chat mode need the State Output mod " ..
-            "(worldpreview or state-output) in the Minecraft instance."
-        )
-    end
-
     if next(rt.remaps.menu) then
         apply_state_remaps()
     end
@@ -601,6 +579,59 @@ local function register_listeners(doc)
 
             pcall(waywall.sleep, math.max(0, math.floor(ninb.start_delay_ms or 500)))
             launch.once(waywall, "ninb", ninb_cmd)
+        end)
+    end
+
+    --[[
+        Say so when the thing half these features need is not there.
+
+        waywall.state() throws "no state output" when it has no instance, and
+        every caller here pcalls it and carries on. That is right for the code
+        and wrong for the person: menu rebinds and chat mode both quietly
+        become no-ops with nothing anywhere saying why.
+
+        It has to wait for the game. wrap->instance is built in
+        on_view_create:
+
+            wrap->view = view;
+            wrap->instance = instance_create(view, wrap->inotify);
+
+        so at load time it is null for everyone, and asking then said "no
+        state output" to people whose state output was fine. That was the
+        first version of this and it was wrong every single time.
+
+        Its own listener, because it waits.
+    ]]
+    if next(rt.remaps.menu) ~= nil or M.has_chat_keymap(doc) then
+        waywall.listen("load", function()
+            -- Once per waywall, not once per save. Every edit reloads the
+            -- config, and being told the same thing on every keystroke is
+            -- how a useful warning becomes one people learn to ignore.
+            if not launch.first_time("stateout") then
+                return
+            end
+
+            if not wait_for_game_window(60000) then
+                return
+            end
+
+            -- The instance exists with the window, but it has to have read
+            -- the file once before it answers.
+            pcall(waywall.sleep, 5000)
+
+            if pcall(waywall.state) then
+                return
+            end
+
+            util.warn(
+                "no state output from the instance, so menu rebinds and chat " ..
+                "mode do nothing. they need the State Output mod (or " ..
+                "worldpreview) in the Minecraft instance."
+            )
+
+            if rt.hud then
+                rt.hud:banner("toolwall: no State Output mod, so menu rebinds and chat mode are off")
+            end
         end)
     end
 

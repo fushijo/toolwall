@@ -357,6 +357,11 @@ end
 
 function M.state()
     guard("state")
+    -- Standing in for an instance waywall has not found, which is what
+    -- every call looks like before the game window exists.
+    if M.state_broken then
+        error("no state output", 0)
+    end
     return M.state_value
 end
 
