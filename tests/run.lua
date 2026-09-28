@@ -20,6 +20,23 @@ launch.proc_cmdline = function(pid)
     return waywall.processes[pid]
 end
 
+-- Real kill(1) has no business running during a test: the pids here are
+-- synthetic, and one might collide with an actual process on whatever
+-- machine is running the suite. Record it instead.
+local killed = {}
+launch.kill = function(pid)
+    table.insert(killed, pid)
+end
+
+-- waywall's own pid, as far as launch.lua is concerned. A plain override that
+-- a test can change per-check() rather than one it has to remember to put
+-- back: nothing here has to leak into the next test if a check() fails
+-- partway through.
+local fake_waywall_pid = 111
+launch.self_pid = function()
+    return fake_waywall_pid
+end
+
 -- The readout writes cache and stream scripts into XDG_RUNTIME_DIR. Point them
 -- somewhere disposable so running tests cannot disturb a live session.
 local ninb_api = require("toolwall.ninb_api")
@@ -53,6 +70,10 @@ local function check(name, fn)
     -- how a reload knows the editor is already open. Tests have to start from
     -- nothing or whichever one ran first decides what the rest see.
     os.execute("rm -f '" .. TEST_RUNTIME .. "'/toolwall-* 2>/dev/null")
+    for i = #killed, 1, -1 do
+        killed[i] = nil
+    end
+    fake_waywall_pid = 111
 
     -- Modules cache runtime state, so reload them for every test.
     for _, mod in ipairs({
@@ -1151,6 +1172,96 @@ check("a second press while starting does not launch a rival copy", function()
 
     cfg.actions["grave"]()
     assert_eq(#waywall.launched, 1, "still exactly one Ninjabrain Bot")
+    os.remove(path)
+end)
+
+--[[
+    ==== ORPHANED NINB, ACROSS A WAYWALL RESTART ====
+
+    waywall.exec() hands ninb off with no further connection to it. If
+    waywall itself dies and a new one starts, the old ninb does not die with
+    it; it is left holding an X11 connection open to an X server that is no
+    longer there. Every hs_err on fushijo's machine - eleven of them - was
+    exactly that: Ninjabrain Bot, SIGSEGV, on the thread blocked on that dead
+    connection.
+]]
+
+check("once launches when nothing is running", function()
+    -- The ordinary case, nothing exotic: sanity that self_pid and the owner
+    -- file do not get in the way of it.
+    waywall.finish_startup()
+
+    assert_eq(launch.once(waywall, "ninb", "java -jar ninb.jar"), true)
+    assert_eq(#waywall.launched, 1)
+end)
+
+check("a second waywall does not see the first one's ninb as its own", function()
+    waywall.finish_startup()
+
+    launch.once(waywall, "ninb", "java -jar ninb.jar")
+    assert_eq(#waywall.launched, 1, "the first waywall's ninb")
+
+    -- Same waywall, asked again (a reload): still just the one.
+    assert_eq(launch.once(waywall, "ninb", "java -jar ninb.jar"), false,
+        "waywall 111 already has one")
+    assert_eq(#waywall.launched, 1)
+
+    -- A second waywall - a crash, a full reset, closing and reopening the
+    -- instance - and now the pid on record belongs to somebody who is gone.
+    fake_waywall_pid = 222
+
+    local ok = launch.once(waywall, "ninb", "java -jar ninb.jar")
+
+    assert_eq(ok, true, "waywall 222 gets a working one of its own")
+    assert_eq(#waywall.launched, 2, "the old one was not mistaken for this one")
+    assert_eq(#killed, 1, "and the orphan was asked to stop")
+end)
+
+check("a pidfile with no owner is trusted, not killed", function()
+    -- What every pidfile written before this existed looks like. Guessing
+    -- wrong here means killing something that was never ours to begin with.
+    waywall.finish_startup()
+    launch.once(waywall, "ninb", "java -jar ninb.jar")
+
+    os.remove(launch.runtime_dir() .. "/toolwall-ninb.owner")
+
+    fake_waywall_pid = 222
+    local ok = launch.once(waywall, "ninb", "java -jar ninb.jar")
+
+    assert_eq(ok, false, "no owner recorded, so it is left alone")
+    assert_eq(#waywall.launched, 1, "nothing new started")
+    assert_eq(#killed, 0, "and nothing was killed on a guess")
+end)
+
+check("the toggle key kills an orphan from a dead waywall and starts a live one", function()
+    -- The same thing, through the actual keybind rather than launch.once
+    -- directly, so the plumbing between commands.lua and launch.lua is
+    -- covered too.
+    local path = write_config([[
+      { "version": 1,
+        "modes": [ { "id": "m", "resolution": {"width":0,"height":0} } ],
+        "ninb": { "jar": "~/ninb.jar", "command": "java -jar {jar}" },
+        "keybinds": [ { "input": "grave", "command": "ninb.toggle" } ] }
+    ]])
+
+    local toolwall = require("toolwall")
+    local cfg = toolwall.setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+
+    cfg.actions["grave"]()
+    assert_eq(#waywall.launched, 1, "the first waywall's ninb")
+
+    -- That waywall is gone. A new one loads the same config.
+    fake_waywall_pid = 222
+    local cfg2 = toolwall.setup({ path = path })
+    waywall.finish_startup()
+
+    cfg2.actions["grave"]()
+
+    assert_eq(#waywall.launched, 2, "a ninb that can actually talk to this one")
+    assert_eq(#killed, 1, "the orphan from waywall 111 was asked to stop")
+
     os.remove(path)
 end)
 

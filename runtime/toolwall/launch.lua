@@ -49,6 +49,62 @@ function M.pid_path(id)
     return M.runtime_dir() .. "/toolwall-" .. id .. ".pid"
 end
 
+--[[
+    Which waywall session started the thing at pid_path(id).
+
+    Ninjabrain Bot is not our child; waywall.exec() hands it off and we never
+    hear from it again. So when waywall itself dies and comes back - a crash,
+    a full reset, just closing and relaunching the instance - ninb does not
+    die with it. It is left running, still holding an X11 connection (the
+    JNativeHook global-hotkey hook, and its own Swing window) open to the X
+    server that waywall has just torn down.
+
+    Without this, M.once saw that old, orphaned ninb was still alive, matched
+    the command line, and called it "already running" forever. It never
+    starts a working one again, and the orphan is not merely idle: every
+    hs_err log on this machine (eleven of them, going back weeks) is
+    Ninjabrain Bot, SIGSEGV, on the JNativeHook hook thread or its AWT
+    sibling - both blocked on an X server that is no longer there. glibc's
+    IO-error handling for a dead X connection does not cope with running on a
+    background thread, and takes the whole JVM down with it instead of
+    exiting cleanly.
+
+    The owner file is what lets `once` tell "still mine, across a config
+    reload" from "somebody else's, and it is not coming back".
+]]
+local function owner_path(id)
+    return M.runtime_dir() .. "/toolwall-" .. id .. ".owner"
+end
+
+local function read_owner(id)
+    local fh = io.open(owner_path(id), "r")
+    if not fh then return nil end
+    local body = fh:read("*a") or ""
+    fh:close()
+    return tonumber(body:match("%d+"))
+end
+
+local function write_owner(id, pid)
+    local fh = io.open(owner_path(id), "w")
+    if not fh then return end
+    fh:write(tostring(pid))
+    fh:close()
+end
+
+--[[
+    Ask a process to stop. Overridable, so a test can watch this happen
+    without actually sending a signal to anything.
+
+    A plain kill, not -9. Whatever old ninb is on the other end, the point is
+    to let it close its X11 connections on its own terms - a shutdown hook
+    unregistering the hotkey hook, Swing tearing its window down - rather
+    than have the socket vanish out from under a blocking read, which is the
+    abrupt kind of disconnect that crashes it in the first place.
+]]
+function M.kill(pid)
+    os.execute(("kill %d >/dev/null 2>&1"):format(pid))
+end
+
 local function claim_path(id)
     return M.runtime_dir() .. "/toolwall-" .. id .. ".starting"
 end
@@ -230,12 +286,35 @@ end
     Returns true if a new process was started.
 ]]
 function M.once(waywall, id, command)
-    if M.running(id, command) or claimed(id) then
+    local self_pid = M.self_pid()
+    local owner = read_owner(id)
+
+    if M.running(id, command) then
+        --[[
+            Ours, or unowned (an older toolwall's pidfile, before this
+            existed) - leave it running, exactly as before.
+
+            Somebody else's and that somebody is not this waywall: it is an
+            orphan, and it is not going to notice its X server is gone on its
+            own. Ask it to stop, then fall through and launch a live one.
+        ]]
+        if not (self_pid and owner and owner ~= self_pid) then
+            return false
+        end
+
+        local stale = read_pid(id)
+        if stale then
+            M.kill(stale)
+        end
+    elseif claimed(id) then
         return false
     end
 
     -- Staked before exec, because the pid cannot exist until afterwards.
     claim(id)
+    if self_pid then
+        write_owner(id, self_pid)
+    end
 
     local path = script_path(id)
     local fh = io.open(path, "w")
