@@ -1075,6 +1075,71 @@ check("gui.toggle expands ~ in gui.command before exec", function()
     os.remove(path)
 end)
 
+local function editor_config()
+    return write_config([[{ "version": 1,
+        "keybinds": [ { "input": "Ctrl-I", "command": "gui.toggle" } ],
+        "gui": { "command": "toolwall-gui" } }]])
+end
+
+check("gui.toggle changes only the editor with per-window visibility", function()
+    local windows = { toolwall = true, ["Ninjabrain Bot"] = true }
+    waywall.window_visible = function(title, show)
+        if show ~= nil then windows[title] = show end
+        return windows[title]
+    end
+    local path = editor_config()
+    local cfg = require("toolwall").setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+    cfg.actions["Ctrl-I"]()
+    assert_eq(windows.toolwall, true, "new editor is revealed")
+    cfg.actions["Ctrl-I"]()
+    assert_eq(windows.toolwall, false, "existing editor is hidden")
+    assert_eq(windows["Ninjabrain Bot"], true, "Ninjabrain stays visible")
+    windows["Ninjabrain Bot"] = false
+    cfg.actions["Ctrl-I"]()
+    assert_eq(windows.toolwall, true, "hidden editor is revealed")
+    assert_eq(windows["Ninjabrain Bot"], false, "Ninjabrain stays hidden")
+    assert_eq(#waywall.launched, 1, "editor is not launched again")
+    for _, entry in ipairs(waywall.log) do
+        assert(entry.name ~= "show_floating", "must not toggle all floating windows")
+    end
+    os.remove(path)
+end)
+
+check("gui.toggle waits for the editor window to map", function()
+    local queries, shown = 0, false
+    waywall.window_visible = function(title, show)
+        assert_eq(title, "toolwall", "editor title")
+        if show ~= nil then shown = show; return show end
+        queries = queries + 1
+        if queries < 3 then return nil end
+        return false
+    end
+    local path = editor_config()
+    local cfg = require("toolwall").setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+    cfg.actions["Ctrl-I"]()
+    assert_eq(queries, 3, "waited for the window")
+    assert_eq(shown, true, "editor shown after mapping")
+    os.remove(path)
+end)
+
+check("gui.toggle bounds the wait if the editor never maps", function()
+    local queries = 0
+    waywall.window_visible = function() queries = queries + 1; return nil end
+    local path = editor_config()
+    local cfg = require("toolwall").setup({ path = path })
+    waywall.finish_startup()
+    waywall.mount_view()
+    local before = waywall.clock
+    cfg.actions["Ctrl-I"]()
+    assert_eq(queries, 40, "bounded queries")
+    assert_eq(waywall.clock - before, 2000, "two-second timeout")
+    os.remove(path)
+end)
+
 check("gui.toggle forces a visibility transition so waywall commits the window", function()
     -- waywall's floating_set_visible() early-returns when the flag already
     -- matches, and that function is the only one that commits the views. A
