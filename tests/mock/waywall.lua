@@ -57,6 +57,7 @@ local function guard(name)
 end
 
 function M.reset()
+    M.window_visible = nil
     M.log = {}
     M.startup = true
     M.listeners = {}

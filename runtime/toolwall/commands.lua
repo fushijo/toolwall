@@ -318,6 +318,23 @@ function M.bind(rt)
 
         cmd = util.expand_command(cmd)
 
+        -- The editor and Ninjabrain must not share a visibility toggle.
+        if waywall.window_visible then
+            local launched = launch.once(waywall, "gui", cmd)
+            for _ = 1, 40 do
+                local visible = waywall.window_visible("toolwall")
+                if visible ~= nil then
+                    local show = launched or not visible
+                    if show then release_cursor() end
+                    waywall.window_visible("toolwall", show)
+                    return
+                end
+                if not pcall(waywall.sleep, 50) then break end
+            end
+            util.warn("Toolwall editor did not map within two seconds")
+            return
+        end
+
         --[[
             Launch state lives in a pidfile, not in this table. Saving from
             the GUI reloads the config, which rebuilds the Lua VM and would
